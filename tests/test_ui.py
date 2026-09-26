@@ -129,3 +129,58 @@ def test_pos_carton_and_stock_in_base_units(pos):
     assert pos.update_totals()["total"] == 36
     pos.finish_sale({"cash_amount": 36, "card_amount": 0, "credit_amount": 0, "cash_received": 50, "change": 14})
     assert products.get_product(pid)["quantity"] == 30 - 13
+
+
+def test_pos_promotions_and_loyalty(pos):
+    from core import promotions, loyalty
+    settings.set_many({"loyalty_enabled": "1", "loyalty_min_redeem": "10", "loyalty_point_value": "0.1"})
+    pid = products.add_product("بسكويت", "b1", "حلويات", 1, 3, 50, 0)
+    promotions.add_promotion("اشترِ 2 واحصل على 1", "buy_get", product_id=pid, buy_qty=2, get_qty=1)
+    cid = customers.add_customer("زبون الولاء")
+    pos.search.setText("6*b1")
+    pos.on_enter()
+    t = pos.update_totals()
+    assert t["discount"] == 6 and t["total"] == 12 and "اشترِ 2" in pos.lbl_promo.text()
+    pos.set_customer(customers.get_customer(cid))
+    pos.finish_sale({"cash_amount": 12, "card_amount": 0, "credit_amount": 0, "cash_received": 12, "change": 0})
+    assert loyalty.balance(cid) == 12 and "نقطة" in pos.lbl_change.text()
+    inv = sales.get_invoice(pos.last_invoice_id)
+    assert inv["promo_discount"] == 6
+    from core import receipts
+    html = receipts.invoice_html(pos.last_invoice_id)
+    assert "خصم العروض" in html and "رصيد نقاطك" in html
+    # استبدال النقاط في الفاتورة التالية
+    pos.search.setText("b1")
+    pos.on_enter()
+    pos.set_customer(customers.get_customer(cid))
+    pos.points = 10
+    assert pos.update_totals()["total"] == 2
+    pos.finish_sale({"cash_amount": 2, "card_amount": 0, "credit_amount": 0, "cash_received": 2, "change": 0})
+    assert loyalty.balance(cid) == 12 - 10 + 2
+
+
+def test_new_screens_actions(app):
+    from core import ledger, cheques
+    from ui.accounting_screen import AccountingScreen, TemplateEntryDialog
+    from ui.cheques_screen import ChequesScreen, ChequeDialog
+    from ui.reorder_screen import ReorderScreen
+    d = TemplateEntryDialog(None)
+    d.amount.setValue(1000)
+    d.accept()
+    assert ledger.balance_sheet()["total_assets"] == 1000
+    scr = AccountingScreen()
+    scr.refresh()
+    for i in range(scr.tabs.count()):
+        scr.tabs.setCurrentIndex(i)
+    assert scr.bs_table.rowCount() > 3
+    cid = customers.add_customer("صاحب شيك", opening_balance=500)
+    cd = ChequeDialog(None, "in", cid)
+    cd.amount.setValue(200)
+    cd.number.setText("123")
+    cd.accept()
+    assert customers.balance(cid) == 300 and len(cheques.list_cheques()) == 1
+    cs = ChequesScreen()
+    cs.refresh()
+    assert cs.table.rowCount() == 1
+    rs = ReorderScreen()
+    rs.refresh()

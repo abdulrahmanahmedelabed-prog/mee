@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if len(sys.argv) > 1:
     os.environ["SHOP_DATA_DIR"] = sys.argv[1]
 
-from core import db, auth, products, customers, suppliers, sales, expenses, shifts, settings, context  # noqa: E402
+from core import (db, auth, products, customers, suppliers, sales, expenses, shifts, settings, context,  # noqa: E402
+                  promotions, cheques, ledger)
 
 PRODUCTS = [
     # الاسم، الفئة، الوحدة، التكلفة، البيع، الكمية، الحد، باركود، مفضلة
@@ -62,7 +63,8 @@ def main():
         return
     auth.set_current_user(auth.authenticate("admin", "admin") or dict(db.query_one("SELECT * FROM users LIMIT 1")))
     settings.set_many({"shop_name": "سوبرماركت النور", "shop_address": "الخليل - شارع السلام",
-                       "shop_phone": "02-2220000"})
+                       "shop_phone": "02-2220000", "loyalty_enabled": "1"})
+    db.set_meta("setup_done", "1")
     random.seed(7)
     pids = []
     for name, cat, unit, cost, price, q, mn, bc, fav in PRODUCTS:
@@ -145,6 +147,22 @@ def main():
                               paid=132)
     expenses.add_expense("إيجار", 2500, "إيجار الشهر", from_drawer=False, expense_date=start.strftime("%Y-%m-%d"))
     expenses.add_expense("رواتب", 3000, "راتب العامل", from_drawer=False)
+
+    # النسخة 4: رأس مال وبنك، عروض، شيكات، مرتجع لمورد
+    ledger.add_manual_entry(start.strftime("%Y-%m-%d"), "رأس مال المحل عند بدء استخدام البرنامج",
+                            [{"account": ledger.BANK, "debit": 20000}, {"account": ledger.CAPITAL, "credit": 20000}])
+    promotions.add_promotion("اشترِ 2 واحصل على 1 — بسكويت شاي", "buy_get", product_id=pids[18], buy_qty=2, get_qty=1)
+    promotions.add_promotion("3 مياه بـ 6 شيكل", "bundle", product_id=pids[16], bundle_qty=3, bundle_price=6)
+    promotions.add_promotion("خصم 10% على المنظفات", "percent", category="منظفات", percent=10,
+                             end_date=(today + timedelta(days=10)).isoformat())
+    cheques.receive_cheque(cids[3], 400, exp(5), "100245", "بنك فلسطين")
+    cheques.receive_cheque(cids[0], 150, exp(20), "558812", "بنك القدس")
+    s3 = db.scalar("SELECT id FROM suppliers WHERE name LIKE 'موزع%'")
+    cheques.issue_cheque(s3, 600, exp(3), "000731", "البنك العربي")
+    suppliers.create_purchase_return(s1, [{"product_id": pids[1], "quantity": 4}], "منتهي الصلاحية")
+    for cid in cids[:2]:
+        sales.create_sale([{"product_id": pids[9], "product_name": "زيت زيتون", "quantity": 3, "unit_price": 38}],
+                          customer_id=cid)
     print("تمت إضافة البيانات التجريبية. الدخول: admin / admin  أو  cashier / 1234")
 
 

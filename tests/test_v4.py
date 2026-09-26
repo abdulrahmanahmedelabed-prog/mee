@@ -66,7 +66,8 @@ def test_ledger_balances_and_matches_subledgers():
     pl = reports.profit_and_loss(t, t)
     assert inc["net_sales"] == pytest.approx(pl["net_revenue"], abs=0.01)
     assert inc["cogs"] == pytest.approx(pl["cogs"], abs=0.01)
-    assert inc["net_income"] == pytest.approx(pl["net_profit"] - 2, abs=0.01)  # الفرق: مسامحة العميل (تسوية)
+    assert inc["net_income"] == pytest.approx(pl["net_profit"], abs=0.01)
+    assert pl["other_adjustments"] == -2  # مسامحة العميل
     # كشف حساب الصندوق يبدأ بصفر وينتهي بالنقد المتوقع
     st = ledger.account_statement(ledger.CASH, t, t)
     assert st["closing"] == shifts.summary(s["sid"])["expected_cash"]
@@ -85,6 +86,7 @@ def test_shift_close_difference_and_handover():
     assert bal[ledger.CASH] == 50
     assert bal[ledger.CASH_SHORT] == 5
     assert ledger.trial_balance(t, t)["totals"]["balanced"]
+    assert ledger.income_statement(t, t)["net_income"] == reports.profit_and_loss(t, t)["net_profit"]
 
 
 def test_manual_entries_and_accounts():
@@ -190,6 +192,7 @@ def test_purchase_return_and_reorder():
     tb = ledger.trial_balance(t, t)
     assert tb["totals"]["balanced"]
     assert {r["code"]: r["closing"] for r in tb["rows"]}[ledger.STOCK_LOSS] == 1.5  # بيع للمورد بأقل من التكلفة
+    assert ledger.income_statement(t, t)["net_income"] == reports.profit_and_loss(t, t)["net_profit"]
     sug = reorder.suggestions(days=30, cover_days=14)
     s = [x for x in sug if x["product_id"] == pid][0]
     # بيع 15 في 30 يوماً = 0.5 يومياً ← 7 للتغطية + 10 حد أدنى − 12 موجود = 5 ← كرتونة واحدة

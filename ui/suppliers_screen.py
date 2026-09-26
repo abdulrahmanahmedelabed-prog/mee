@@ -266,6 +266,101 @@ class PurchaseDialog(QDialog):
         super().accept()
 
 
+class PurchaseReturnDialog(QDialog):
+    """إرجاع بضاعة للمورد: تُخصم من المخزون ومن حسابه"""
+
+    def __init__(self, parent, supplier):
+        super().__init__(parent)
+        self.supplier = supplier
+        self.setWindowTitle(f"مرتجع بضاعة للمورد {supplier['name']}")
+        self.resize(720, 460)
+        self.lines = []
+        lay = QVBoxLayout(self)
+        self.scan = QLineEdit()
+        self.scan.setPlaceholderText("امسح باركود الصنف المرتجع أو اكتب اسمه واضغط Enter...")
+        self.scan.returnPressed.connect(self.on_scan)
+        lay.addWidget(self.scan)
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["الصنف", "الكمية (بالحبة)", "سعر الحبة عند المورد", "الإجمالي", "الموجود"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
+        self.table.itemChanged.connect(self.on_edit)
+        lay.addWidget(self.table, 1)
+        form = QFormLayout()
+        self.reason = QComboBox()
+        self.reason.setEditable(True)
+        self.reason.addItems(["منتهي الصلاحية", "تالف", "خطأ في التوريد", "زائد عن الحاجة"])
+        self.total_lbl = QLabel("0.00")
+        self.total_lbl.setObjectName("bigNumber")
+        form.addRow("السبب:", self.reason)
+        form.addRow("يُخصم من حساب المورد:", self.total_lbl)
+        lay.addLayout(form)
+        lay.addWidget(hint("السعر الافتراضي = تكلفة الحبة عندك. إذا اتفقت مع المورد على سعر آخر عدّله؛ "
+                           "الفرق يُسجَّل ربحاً أو خسارة تلقائياً."))
+        ok_cancel(self, lay, "حفظ المرتجع")
+        self._busy = False
+
+    def on_scan(self):
+        text = self.scan.text().strip()
+        if not text:
+            return
+        p, _, _ = products.lookup_code(text)
+        if not p:
+            dlg = ProductPicker(self, text)
+            if dlg.exec() != QDialog.Accepted:
+                return
+            p = dlg.selected
+        p = products.get_product(p["id"])
+        for ln in self.lines:
+            if ln["product_id"] == p["id"]:
+                ln["quantity"] += 1
+                break
+        else:
+            self.lines.append({"product_id": p["id"], "name": p["name"], "quantity": 1.0, "unit_cost": p["cost_price"],
+                               "stock": p["quantity"]})
+        self.scan.clear()
+        self.render()
+
+    def render(self):
+        self._busy = True
+        self.table.setRowCount(len(self.lines))
+        for r, ln in enumerate(self.lines):
+            for c, v in enumerate([ln["name"], fmt_qty(ln["quantity"]), m(ln["unit_cost"]),
+                                   m(ln["quantity"] * ln["unit_cost"]), fmt_qty(ln["stock"])]):
+                it = QTableWidgetItem(v)
+                if c in (0, 3, 4):
+                    it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                self.table.setItem(r, c, it)
+        self._busy = False
+        self.total_lbl.setText(m(sum(l["quantity"] * l["unit_cost"] for l in self.lines)))
+
+    def on_edit(self, item):
+        if self._busy:
+            return
+        v = to_float(item.text(), -1)
+        key = {1: "quantity", 2: "unit_cost"}.get(item.column())
+        if key and v >= 0:
+            self.lines[item.row()][key] = v
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self.render)
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Return, Qt.Key_Enter):
+            return
+        super().keyPressEvent(e)
+
+    def accept(self):
+        try:
+            res = suppliers.create_purchase_return(
+                self.supplier["id"], [{"product_id": l["product_id"], "quantity": l["quantity"], "unit_cost": l["unit_cost"]}
+                                      for l in self.lines], self.reason.currentText(), shift_id=shifts.current_shift_id())
+        except ValueError as e:
+            warn(self, str(e))
+            return
+        info(self, f"تم حفظ المرتجع {res['return_number']} بقيمة {m(res['total'])} وخصمه من حساب المورد.")
+        super().accept()
+
+
 class SuppliersScreen(QWidget):
     def __init__(self):
         super().__init__()
@@ -308,6 +403,8 @@ class SuppliersScreen(QWidget):
         b = QHBoxLayout()
         b.addWidget(button("💸 دفعة للمورد", "successBtn", self.pay))
         b.addWidget(button("🧾 فاتورة من هذا المورد", "secondaryBtn", lambda: self.new_purchase(True)))
+        b.addWidget(button("↩ مرتجع للمورد", "warnBtn", self.purchase_return))
+        b.addWidget(button("📤 شيك مؤجل", "secondaryBtn", self.issue_cheque))
         b.addWidget(button("✏ تعديل", "secondaryBtn", self.edit))
         b.addWidget(button("🗑", "dangerBtn", self.delete))
         rl.addLayout(b)
@@ -417,3 +514,19 @@ class SuppliersScreen(QWidget):
             sid = s["id"]
         if PurchaseDialog(self, sid).exec() == QDialog.Accepted:
             self.refresh()
+
+    def purchase_return(self):
+        s = self.need()
+        if s and PurchaseReturnDialog(self, s).exec() == QDialog.Accepted:
+            self.load()
+            self.load_statement()
+
+    def issue_cheque(self):
+        s = self.need()
+        if not s:
+            return
+        from ui.cheques_screen import ChequeDialog
+        from ui.widgets import require_permission
+        if require_permission(self, "cheques") and ChequeDialog(self, "out", s["id"]).exec() == QDialog.Accepted:
+            self.load()
+            self.load_statement()

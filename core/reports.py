@@ -31,7 +31,13 @@ def profit_and_loss(date_from, date_to):
     net_revenue = money(net_sales - tax_due)          # الإيراد بدون ضريبة
     cogs = money(inv["cogs"] - ret["cost"])
     gross_profit = money(net_revenue - cogs)
-    net_profit = money(gross_profit - expenses - stock_loss)
+    # فروقات أخرى تؤثر على الربح: عجز/زيادة الصندوق، تسويات الحسابات، فرق سعر المرتجع للمورد
+    cash_diff = money(db.scalar(f"SELECT SUM(difference) FROM shifts WHERE status='closed' AND {_RANGE.format(col='closed_at')}", p))
+    cust_adj = money(db.scalar(f"SELECT SUM(amount) FROM customer_transactions WHERE type='adjust' AND {_RANGE.format(col='created_at')}", p))
+    sup_adj = money(db.scalar(f"SELECT SUM(amount) FROM supplier_transactions WHERE type='adjust' AND {_RANGE.format(col='created_at')}", p))
+    pr_diff = money(db.scalar(f"SELECT SUM(total - cost_total) FROM purchase_returns WHERE {_RANGE.format(col='created_at')}", p))
+    other = money(cash_diff + cust_adj - sup_adj + pr_diff)
+    net_profit = money(gross_profit - expenses - stock_loss + other)
     return {
         "invoice_count": inv["cnt"],
         "gross_sales": money(inv["gross"]),
@@ -47,6 +53,8 @@ def profit_and_loss(date_from, date_to):
         "gross_margin": round(gross_profit / net_revenue * 100, 1) if net_revenue else 0.0,
         "expenses": expenses,
         "stock_loss": stock_loss,
+        "cash_diff": cash_diff,
+        "other_adjustments": other,
         "net_profit": net_profit,
         "cash_sales": money(inv["cash"]),
         "card_sales": money(inv["card"]),

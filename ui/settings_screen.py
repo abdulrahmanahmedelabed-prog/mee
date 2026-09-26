@@ -151,6 +151,53 @@ class SettingsScreen(QWidget):
         f.addRow("القيمة في الباركود:", mode)
         self._num(f, "scale_code_length", "عدد خانات رمز الصنف:", 4, 6, decimals=0)
 
+        # --- نقاط الولاء ولوحة المالك
+        f = self._form_tab("نقاط الولاء ولوحة المالك")
+        f.addRow(title("🎁 نقاط الولاء", "subTitle"))
+        self._check(f, "loyalty_enabled", "تفعيل نقاط الولاء للعملاء المسجلين")
+        self._num(f, "loyalty_points_per_unit", "النقاط المكتسبة لكل 1 من العملة:", 0, 100)
+        self._num(f, "loyalty_point_value", "قيمة النقطة الواحدة عند الاستبدال:", 0, 100, decimals=3)
+        self._num(f, "loyalty_min_redeem", "أقل عدد نقاط للاستبدال:", 0, 1_000_000, decimals=0)
+        f.addRow("", hint("مثال: نقطة لكل شيكل، والنقطة = 0.05 ← الزبون يسترد 5% من مشترياته. "
+                          "100 نقطة كحد أدنى = خصم 5 شيكل بعد 100 شيكل مشتريات."))
+        self._check(f, "promotions_enabled", "تطبيق العروض التلقائية في نقطة البيع")
+        f.addRow(title("📱 لوحة المالك وملخص اليوم", "subTitle"))
+        self._line(f, "owner_whatsapp", "رقم واتساب المالك (لإرسال ملخص اليوم):")
+        self._check(f, "owner_web", "تشغيل لوحة المالك على الجوال من هذا الجهاز")
+        self.owner_url = hint("")
+        self.owner_url.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        f.addRow("", self.owner_url)
+
+        # --- الترخيص والتفعيل
+        lic = QWidget()
+        ll = QVBoxLayout(lic)
+        c, cl = card()
+        self.lic_status = QLabel("")
+        self.lic_status.setObjectName("subTitle")
+        self.lic_status.setWordWrap(True)
+        cl.addWidget(self.lic_status)
+        mrow = QHBoxLayout()
+        mrow.addWidget(QLabel("رمز هذا الجهاز:"))
+        self.machine_lbl = QLabel("")
+        self.machine_lbl.setStyleSheet("font-size:20px; font-weight:900; letter-spacing:2px; color:#1D4ED8;")
+        self.machine_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        mrow.addWidget(self.machine_lbl)
+        mrow.addWidget(button("📋 نسخ", "secondaryBtn", self.copy_machine))
+        mrow.addWidget(button("📱 طلب التفعيل عبر واتساب", "successBtn", self.request_activation))
+        mrow.addStretch()
+        cl.addLayout(mrow)
+        cl.addWidget(hint("1) أرسل رمز الجهاز لمزوّد البرنامج.  2) يرسل لك مفتاح التفعيل.  3) الصقه هنا واضغط «تفعيل»."))
+        self.lic_key = QTextEdit()
+        self.lic_key.setPlaceholderText("الصق مفتاح التفعيل هنا (يبدأ بـ SA1.)")
+        self.lic_key.setMaximumHeight(110)
+        cl.addWidget(self.lic_key)
+        cl.addWidget(button("✓ تفعيل", "successBtn", self.activate_license), alignment=Qt.AlignRight)
+        ll.addWidget(c)
+        self.vendor_lbl = hint("")
+        ll.addWidget(self.vendor_lbl)
+        ll.addStretch()
+        self.license_tab = self.tabs.addTab(lic, "الترخيص والتفعيل")
+
         # --- المستخدمون
         users = QWidget()
         ul = QVBoxLayout(users)
@@ -280,6 +327,13 @@ class SettingsScreen(QWidget):
         self.load_users()
         self.load_backups()
         self.load_network()
+        self.load_license()
+        port = config.get("server_port") or 8765
+        running = remote.SERVER.httpd is not None
+        self.owner_url.setText(
+            f"افتح من جوال المالك (على نفس شبكة المحل): http://{config.local_ip()}:{port}/owner "
+            f"{'— تعمل الآن ✓' if running else '— تعمل بعد إعادة تشغيل البرنامج'}\n"
+            "للمتابعة من خارج المحل ثبّت تطبيق VPN مجاني مثل Tailscale على الجهاز والجوال.")
         client = remote.is_client()
         for b in (self.restore_btn, self.restore_file_btn):
             b.setEnabled(not client)
@@ -429,3 +483,51 @@ class SettingsScreen(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "اختر ملف النسخة", "", "Database (*.db)")
         if path:
             self._restore(path)
+
+    # ---------------------------------------------------------------- الترخيص
+    def load_license(self):
+        from core import license, vendor
+        st = license.status()
+        icon = {"licensed": "✅", "trial": "⏳"}.get(st["state"], "⛔")
+        extra = ""
+        if st["state"] == "licensed":
+            extra = f"\nالمحل: {st['shop']} — الأجهزة المسموحة: {st['terminals'] or 'غير محدود'}"
+        if st.get("key_error"):
+            extra += f"\n⚠ المفتاح المحفوظ: {st['key_error']}"
+        self.lic_status.setText(f"{icon} {st['message']}{extra}")
+        self.machine_lbl.setText(st["machine_id"])
+        v = [vendor.PRODUCT_NAME + f" — الإصدار {vendor.VERSION}", f"المزوّد: {vendor.VENDOR_NAME}"]
+        if vendor.VENDOR_PHONE:
+            v.append(f"الدعم: {vendor.VENDOR_PHONE} ({vendor.SUPPORT_HOURS})")
+        if vendor.VENDOR_WEBSITE:
+            v.append(vendor.VENDOR_WEBSITE)
+        self.vendor_lbl.setText("  •  ".join(v))
+
+    def show_license_tab(self):
+        self.tabs.setCurrentIndex(self.license_tab)
+
+    def copy_machine(self):
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(self.machine_lbl.text())
+        info(self, "تم نسخ رمز الجهاز.")
+
+    def request_activation(self):
+        from core import license, vendor, whatsapp
+        from ui.widgets import open_whatsapp
+        msg = license.request_message()
+        url = whatsapp.link("+" + vendor.VENDOR_PHONE, msg) if vendor.VENDOR_PHONE else None
+        open_whatsapp(self, url, msg)
+
+    def activate_license(self):
+        from core import license
+        try:
+            st = license.activate(self.lic_key.toPlainText())
+        except (license.LicenseError, ValueError) as e:
+            warn(self, str(e))
+            return
+        self.lic_key.clear()
+        self.load_license()
+        info(self, f"تم التفعيل بنجاح ✓\n{st['message']}")
+        w = self.window()
+        if hasattr(w, "update_license"):
+            w.update_license()

@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from core import remote, auth, products, sales, shifts, reports, customers, settings, context, db
+from core import remote, auth, products, sales, shifts, reports, customers, settings, context, db, license
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -81,5 +81,32 @@ def test_two_terminals_share_data(server):
     client.token = "fake"
     with pytest.raises(remote.RemoteError):
         products.get_all_products()
+    remote.uninstall_client()
+    auth.set_current_user(local_user)
+
+
+def test_owner_page_and_server_side_permissions(server):
+    import urllib.request, urllib.parse
+    base = f"http://127.0.0.1:{server}"
+    html = urllib.request.urlopen(base + "/owner").read().decode("utf-8")
+    assert "لوحة المالك" in html and "كلمة المرور" in html
+    # الدخول بكلمة مرور صحيحة يعطي كوكي الجلسة ثم لوحة المالك
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
+    body = urllib.parse.urlencode({"username": "admin", "password": "admin"}).encode()
+    page = opener.open(base + "/owner/login", data=body).read().decode("utf-8")
+    assert "مبيعات اليوم" in page
+
+    local_user = auth.current_user()
+    client = remote.install_client("127.0.0.1", server, "ABC123", "كاشير 2")
+    assert auth.login("admin", "admin")
+    auth.create_user("kashier", "كاشير", "1234", "cashier")
+    assert auth.login("kashier", "1234")["role"] == "cashier"
+    with pytest.raises(remote.RemoteError):
+        auth.create_user("hacker", "x", "1234", "admin")         # الخادم يرفض حتى لو تجاوز الجهاز الواجهة
+    with pytest.raises(remote.RemoteError):
+        auth.change_password(1, "owned")                          # لا يغيّر كلمة مرور المدير
+    with pytest.raises(remote.RemoteError):
+        settings.save_shared({"shop_name": "x"})
+    assert license.status()["state"] == "trial"                   # حالة الترخيص تأتي من الجهاز الرئيسي
     remote.uninstall_client()
     auth.set_current_user(local_user)

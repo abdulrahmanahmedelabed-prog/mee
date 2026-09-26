@@ -36,7 +36,7 @@ DEFAULTS = {
 
 # مفاتيح تُقرأ من إعدادات الجهاز بدل إعدادات المحل العامة
 LOCAL_KEYS = {"printer_name", "receipt_width_mm", "auto_print_receipt", "drawer_mode", "drawer_printer",
-              "drawer_host", "drawer_port", "drawer_serial", "drawer_on_cash_sale"}
+              "drawer_host", "drawer_port", "drawer_serial", "drawer_on_cash_sale", "owner_web"}
 
 _cache = None
 

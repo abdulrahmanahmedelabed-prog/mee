@@ -97,6 +97,9 @@ def main():
         return 0
     if auth.current_user().get("must_change_password"):
         ChangePasswordDialog(None, forced=True).exec()
+    from ui.setup_wizard import SetupWizard, needs_setup
+    if auth.has_permission("settings") and needs_setup():
+        SetupWizard().exec()
 
     from ui.main_window import MainWindow
     window = MainWindow()

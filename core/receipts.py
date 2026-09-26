@@ -45,8 +45,13 @@ def invoice_html(invoice_id, copy=False):
         f"<tr><td>{fmt_qty(i['quantity'])} × {_m(i['unit_price'])}</td><td></td><td class='l'>{_m(i['total'])}</td></tr>"
         for i in items)
     lines = [f"<tr><td>المجموع</td><td class='l'>{_m(inv['subtotal'])}</td></tr>"]
-    if inv["discount"]:
-        lines.append(f"<tr><td>الخصم</td><td class='l'>-{_m(inv['discount'])}</td></tr>")
+    manual = money(inv["discount"] - inv["promo_discount"] - inv["points_value"])
+    if manual > 0:
+        lines.append(f"<tr><td>الخصم</td><td class='l'>-{_m(manual)}</td></tr>")
+    if inv["promo_discount"]:
+        lines.append(f"<tr><td>خصم العروض 🎁</td><td class='l'>-{_m(inv['promo_discount'])}</td></tr>")
+    if inv["points_value"]:
+        lines.append(f"<tr><td>استبدال {inv['points_redeemed']:g} نقطة</td><td class='l'>-{_m(inv['points_value'])}</td></tr>")
     if inv["tax"]:
         label = "منها ضريبة" if settings.get_bool("prices_include_vat") else "الضريبة"
         lines.append(f"<tr><td>{label} ({settings.get('vat_rate')}%)</td><td class='l'>{_m(inv['tax'])}</td></tr>")
@@ -62,6 +67,10 @@ def invoice_html(invoice_id, copy=False):
         lines.append(f"<tr><td>آجل (دين)</td><td class='l'>{_m(inv['credit_amount'])}</td></tr>")
     if inv["customer_id"]:
         lines.append(f"<tr><td>رصيد العميل الحالي</td><td class='l'>{_m(customers.balance(inv['customer_id']))}</td></tr>")
+    if inv["customer_id"] and (inv["points_earned"] or inv["points_redeemed"]):
+        from core import loyalty
+        lines.append(f"<tr><td>نقاط هذه الفاتورة</td><td class='l'>+{inv['points_earned']:g}</td></tr>")
+        lines.append(f"<tr><td>رصيد نقاطك</td><td class='l'>{loyalty.balance(inv['customer_id']):g}</td></tr>")
     if inv["returned_total"]:
         lines.append(f"<tr><td>مرتجع</td><td class='l'>-{_m(inv['returned_total'])}</td></tr>")
 
@@ -74,6 +83,8 @@ def invoice_html(invoice_id, copy=False):
         body += f"<div>العميل: {escape(inv['customer_name'])}</div>"
     body += f"<hr><table><tr><th>الصنف</th><th></th><th class='l'>المبلغ</th></tr>{rows}</table><hr>"
     body += f"<table>{''.join(lines)}</table><hr>"
+    if inv["note"] and "عروض:" in inv["note"]:
+        body += f"<div class='c'>{escape(inv['note'].split('عروض:', 1)[1].strip())}</div><hr>"
     body += f"<div class='c'>{escape(settings.get('receipt_footer') or '')}</div>"
     body += f"<div class='c'>عدد الأصناف: {len(items)}</div>"
     return _wrap(body)

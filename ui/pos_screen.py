@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QRadioButton, QButtonGroup
 )
 
-from core import products, sales, settings, auth, receipts, customers, drawer, audit
+from core import products, sales, settings, auth, receipts, customers, drawer, audit, loyalty
 from core.sales import SaleError
 from core.utils import money, fmt_qty, qty as round_qty
 from ui import printing
@@ -233,7 +233,8 @@ class POSScreen(QWidget):
         super().__init__()
         self.setObjectName("page")
         self.cart = []
-        self.discount = 0.0
+        self.discount = 0.0      # الخصم اليدوي فقط (العروض ونقاط الولاء تُحسب تلقائياً)
+        self.points = 0.0        # نقاط ولاء سيستبدلها العميل في هذه الفاتورة
         self.customer = None
         self.last_invoice_id = None
         self._rendering = False
@@ -338,11 +339,16 @@ class POSScreen(QWidget):
         self.lbl_total.setObjectName("grandTotal")
         self.lbl_total.setAlignment(Qt.AlignCenter)
         tl.addWidget(self.lbl_total, 4, 0, 1, 2)
+        self.lbl_promo = QLabel("")
+        self.lbl_promo.setStyleSheet("color:#F9A8D4; font-weight:700;")
+        self.lbl_promo.setAlignment(Qt.AlignCenter)
+        self.lbl_promo.setWordWrap(True)
+        tl.addWidget(self.lbl_promo, 5, 0, 1, 2)
         self.lbl_change = QLabel("")
         self.lbl_change.setObjectName("changeLabel")
         self.lbl_change.setAlignment(Qt.AlignCenter)
         self.lbl_change.setWordWrap(True)
-        tl.addWidget(self.lbl_change, 5, 0, 1, 2)
+        tl.addWidget(self.lbl_change, 6, 0, 1, 2)
         side.addWidget(totals)
 
         pay = button("💵  دفع  (F2)", "payBtn", self.checkout)
@@ -358,6 +364,7 @@ class POSScreen(QWidget):
             ("⏸ تعليق  F6", self.hold), ("▶ المعلّقة  F7", self.show_held),
             ("🖨 آخر فاتورة  F11", self.reprint_last), ("💰 فتح الدرج", self.open_drawer),
             ("✖ تفريغ السلة", self.clear_confirm), ("➕ منتج جديد", self.new_product),
+            ("🎁 استبدال نقاط", self.redeem_points), ("🔍 فحص سعر", self.price_check),
         ]
         for i, (text, slot) in enumerate(actions):
             b = button(text, "posBtn", slot)
@@ -605,8 +612,17 @@ class POSScreen(QWidget):
         self.update_totals()
 
     def update_totals(self):
-        t = sales.compute_totals(self.cart, self.discount)
-        self.discount = t["discount"]
+        subtotal = sales.compute_totals(self.cart)["subtotal"]
+        self.discount = min(self.discount, subtotal)
+        if self.cart:
+            disc = sales.cart_discounts(self.cart, self.discount, self.points)
+        else:
+            disc = {"total": 0.0, "promo_lines": [], "points_value": 0.0}
+        t = sales.compute_totals(self.cart, disc["total"])
+        parts = [f"🎁 {l['name']}: −{m(l['amount'])}" for l in disc["promo_lines"]]
+        if disc["points_value"]:
+            parts.append(f"⭐ {self.points:g} نقطة: −{m(disc['points_value'])}")
+        self.lbl_promo.setText("\n".join(parts))
         sym = settings.get("currency_symbol")
         self.lbl_items.setText(str(len(self.cart)))
         self.lbl_sub.setText(m(t["subtotal"]))
@@ -690,6 +706,7 @@ class POSScreen(QWidget):
     def clear_cart(self):
         self.cart = []
         self.discount = 0.0
+        self.points = 0.0
         self.set_customer(None)
         self.render_cart()
 
@@ -700,12 +717,63 @@ class POSScreen(QWidget):
 
     # ------------------------------------------------------------------ عميل / خصم / تعليق
     def set_customer(self, customer):
+        if (customer["id"] if customer else None) != (self.customer["id"] if self.customer else None):
+            self.points = 0.0
         self.customer = customer
         if customer:
             bal = customers.balance(customer["id"])
-            self.customer_btn.setText(f"👤  {customer['name']}  (رصيده {m(bal)})")
+            pts = f" • 🎁 {loyalty.balance(customer['id']):g} نقطة" if loyalty.enabled() else ""
+            self.customer_btn.setText(f"👤  {customer['name']}  (رصيده {m(bal)}{pts})")
         else:
             self.customer_btn.setText("👤  زبون نقدي (F4)")
+        if hasattr(self, "lbl_promo"):
+            self.update_totals()
+
+    def redeem_points(self):
+        if not loyalty.enabled():
+            self.show_flash("نقاط الولاء غير مفعّلة (الإعدادات ← نقاط الولاء)", "info")
+            return
+        if not self.customer:
+            self.show_flash("اختر العميل أولاً (F4) لاستبدال نقاطه", "err")
+            return
+        if not self.cart:
+            return
+        have = loyalty.balance(self.customer["id"])
+        min_pts = settings.get_float("loyalty_min_redeem", 0)
+        if have < min_pts or have <= 0:
+            self.show_flash(f"رصيد العميل {have:g} نقطة؛ أقل استبدال {min_pts:g}", "info")
+            return
+        per_point = settings.get_float("loyalty_point_value", 0.05) or 0.05
+        subtotal = sales.compute_totals(self.cart)["subtotal"]
+        max_pts = float(int(min(have, (subtotal - self.discount) / per_point)))
+        if max_pts < min_pts:
+            self.show_flash("قيمة الفاتورة أقل من قيمة أقل استبدال للنقاط", "info")
+            return
+        val, ok = QInputDialog.getDouble(self, "استبدال نقاط الولاء",
+                                         f"رصيد {self.customer['name']}: {have:g} نقطة (النقطة = {per_point:g})\n"
+                                         f"عدد النقاط للاستبدال:", max_pts, 0, max_pts, 0)
+        if ok:
+            self.points = val if val >= min_pts else 0.0
+            self.update_totals()
+        self.focus_search()
+
+    def price_check(self):
+        """فحص سعر صنف بدون إضافته للسلة (سؤال الزبون: بكم هذا؟)"""
+        code, ok = QInputDialog.getText(self, "فحص سعر", "امسح الباركود أو اكتب الاسم:")
+        if not ok or not code.strip():
+            self.focus_search()
+            return
+        p, _, unit = products.lookup_code(code.strip())
+        if not p:
+            found = products.get_all_products(search=code.strip())
+            p = found[0] if found else None
+        if not p:
+            self.show_flash("الصنف غير موجود", "err")
+        else:
+            price = unit["sale_price"] if unit else p["sale_price"]
+            name = f"{p['name']} ({unit['name']})" if unit else p["name"]
+            self.show_flash(f"🔍 {name}: {m(price)} {settings.get('currency_symbol')} — المتوفر {fmt_qty(p['quantity'])}", "info")
+        self.focus_search()
 
     def pick_customer(self):
         dlg = CustomerPicker(self)
@@ -799,7 +867,7 @@ class POSScreen(QWidget):
         cid = self.customer["id"] if self.customer else None
         kwargs = dict(discount=self.discount, customer_id=cid, cash_amount=pay["cash_amount"],
                       card_amount=pay["card_amount"], credit_amount=pay["credit_amount"],
-                      cash_received=pay["cash_received"], shift_id=shift_id)
+                      cash_received=pay["cash_received"], shift_id=shift_id, points_redeemed=self.points)
         try:
             try:
                 res = sales.create_sale(self.cart, **kwargs)
@@ -820,9 +888,12 @@ class POSScreen(QWidget):
         if res["cash_amount"] > 0 and settings.get_bool("drawer_on_cash_sale"):
             self.open_drawer(silent=True)
         if res["credit_amount"]:
-            self.lbl_change.setText(f"✓ {res['invoice_number']}\nدين على العميل: {m(res['credit_amount'])}")
+            msg = f"✓ {res['invoice_number']}\nدين على العميل: {m(res['credit_amount'])}"
         else:
-            self.lbl_change.setText(f"✓ {res['invoice_number']}\nالباقي للزبون: {m(res['change'])}")
+            msg = f"✓ {res['invoice_number']}\nالباقي للزبون: {m(res['change'])}"
+        if res.get("points_earned"):
+            msg += f"\n🎁 +{res['points_earned']:g} نقطة"
+        self.lbl_change.setText(msg)
         self.clear_cart()
         if print_it:
             try:

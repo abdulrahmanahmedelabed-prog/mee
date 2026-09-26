@@ -6,8 +6,8 @@ from datetime import datetime
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QScrollArea, QFrame
 
-from core import reports, products, auth, db
-from ui.widgets import Table, page, title, hint, m, card, KpiCard, BarChart, qty_cell, button
+from core import reports, products, auth, db, settings, whatsapp
+from ui.widgets import Table, page, title, hint, m, card, KpiCard, BarChart, qty_cell, button, open_whatsapp
 
 
 class DashboardScreen(QWidget):
@@ -30,6 +30,7 @@ class DashboardScreen(QWidget):
         for text, key, obj in [("🧾 بيع جديد", "pos", "successBtn"), ("📦 إضافة بضاعة", "suppliers", "secondaryBtn"),
                                ("💸 مصروف", "expenses", "secondaryBtn"), ("📊 التقارير", "reports", "secondaryBtn")]:
             head.addWidget(button(text, obj, lambda _=False, k=key: self.navigate.emit(k)))
+        head.addWidget(button("📱 ملخص اليوم للمالك", "warnBtn", self.send_summary))
         lay.addLayout(head)
 
         grid = QGridLayout()
@@ -47,8 +48,11 @@ class DashboardScreen(QWidget):
         self.k_expiry.mousePressEvent = lambda e: self.navigate.emit("expiry")
         self.k_low.setCursor(Qt.PointingHandCursor)
         self.k_low.mousePressEvent = lambda e: self.navigate.emit("inventory")
+        self.k_cheques = KpiCard("شيكات تستحق خلال أسبوع", "#0369A1", "🏦")
+        self.k_cheques.setCursor(Qt.PointingHandCursor)
+        self.k_cheques.mousePressEvent = lambda e: self.navigate.emit("cheques")
         cards = (self.k_sales, self.k_profit, self.k_count, self.k_cash, self.k_debts,
-                 self.k_dues, self.k_low, self.k_expiry, self.k_stock)
+                 self.k_dues, self.k_low, self.k_expiry, self.k_stock, self.k_cheques)
         for i, k in enumerate(cards):
             grid.addWidget(k, i // 5, i % 5)
         lay.addLayout(grid)
@@ -91,6 +95,7 @@ class DashboardScreen(QWidget):
         self.k_low.set(str(d["low_stock"]), "اضغط للعرض")
         self.k_expiry.set(str(d["expiring"]), "اضغط للعرض")
         self.k_stock.set(m(d["inventory"]["cost_value"]), f"{d['inventory']['items']} صنف")
+        self.k_cheques.set(str(d["cheques_due"]), f"وارد {m(d['cheques_in_due'])} • صادر {m(d['cheques_out_due'])}")
         days = reports.last_n_days(14)
         self.chart.set_data([x["date"][5:] for x in days], [x["total"] for x in days])
         today = db.today()
@@ -99,3 +104,8 @@ class DashboardScreen(QWidget):
         low = products.get_low_stock_products()[:30]
         self.low.set_rows([[p["name"], qty_cell(p["quantity"]), qty_cell(p["min_quantity"])] for p in low],
                           colors=[("#FEE2E2" if p["quantity"] <= 0 else None) for p in low])
+
+    def send_summary(self):
+        text = reports.daily_summary_text()
+        phone = settings.get("owner_whatsapp")
+        open_whatsapp(self, whatsapp.link(phone, text) if phone else None, text)

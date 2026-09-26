@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                                QComboBox, QSplitter)
 from PySide6.QtCore import Qt
 
-from core import customers, receipts, shifts, whatsapp
+from core import customers, receipts, shifts, whatsapp, loyalty
 from ui import printing
 from ui.dialogs import CustomerDialog, TextDialog
 from ui.widgets import (Table, button, page, title, hint, warn, info, ask, error, MoneySpin, ok_cancel, m, card,
@@ -122,7 +122,8 @@ class CustomersScreen(QWidget):
         btns = QGridLayout()
         for i, (text, obj, slot) in enumerate([("💰 تسديد دفعة", "successBtn", self.pay), ("🖨 طباعة الكشف", "secondaryBtn", self.print_statement),
                                 ("💬 تذكير واتساب", "secondaryBtn", self.reminder), ("✏ تعديل", "secondaryBtn", self.edit),
-                                ("⚖ تسوية", "secondaryBtn", self.adjust), ("🗑 حذف", "dangerBtn", self.delete)]):
+                                ("⚖ تسوية", "secondaryBtn", self.adjust), ("📥 استلام شيك", "secondaryBtn", self.receive_cheque),
+                                ("🗑 حذف", "dangerBtn", self.delete)]):
             btns.addWidget(button(text, obj, slot), i // 3, i % 3)
         rl.addLayout(btns)
         self.statement = Table(["التاريخ", "البيان", "عليه (مدين)", "له (دائن)", "الرصيد"], stretch=1, sortable=False)
@@ -152,7 +153,8 @@ class CustomersScreen(QWidget):
         opening, rows = customers.statement(c["id"])
         self.cust_title.setText(f"{c['name']}   {c['phone'] or ''}")
         bal = customers.balance(c["id"])
-        self.balance_lbl.setText(f"الرصيد: {m(bal)}")
+        pts = loyalty.balance(c["id"]) if loyalty.enabled() else 0
+        self.balance_lbl.setText(f"الرصيد: {m(bal)}" + (f"   🎁 {pts:g} نقطة" if pts else ""))
         self.balance_lbl.setStyleSheet(f"color:{'#DC2626' if bal > 0 else '#16A34A'};")
         rows = list(reversed(rows))
         self.statement.set_rows([[r["created_at"][:16], f"{r['type_label']} {r['note'] or ''}".strip(),
@@ -232,3 +234,12 @@ class CustomersScreen(QWidget):
             except ValueError as e:
                 warn(self, str(e))
             self.load()
+
+    def receive_cheque(self):
+        c = self.need()
+        if not c:
+            return
+        from ui.cheques_screen import ChequeDialog
+        if require_permission(self, "cheques") and ChequeDialog(self, "in", c["id"]).exec() == QDialog.Accepted:
+            self.load()
+            self.reselect(c["id"])

@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel, QPushButton,
                                QStackedWidget, QButtonGroup, QDialog, QScrollArea)
 
-from core import auth, settings, shifts, backup, config, remote
+from core import auth, settings, shifts, backup, config, remote, license, vendor
 from ui.widgets import button, ask
 from ui.dialogs import ChangePasswordDialog, LoginDialog
 
@@ -22,8 +22,12 @@ from ui.cash_screen import CashScreen
 from ui.reports_screen import ReportsScreen
 from ui.expiry_screen import ExpiryScreen
 from ui.settings_screen import SettingsScreen
+from ui.accounting_screen import AccountingScreen
+from ui.cheques_screen import ChequesScreen
+from ui.promotions_screen import PromotionsScreen
+from ui.reorder_screen import ReorderScreen
 
-VERSION = "3.0"
+VERSION = vendor.VERSION
 
 PAGES = [
     ("dashboard", "🏠   لوحة التحكم", ("dashboard",), DashboardScreen),
@@ -33,9 +37,13 @@ PAGES = [
     ("expiry", "⏳   الصلاحية", ("inventory",), ExpiryScreen),
     ("customers", "👥   العملاء والديون", ("customers",), CustomersScreen),
     ("suppliers", "🚚   الموردون والمشتريات", ("suppliers",), SuppliersScreen),
+    ("reorder", "🧠   الطلبيات الذكية", ("suppliers",), ReorderScreen),
+    ("promotions", "🎁   العروض والولاء", ("promotions",), PromotionsScreen),
     ("expenses", "💸   المصاريف", ("expenses",), ExpensesScreen),
     ("cash", "💵   الصندوق والورديات", ("cash",), CashScreen),
+    ("cheques", "🏦   الشيكات", ("cheques",), ChequesScreen),
     ("reports", "📊   التقارير", ("reports",), ReportsScreen),
+    ("accounting", "📚   المحاسبة والميزانية", ("accounting",), AccountingScreen),
     ("settings", "⚙   الإعدادات", ("settings", "backup"), SettingsScreen),
 ]
 
@@ -128,6 +136,17 @@ class MainWindow(QMainWindow):
         self.clock.setObjectName("chip")
         tl.addWidget(self.clock)
         content.addWidget(top)
+        # شريط الترخيص (يظهر في التجربة أو عند الانتهاء)
+        self.license_bar = QFrame()
+        self.license_bar.setStyleSheet("QFrame { background:#FEF3C7; border-bottom:1px solid #FDE68A; }")
+        lb = QHBoxLayout(self.license_bar)
+        lb.setContentsMargins(20, 6, 20, 6)
+        self.license_lbl = QLabel()
+        self.license_lbl.setStyleSheet("color:#92400E; font-weight:700;")
+        lb.addWidget(self.license_lbl)
+        lb.addStretch()
+        lb.addWidget(button("🔑 تفعيل البرنامج", "warnBtn", self.open_license))
+        content.addWidget(self.license_bar)
         self.stack = QStackedWidget()
         content.addWidget(self.stack, 1)
         wrap = QWidget()
@@ -181,7 +200,32 @@ class MainWindow(QMainWindow):
             self.net_chip.setText(f"💻 {term} ← {config.get('server_host')}")
         self.shift_chip.style().unpolish(self.shift_chip)
         self.shift_chip.style().polish(self.shift_chip)
+        self.update_license()
         self.tick()
+
+    def update_license(self):
+        try:
+            st = license.status()
+        except Exception:
+            self.license_bar.hide()
+            return
+        show = st["state"] != "licensed" or (st["days_left"] is not None and st["days_left"] <= 15)
+        self.license_bar.setVisible(show)
+        if st["state"] in ("expired", "license_expired"):
+            self.license_bar.setStyleSheet("QFrame { background:#FEE2E2; border-bottom:1px solid #FECACA; }")
+            self.license_lbl.setStyleSheet("color:#991B1B; font-weight:700;")
+        text = st["message"]
+        if vendor.VENDOR_PHONE:
+            text += f"   —   للتفعيل والدعم: {vendor.VENDOR_NAME} {vendor.VENDOR_PHONE}"
+        self.license_lbl.setText("🔑 " + text)
+
+    def open_license(self):
+        if not auth.has_permission("settings"):
+            from ui.widgets import info
+            info(self, "التفعيل من حساب مدير النظام: الإعدادات ← الترخيص والتفعيل.")
+            return
+        self.go("settings")
+        self.pages["settings"].show_license_tab()
 
     def tick(self):
         days = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
