@@ -1,0 +1,38 @@
+# Shop Accounting & POS — Product Sheet (v5.0)
+
+**Point of sale + real accounting for grocery stores, mini-markets and small supermarkets.**
+Works fully offline on your own computer, in **English and Arabic**. Buy once — or subscribe monthly.
+
+![Point of sale](en_pos.png)
+
+## Why shop owners choose it
+- **Fast checkout** — barcode, weighing-scale labels, cartons vs. pieces, hold/recall, quick keys, `3*barcode`.
+- **Never stops selling** — no internet needed. With several tills, cashiers keep selling even if the main computer goes down; sales sync automatically, without duplicates.
+- **Know your real profit** — cost of goods, discounts, returns, expenses, write-offs and cash shortages are all included. Automatic double-entry accounting gives you an income statement, balance sheet and trial balance without typing a single journal entry.
+- **Smart advisor** — every morning: items sold at a loss, best sellers about to run out, dead stock, customers who stopped coming, late debts, unusual cashier discounts, peak hours, items bought together.
+- **Customer credit & post-dated cheques** — statements, credit limits, WhatsApp reminders, cheque due-date alerts, bounced cheques restore the debt automatically.
+- **Inventory done right** — batches & expiry dates (first-expiry-first-out), stock counts, loss tracking, returns to suppliers, ABC analysis, smart reorder suggestions sent to suppliers on WhatsApp.
+- **Grow sales** — automatic offers (buy X get Y, bundle price, % off a category), loyalty points, wholesale price levels, bulk price updates by target margin.
+- **Control** — cashier shifts with cash counting, manager approval for sensitive actions, full activity log, server-side permission checks.
+- **Owner on the go** — read-only dashboard on the owner's phone and a daily WhatsApp summary.
+- **VAT ready** — output and input VAT with a VAT return report.
+- **Your data stays yours** — stored on your computer with daily backups and an optional cloud copy (Google Drive / OneDrive).
+
+| | |
+|---|---|
+| ![Dashboard](en_dashboard.png) | ![Accounting](en_accounting.png) |
+| ![Smart advisor](en_insights.png) | ![Owner phone dashboard](owner_mobile.png) |
+
+## Plans (suggested)
+| Plan | Perpetual license | Subscription |
+|---|---|---|
+| Basic — 1 till | $249 | $19 / month |
+| Pro — up to 3 tills | $499 | $39 / month |
+| Enterprise — unlimited tills | $899 | $69 / month |
+
+All plans include every feature. **30-day free trial, full features.** When a trial or subscription ends only selling stops — your reports and data remain available.
+
+## Requirements
+Windows 10/11 PC, any thermal receipt printer (58/80 mm), USB barcode scanner, optional cash drawer and customer display. Multiple tills connect over the shop's local network.
+
+**Contact:** _your name — WhatsApp — email — website_

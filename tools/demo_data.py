@@ -160,6 +160,13 @@ def main():
     s3 = db.scalar("SELECT id FROM suppliers WHERE name LIKE 'موزع%'")
     cheques.issue_cheque(s3, 600, exp(3), "000731", "البنك العربي")
     suppliers.create_purchase_return(s1, [{"product_id": pids[1], "quantity": 4}], "منتهي الصلاحية")
+    # النسخة 5: أسعار جملة وعميل جملة
+    for i in (6, 7, 8, 9, 10, 15, 16):
+        p = products.get_product(pids[i])
+        products.update_product(p["id"], p["name"], p["barcode"], p["category"], p["cost_price"], p["sale_price"],
+                                p["min_quantity"], p["unit"], p["plu_code"], p["is_weighted"], p["is_favorite"],
+                                wholesale_price=round(p["cost_price"] * 1.12, 1))
+    customers.add_customer("بقالة الحي (جملة)", "0599887766", credit_limit=3000, price_level="wholesale")
     for cid in cids[:2]:
         sales.create_sale([{"product_id": pids[9], "product_name": "زيت زيتون", "quantity": 3, "unit_price": 38}],
                           customer_id=cid)

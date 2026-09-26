@@ -91,7 +91,7 @@ class CustomerDisplay(QWidget):
 
     def idle(self):
         self.shop.setText(f"🏪 {settings.get('shop_name')}")
-        self.items.setText(f"<div style='text-align:center; font-size:40px; color:#CBD5E1'><br><br>أهلاً وسهلاً بكم 🌷</div>")
+        self.items.setText("<div style='text-align:center; font-size:40px; color:#CBD5E1'><br><br>أهلاً وسهلاً بكم 🌷</div>")
         self.saving.setText("")
         self.total.setText("")
         self.footer.setText(settings.get("receipt_footer") or "")
@@ -116,7 +116,7 @@ class CustomerDisplay(QWidget):
         self.footer.setText(f"عدد الأصناف: {len(cart)}")
 
     def show_paid(self, total, change, points=0):
-        self.items.setText(f"<div style='text-align:center; font-size:44px'><br>شكراً لتسوقكم 🌷</div>")
+        self.items.setText("<div style='text-align:center; font-size:44px'><br>شكراً لتسوقكم 🌷</div>")
         self.saving.setText(f"🎁 +{points:g} نقطة" if points else "")
         self.total.setText(f"الباقي: {_m(change)} {self._sym()}" if change else f"{_m(total)} {self._sym()} ✓")
         self.footer.setText(settings.get("receipt_footer") or "")

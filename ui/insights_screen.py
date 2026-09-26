@@ -1,44 +1,36 @@
 # -*- coding: utf-8 -*-
 """المستشار الذكي: توصيات عملية، تحليل ABC، أصناف تُشترى معاً، وتحديث الأسعار الجماعي"""
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QScrollArea, QFrame, QComboBox,
-                               QDoubleSpinBox, QCheckBox, QSpinBox)
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QFrame, QComboBox,
+                               QDoubleSpinBox, QCheckBox)
 
 from core import insights, products, settings
-from ui.widgets import Table, button, page, hint, warn, info, ask, m, qty_cell, require_permission, KpiCard
+from ui.widgets import Table, button, page, hint, info, ask, m, qty_cell, require_permission, KpiCard
 
 COLORS = {"danger": ("#FEF2F2", "#DC2626", "⛔"), "warning": ("#FFFBEB", "#D97706", "⚠"),
           "info": ("#EFF6FF", "#2563EB", "💡"), "success": ("#F0FDF4", "#16A34A", "✅")}
 
 
-class InsightCard(QFrame):
-    def __init__(self, card, on_action):
-        super().__init__()
-        bg, fg, icon = COLORS[card["severity"]]
-        self.setStyleSheet(f"QFrame#ins {{ background:{bg}; border:1px solid {fg}33; border-right:5px solid {fg};"
-                           f" border-radius:12px; }}")
-        self.setObjectName("ins")
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(16, 12, 16, 12)
-        head = QHBoxLayout()
-        t = QLabel(f"{icon}  {card['title']}")
-        t.setStyleSheet(f"font-size:16px; font-weight:800; color:{fg}; background:transparent;")
-        t.setWordWrap(True)
-        head.addWidget(t, 1)
-        if card.get("action"):
-            head.addWidget(button(f"{card['action_label']} ←", "secondaryBtn", lambda: on_action(card["action"])))
-        lay.addLayout(head)
-        d = QLabel(card["detail"])
-        d.setWordWrap(True)
-        d.setStyleSheet("color:#334155; background:transparent;")
-        lay.addWidget(d)
-        if card["items"]:
-            items = QLabel("\n".join(f"• {x}" for x in card["items"]))
-            items.setWordWrap(True)
-            items.setStyleSheet("color:#475569; background:transparent;")
-            items.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            lay.addWidget(items)
+def cards_html(cards):
+    """التوصيات كصفحة واحدة منسّقة (أثبت من عناصر كثيرة داخل منطقة تمرير)"""
+    from html import escape
+    from core.i18n import tr, is_rtl
+    side = "right" if is_rtl() else "left"
+    out = []
+    for c in cards:
+        bg, fg, icon = COLORS[c["severity"]]
+        items = "<br>".join(f"• {escape(tr(x))}" for x in c["items"])
+        link = (f"&nbsp;&nbsp;<a href='act:{c['action']}' style='color:{fg}; font-weight:bold'>{escape(tr(c['action_label']))} ←</a>"
+                if c.get("action") else "")
+        out.append(
+            f"<table width='100%' cellspacing='0' cellpadding='10' style='background-color:{bg}; margin-bottom:12px'>"
+            f"<tr><td width='6' style='background-color:{fg}'></td><td align='{side}'>"
+            f"<span style='font-size:14pt; font-weight:bold; color:{fg}'>{icon} {escape(tr(c['title']))}</span>{link}"
+            f"<br><span style='color:#334155'>{escape(tr(c['detail']))}</span>"
+            + (f"<br><span style='color:#475569; font-size:10pt'>{items}</span>" if items else "")
+            + "</td></tr></table>")
+    return f"<div dir='{'rtl' if is_rtl() else 'ltr'}'>{''.join(out)}</div>"
 
 
 class InsightsScreen(QWidget):
@@ -62,14 +54,13 @@ class InsightsScreen(QWidget):
         row.addStretch()
         row.addWidget(button("🔄 تحليل الآن", "successBtn", self.load_cards))
         rl.addLayout(row)
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        self.cards_w = QWidget()
-        self.cards_l = QVBoxLayout(self.cards_w)
-        self.cards_l.setSpacing(10)
-        self.scroll.setWidget(self.cards_w)
-        rl.addWidget(self.scroll, 1)
+        from PySide6.QtWidgets import QTextBrowser
+        self.cards = QTextBrowser()
+        self.cards.setOpenLinks(False)
+        self.cards.setFrameShape(QFrame.NoFrame)
+        self.cards.setStyleSheet("QTextBrowser { background: transparent; font-size: 11pt; }")
+        self.cards.anchorClicked.connect(lambda url: self.on_action(url.toString()[4:]))
+        rl.addWidget(self.cards, 1)
         self.tabs.addTab(rec, "🤖 التوصيات")
 
         # --- ABC
@@ -160,13 +151,7 @@ class InsightsScreen(QWidget):
             self.pairs.set_rows([[r["a"], r["b"], r["count"]] for r in rows])
 
     def load_cards(self):
-        while self.cards_l.count():
-            it = self.cards_l.takeAt(0)
-            if it.widget():
-                it.widget().deleteLater()
-        for c in insights.insights(30):
-            self.cards_l.addWidget(InsightCard(c, self.on_action))
-        self.cards_l.addStretch()
+        self.cards.setHtml(cards_html(insights.insights(30)))
 
     def on_action(self, action):
         if action == "insights:prices":

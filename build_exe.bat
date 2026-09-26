@@ -8,7 +8,7 @@ if not exist core\license_pubkey.py (
   exit /b 1
 )
 pip install -r requirements.txt pyinstaller
-pyinstaller --noconfirm --windowed --name ShopAccounting --hidden-import core.license_pubkey main.py
+pyinstaller --noconfirm --windowed --name ShopAccounting --hidden-import core.license_pubkey --add-data "i18n;i18n" main.py
 echo.
 echo Done. The program is in dist\ShopAccounting  (copy the whole folder to the shop PC)
 echo Do NOT ship the tools folder or your private key.
