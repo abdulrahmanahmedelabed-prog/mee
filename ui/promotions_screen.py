@@ -234,7 +234,7 @@ class PromotionsScreen(QWidget):
 
     def adjust_points(self):
         r = self.members.selected_data()
-        if not r or not require_permission(self, "customers"):
+        if not r or not require_permission(self, "promotions"):
             return
         from PySide6.QtWidgets import QInputDialog
         val, ok = QInputDialog.getDouble(self, "تعديل النقاط", f"النقاط المضافة (+) أو المخصومة (−) للعميل {r['name']}:",

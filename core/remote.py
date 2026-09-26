@@ -52,7 +52,7 @@ REQUIRED_PERMISSION = {
     ("ledger", "add_account"): "accounting",
     ("promotions", "add_promotion"): "promotions", ("promotions", "update_promotion"): "promotions",
     ("promotions", "delete_promotion"): "promotions",
-    ("loyalty", "adjust"): "customers",
+    ("loyalty", "adjust"): "promotions",
 }
 
 
