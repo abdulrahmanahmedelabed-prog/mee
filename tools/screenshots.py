@@ -42,7 +42,7 @@ def main(out_dir):
     pos = w.pages["pos"]
     for p in products.get_all_products()[:4]:
         pos.add_product(products.get_product(p["id"]), 2 if p["unit"] != "كغم" else 1.25)
-    for code in ("5449000000996", "7290000001028", "7290000001011"):   # كرتونة كولا + لبنة منتهية + حليب قريب
+    for code in ("3*6223000000011", "5449000000996", "7290000001028", "7290000001011"):  # عرض 2+1، كرتونة، صلاحية
         pos.search.setText(code)
         pos.on_enter()
 

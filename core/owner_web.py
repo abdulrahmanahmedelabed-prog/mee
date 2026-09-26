@@ -33,7 +33,7 @@ main{max-width:900px;margin:0 auto;padding:12px 16px 40px}
 .k small{color:var(--muted);display:block}.k b{font-size:21px;display:block;margin-top:4px}.k i{font-style:normal;color:var(--muted);font-size:12px}
 h2{font-size:15px;margin:22px 0 8px;color:var(--muted)}
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right}th{color:var(--muted);font-weight:normal;font-size:13px}
+html,body{overflow-x:hidden}td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;overflow-wrap:anywhere}th{color:var(--muted);font-weight:normal;font-size:13px}
 td.n{text-align:left;font-variant-numeric:tabular-nums;white-space:nowrap}
 .bars{display:flex;align-items:flex-end;gap:6px;height:130px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
 .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;font-size:11px;color:var(--muted);height:100%}

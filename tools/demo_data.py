@@ -146,7 +146,7 @@ def main():
     suppliers.create_purchase(None, [{"product_id": pids[17], "quantity": 24, "unit_cost": 5.5, "expiry_date": exp(90)}],
                               paid=132)
     expenses.add_expense("إيجار", 2500, "إيجار الشهر", from_drawer=False, expense_date=start.strftime("%Y-%m-%d"))
-    expenses.add_expense("رواتب", 3000, "راتب العامل", from_drawer=False)
+    expenses.add_expense("رواتب", 3000, "راتب العامل", from_drawer=False, expense_date=start.strftime("%Y-%m-%d"))
 
     # النسخة 4: رأس مال وبنك، عروض، شيكات، مرتجع لمورد
     ledger.add_manual_entry(start.strftime("%Y-%m-%d"), "رأس مال المحل عند بدء استخدام البرنامج",
