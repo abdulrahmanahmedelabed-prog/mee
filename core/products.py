@@ -110,13 +110,12 @@ def _move_stock(conn, product_id, change, reason, expiry_date=None, batch_no=Non
     change = qty(change)
     conn.execute("UPDATE products SET quantity = ROUND(quantity + ?, 3) WHERE id=?", (change, product_id))
     bal = conn.execute("SELECT quantity FROM products WHERE id=?", (product_id,)).fetchone()[0]
-    loss_value = 0.0
-    if loss:
-        cost = conn.execute("SELECT cost_price FROM products WHERE id=?", (product_id,)).fetchone()[0]
-        loss_value = money(-change * cost)  # نقص = خسارة موجبة، زيادة في الجرد = ربح (سالب)
-    conn.execute("""INSERT INTO stock_movements (product_id, change_qty, reason, user_id, balance_after, loss_value, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                 (product_id, change, reason, auth.current_user_id(), bal, loss_value, db.now()))
+    cost = conn.execute("SELECT cost_price FROM products WHERE id=?", (product_id,)).fetchone()[0] or 0
+    loss_value = money(-change * cost) if loss else 0.0  # نقص = خسارة موجبة، زيادة في الجرد = ربح (سالب)
+    conn.execute("""INSERT INTO stock_movements (product_id, change_qty, reason, user_id, balance_after, loss_value,
+                                                 unit_cost, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                 (product_id, change, reason, auth.current_user_id(), bal, loss_value, cost, db.now()))
     if change > 0 and expiry_date:
         conn.execute("""INSERT INTO product_batches(product_id, batch_no, expiry_date, quantity, remaining, purchase_id, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?)""",

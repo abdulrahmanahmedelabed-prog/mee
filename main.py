@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-برنامج المحاسبة ونقاط البيع للمحلات الصغيرة والسوبرماركت - النسخة 3.0
+برنامج المحاسبة ونقاط البيع للمحلات الصغيرة والسوبرماركت - النسخة 4.0
 يعمل محلياً بدون إنترنت، على جهاز واحد أو عدة أجهزة كاشير عبر شبكة المحل.
 """
 
@@ -81,7 +81,7 @@ def main():
         connect_as_client(app)
     else:
         db.init_db()
-        if mode == config.MODE_SERVER:
+        if mode == config.MODE_SERVER or str(config.get("owner_web")) == "1":
             try:
                 remote.start_server()
             except OSError as e:

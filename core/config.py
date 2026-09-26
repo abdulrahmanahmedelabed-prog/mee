@@ -20,6 +20,7 @@ DEFAULTS = {
     "server_host": "",
     "server_port": 8765,
     "link_code": "",               # رمز الربط السري بين الأجهزة
+    "owner_web": "0",              # تشغيل لوحة المالك على الجوال في الوضع المستقل
     # الطباعة
     "printer_name": "",
     "receipt_width_mm": "80",

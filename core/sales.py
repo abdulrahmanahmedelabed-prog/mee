@@ -10,8 +10,9 @@
 """
 
 import json
+import math
 
-from core import db, auth, audit, settings, context
+from core import db, auth, audit, settings, context, loyalty, promotions, license
 from core.products import _move_stock
 from core.utils import money, qty, fmt_qty
 
@@ -59,23 +60,42 @@ def _customer_balance(conn, customer_id):
                         (customer_id,)).fetchone()[0]
 
 
+def cart_discounts(cart, manual_discount=0.0, points=0.0):
+    """كل خصومات السلة: اليدوي + العروض التلقائية + قيمة نقاط الولاء المستبدلة"""
+    promo = promotions.apply(cart)
+    points_value = loyalty.value_of(points) if points else 0.0
+    manual = money(max(manual_discount or 0, 0))
+    return {"manual": manual, "promo": promo["total"], "promo_lines": promo["lines"], "points_value": points_value,
+            "total": money(manual + promo["total"] + points_value)}
+
+
 def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
-                cash_received=None, note="", shift_id=None, allow_over_limit=False):
+                cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0):
     """
     cart: قائمة dict: product_id, product_name, quantity, unit_price
           (اختياري) factor, unit_name للبيع بوحدة أكبر مثل الكرتونة
+    discount: الخصم اليدوي فقط؛ خصم العروض وقيمة نقاط الولاء تُضاف تلقائياً.
     إذا لم يُحدد cash_amount يُعتبر الباقي كله نقداً.
     يرجع dict فيه رقم الفاتورة ومعرّفها والإجماليات.
     """
     if not cart:
         raise SaleError("السلة فارغة")
+    try:
+        license.require_active()
+    except license.LicenseError as e:
+        raise SaleError(str(e))
     for item in cart:
         if item["quantity"] <= 0:
             raise SaleError(f"كمية غير صحيحة للمنتج {item['product_name']}")
         if item["unit_price"] < 0:
             raise SaleError(f"سعر غير صحيح للمنتج {item['product_name']}")
 
-    t = compute_totals(cart, discount)
+    points_redeemed = float(points_redeemed or 0)
+    disc = cart_discounts(cart, discount, points_redeemed)
+    subtotal = compute_totals(cart)["subtotal"]
+    if points_redeemed and disc["total"] > subtotal + 0.009:
+        raise SaleError("قيمة النقاط المستبدلة أكبر من قيمة الفاتورة بعد الخصم")
+    t = compute_totals(cart, disc["total"])
     total = t["total"]
     card_amount = money(card_amount or 0)
     credit_amount = money(credit_amount or 0)
@@ -133,19 +153,34 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
                 if bal + credit_amount > limit + 0.009:
                     raise SaleError(f"تجاوز حد الدين للعميل {cust['name']}: الرصيد الحالي {money(bal)} والحد {money(limit)}")
 
+        if points_redeemed:
+            try:
+                loyalty._check_redeem(conn, customer_id, points_redeemed)
+            except ValueError as e:
+                raise SaleError(str(e))
+        points_earned = loyalty.points_for(total) if customer_id else 0.0
+        if disc["promo_lines"]:
+            promo_note = "عروض: " + "، ".join(l["name"] for l in disc["promo_lines"])
+            note = f"{note} | {promo_note}" if note else promo_note
+
         number = db.next_number(conn, "invoice", "INV")
         created = db.now()
         cost_total = money(sum(products[i["product_id"]]["cost_price"] * i["quantity"] * i.get("factor", 1) for i in cart))
         cur = conn.execute("""
             INSERT INTO invoices (invoice_number, customer_id, subtotal, discount, tax, total, cost_total, paid,
                                   payment_method, cash_amount, card_amount, credit_amount, cash_received, change_given,
-                                  status, note, user_id, shift_id, terminal, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?)
+                                  status, note, user_id, shift_id, terminal, promo_discount, points_redeemed,
+                                  points_value, points_earned, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (number, customer_id, t["subtotal"], t["discount"], t["tax"], total, cost_total,
               money(cash_amount + card_amount), payment_label(cash_amount, card_amount, credit_amount),
               cash_amount, card_amount, credit_amount, money(cash_received), change, note, user_id, shift_id,
-              context.terminal(), created))
+              context.terminal(), disc["promo"], points_redeemed, disc["points_value"], points_earned, created))
         invoice_id = cur.lastrowid
+        if points_redeemed:
+            loyalty._record(conn, customer_id, -points_redeemed, invoice_id, f"استبدال في الفاتورة {number}", user_id)
+        if points_earned:
+            loyalty._record(conn, customer_id, points_earned, invoice_id, f"نقاط الفاتورة {number}", user_id)
 
         for item in cart:
             p = products[item["product_id"]]
@@ -169,7 +204,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
                          (customer_id, credit_amount, invoice_id, f"فاتورة {number}", user_id, shift_id, created))
 
     return {"invoice_id": invoice_id, "invoice_number": number, "change": change, **t,
-            "cash_amount": cash_amount, "card_amount": card_amount, "credit_amount": credit_amount}
+            "cash_amount": cash_amount, "card_amount": card_amount, "credit_amount": credit_amount,
+            "promo_discount": disc["promo"], "points_value": disc["points_value"], "points_earned": points_earned}
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +280,9 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
             conn.execute("""INSERT INTO customer_transactions (customer_id, type, amount, invoice_id, note, user_id, shift_id, created_at)
                             VALUES (?, 'return', ?, ?, ?, ?, ?, ?)""",
                          (inv["customer_id"], -total, invoice_id, f"مرتجع {number}", user_id, shift_id, created))
+        if inv["customer_id"] and inv["points_earned"] and inv["total"]:
+            lost = float(math.floor(inv["points_earned"] * total / inv["total"] + 0.5))
+            loyalty._record(conn, inv["customer_id"], -lost, invoice_id, f"إلغاء نقاط بسبب المرتجع {number}", user_id)
         audit.log("مرتجع", f"{number} من {inv['invoice_number']} بقيمة {total} ({refund_method})", conn)
 
     return {"return_id": ret_id, "return_number": number, "total": total}

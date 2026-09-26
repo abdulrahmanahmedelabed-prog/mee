@@ -144,10 +144,11 @@ def sales_by_hour(date_from, date_to):
 
 def dashboard(today=None):
     today = today or db.today()
-    from core import customers, suppliers, products, shifts
+    from core import customers, suppliers, products, shifts, cheques, license
     pl = profit_and_loss(today, today)
     shift = shifts.current_shift()
     cash = shifts.summary(shift["id"])["expected_cash"] if shift else None
+    due = cheques.due_soon(7)
     return {
         "today": pl,
         "expiring": len(products.expiring_batches()),
@@ -157,4 +158,38 @@ def dashboard(today=None):
         "inventory": products.inventory_value(),
         "drawer_cash": cash,
         "shift": shift,
+        "cheques_due": len(due),
+        "cheques_in_due": money(sum(c["amount"] for c in due if c["direction"] == "in")),
+        "cheques_out_due": money(sum(c["amount"] for c in due if c["direction"] == "out")),
+        "license": license.status(),
     }
+
+
+def daily_summary_text(day=None):
+    """ملخص اليوم للمالك (يُرسل عبر واتساب بضغطة)"""
+    from core import settings, products, shifts, customers, cheques
+    from core.utils import fmt_qty
+    day = day or db.today()
+    p = profit_and_loss(day, day)
+    cur = settings.get("currency_symbol", "")
+    drawers = money(sum(shifts.summary(s["id"])["expected_cash"] for s in shifts.open_shifts()))
+    lines = [f"📊 ملخص يوم {day} — {settings.get('shop_name')}", "",
+             f"🧾 المبيعات: {p['net_sales']:,.2f} {cur} ({p['invoice_count']} فاتورة)",
+             f"   نقدي {p['cash_sales']:,.2f} • بطاقة {p['card_sales']:,.2f} • آجل {p['credit_sales']:,.2f}",
+             f"📈 مجمل الربح: {p['gross_profit']:,.2f} (هامش {p['gross_margin']}%)",
+             f"💸 المصاريف: {p['expenses']:,.2f}",
+             f"💰 صافي الربح: {p['net_profit']:,.2f}",
+             f"📒 ديون محصّلة: {p['debt_collected']:,.2f} • إجمالي ديون العملاء: {customers.total_debts():,.2f}",
+             f"💵 النقد في الأدراج الآن: {drawers:,.2f}"]
+    top = top_products(day, day, 3, "total")
+    if top:
+        lines += ["", "🏆 الأكثر مبيعاً:"] + [f"   {i + 1}. {r['product_name']} ×{fmt_qty(r['qty'])}" for i, r in enumerate(top)]
+    low = len(products.get_low_stock_products())
+    due = cheques.due_soon(3)
+    if low or due:
+        lines.append("")
+    if low:
+        lines.append(f"⚠ {low} صنف تحت الحد الأدنى")
+    if due:
+        lines.append(f"🏦 {len(due)} شيك يستحق خلال 3 أيام بقيمة {sum(c['amount'] for c in due):,.2f}")
+    return "\n".join(lines)

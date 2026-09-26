@@ -34,6 +34,14 @@ DEFAULTS = {
     "block_expired_sale": "0",
     # واتساب
     "whatsapp_country_code": "970",
+    "owner_whatsapp": "",           # رقم المالك لإرسال ملخص اليوم
+    # نقاط الولاء
+    "loyalty_enabled": "0",
+    "loyalty_points_per_unit": "1",   # نقاط لكل 1 شيكل من قيمة الفاتورة
+    "loyalty_point_value": "0.05",    # قيمة النقطة بالعملة عند الاستبدال
+    "loyalty_min_redeem": "100",      # أقل عدد نقاط يمكن استبداله
+    # العروض
+    "promotions_enabled": "1",
     "expense_categories": "إيجار,كهرباء,ماء,رواتب,إنترنت واتصالات,مواصلات,صيانة,تنظيف,ضيافة,أخرى",
 }
 

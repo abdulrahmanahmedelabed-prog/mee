@@ -12,7 +12,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def app_dir():
@@ -317,6 +317,100 @@ CREATE TABLE IF NOT EXISTS product_batches (
     created_at TEXT
 );
 
+-- ===== النسخة 4 =====
+CREATE TABLE IF NOT EXISTS accounts (
+    code TEXT PRIMARY KEY,           -- رقم الحساب في دليل الحسابات (مثل 1110 الصندوق)
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,              -- asset / liability / equity / revenue / expense
+    is_system INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_number TEXT UNIQUE,
+    entry_date TEXT NOT NULL,
+    description TEXT,
+    is_void INTEGER NOT NULL DEFAULT 0,
+    user_id INTEGER,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS journal_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+    account_code TEXT NOT NULL,
+    debit REAL NOT NULL DEFAULT 0,
+    credit REAL NOT NULL DEFAULT 0,
+    note TEXT
+);
+
+CREATE TABLE IF NOT EXISTS cheques (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    direction TEXT NOT NULL,         -- in = شيك وارد من عميل / out = شيك صادر لمورد
+    cheque_number TEXT,
+    bank TEXT,
+    amount REAL NOT NULL,
+    due_date TEXT NOT NULL,          -- تاريخ الاستحقاق (الشيك المؤجل)
+    customer_id INTEGER REFERENCES customers(id),
+    supplier_id INTEGER REFERENCES suppliers(id),
+    status TEXT NOT NULL DEFAULT 'pending',   -- pending / cleared / bounced
+    status_date TEXT,
+    note TEXT,
+    user_id INTEGER,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS promotions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,              -- buy_get / bundle / percent
+    product_id INTEGER REFERENCES products(id),
+    category TEXT,
+    buy_qty REAL NOT NULL DEFAULT 0,
+    get_qty REAL NOT NULL DEFAULT 0,
+    bundle_qty REAL NOT NULL DEFAULT 0,
+    bundle_price REAL NOT NULL DEFAULT 0,
+    percent REAL NOT NULL DEFAULT 0,
+    start_date TEXT,
+    end_date TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS loyalty_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    points REAL NOT NULL,            -- موجب = نقاط مكتسبة، سالب = مستبدلة أو ملغاة بمرتجع
+    invoice_id INTEGER,
+    note TEXT,
+    user_id INTEGER,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS purchase_returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_number TEXT UNIQUE,
+    supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
+    total REAL NOT NULL,             -- القيمة المخصومة من حساب المورد
+    cost_total REAL NOT NULL DEFAULT 0,   -- قيمة البضاعة بالتكلفة الدفترية
+    reason TEXT,
+    user_id INTEGER,
+    shift_id INTEGER,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS purchase_return_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    return_id INTEGER NOT NULL REFERENCES purchase_returns(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id),
+    product_name TEXT,
+    quantity REAL NOT NULL,          -- بالوحدة الأساسية
+    unit_cost REAL NOT NULL,
+    book_cost REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -355,6 +449,10 @@ ADDED_COLUMNS = {
         ("user_id", "INTEGER"),
         ("shift_id", "INTEGER"),
         ("terminal", "TEXT"),
+        ("promo_discount", "REAL NOT NULL DEFAULT 0"),   # خصم العروض التلقائية (جزء من discount)
+        ("points_redeemed", "REAL NOT NULL DEFAULT 0"),  # نقاط ولاء مستبدلة
+        ("points_value", "REAL NOT NULL DEFAULT 0"),     # قيمتها (جزء من discount)
+        ("points_earned", "REAL NOT NULL DEFAULT 0"),
     ],
     "invoice_items": [
         ("returned_qty", "REAL NOT NULL DEFAULT 0"),
@@ -380,6 +478,7 @@ ADDED_COLUMNS = {
         ("user_id", "INTEGER"),
         ("balance_after", "REAL"),
         ("loss_value", "REAL NOT NULL DEFAULT 0"),   # قيمة الخسارة بالتكلفة (تالف/منتهي/عجز جرد)
+        ("unit_cost", "REAL"),                       # تكلفة الحبة وقت الحركة (للقيود المحاسبية)
     ],
 }
 
@@ -399,6 +498,11 @@ CREATE INDEX IF NOT EXISTS ix_purchases_created ON purchases(created_at);
 CREATE INDEX IF NOT EXISTS ix_units_product ON product_units(product_id);
 CREATE INDEX IF NOT EXISTS ix_batches_product ON product_batches(product_id, expiry_date);
 CREATE INDEX IF NOT EXISTS ix_batches_expiry ON product_batches(expiry_date);
+CREATE INDEX IF NOT EXISTS ix_journal_date ON journal_entries(entry_date);
+CREATE INDEX IF NOT EXISTS ix_jlines_entry ON journal_lines(entry_id);
+CREATE INDEX IF NOT EXISTS ix_cheques_due ON cheques(status, due_date);
+CREATE INDEX IF NOT EXISTS ix_loyalty_customer ON loyalty_transactions(customer_id);
+CREATE INDEX IF NOT EXISTS ix_shifts_terminal ON shifts(terminal, id);
 """
 
 
@@ -428,14 +532,26 @@ def init_db():
         conn.execute("UPDATE shifts SET terminal=? WHERE terminal IS NULL", (config.get("terminal_name"),))
 
         conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
+        conn.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('install_date', ?)", (today(),))
         conn.commit()
     finally:
         conn.close()
 
-    # إعدادات افتراضية + مستخدم مدير أول مرة
-    from core import settings, auth
+    # إعدادات افتراضية + مستخدم مدير أول مرة + دليل الحسابات
+    from core import settings, auth, ledger
     settings.ensure_defaults()
     auth.ensure_admin()
+    ledger.ensure_accounts()
+
+
+def get_meta(key, default=None):
+    row = query_one("SELECT value FROM meta WHERE key=?", (key,))
+    return row[0] if row else default
+
+
+def set_meta(key, value):
+    with tx() as conn:
+        conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", (key, None if value is None else str(value)))
 
 
 def _migrate_v1_data(conn):

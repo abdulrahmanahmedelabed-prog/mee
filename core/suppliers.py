@@ -10,7 +10,7 @@ PAY_OUTSIDE = "نقدي من خارج الصندوق"
 PAY_BANK = "تحويل بنكي / شيك"
 PAYMENT_METHODS = [PAY_DRAWER, PAY_OUTSIDE, PAY_BANK]
 TYPE_LABELS = {"purchase": "فاتورة مشتريات", "payment": "دفعة للمورد", "return": "مرتجع مشتريات",
-               "opening": "رصيد سابق", "adjust": "تسوية"}
+               "opening": "رصيد سابق", "adjust": "تسوية", "bounced": "شيك راجع"}
 
 
 def add_supplier(name, phone="", address="", notes="", opening_balance=0):
@@ -118,6 +118,62 @@ def create_purchase(supplier_id, items, paid=0.0, payment_method=PAY_DRAWER, sup
         # ملاحظة: المشتريات النقدية بدون مورد تُحسب في الصندوق مباشرة من جدول purchases
         audit.log("فاتورة مشتريات", f"{number} بقيمة {total} مدفوع {paid}", conn)
     return {"purchase_id": pid, "purchase_number": number, "total": total}
+
+
+def create_purchase_return(supplier_id, items, reason="", shift_id=None):
+    """
+    إرجاع بضاعة للمورد (تالف، منتهي، زائد عن الحاجة): تُخصم من المخزون ومن حساب المورد.
+    items: dict: product_id, quantity (بالحبة)، (اختياري) unit_cost = السعر الذي سيخصمه المورد (افتراضياً تكلفتنا)
+    """
+    items = [i for i in items if i.get("quantity", 0) > 0]
+    if not supplier_id:
+        raise ValueError("اختر المورد")
+    if not items:
+        raise ValueError("أضف منتجاً واحداً على الأقل")
+    user_id, created = auth.current_user_id(), db.now()
+    with db.tx() as conn:
+        if not conn.execute("SELECT 1 FROM suppliers WHERE id=?", (supplier_id,)).fetchone():
+            raise ValueError("المورد غير موجود")
+        number = db.next_number(conn, "purchase_return", "PRT")
+        lines = []
+        for it in items:
+            p = conn.execute("SELECT * FROM products WHERE id=?", (it["product_id"],)).fetchone()
+            if not p:
+                raise ValueError("منتج غير موجود")
+            q = qty(it["quantity"])
+            if q > p["quantity"] + 1e-9:
+                raise ValueError(f"الكمية المرتجعة من {p['name']} أكبر من الموجود ({p['quantity']:g})")
+            unit_cost = money(it.get("unit_cost") if it.get("unit_cost") is not None else p["cost_price"])
+            lines.append((p, q, unit_cost, money(q * unit_cost), money(q * p["cost_price"])))
+        total = money(sum(l[3] for l in lines))
+        cost_total = money(sum(l[4] for l in lines))
+        cur = conn.execute("""INSERT INTO purchase_returns(return_number, supplier_id, total, cost_total, reason, user_id,
+                                                           shift_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (number, supplier_id, total, cost_total, reason, user_id, shift_id, created))
+        rid = cur.lastrowid
+        for p, q, unit_cost, line_total, book in lines:
+            conn.execute("""INSERT INTO purchase_return_items(return_id, product_id, product_name, quantity, unit_cost,
+                                                              book_cost, total) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                         (rid, p["id"], p["name"], q, unit_cost, p["cost_price"], line_total))
+            _move_stock(conn, p["id"], -q, f"مرتجع مشتريات {number}")
+        conn.execute("""INSERT INTO supplier_transactions(supplier_id, type, amount, note, user_id, shift_id, created_at)
+                        VALUES (?, 'return', ?, ?, ?, ?, ?)""",
+                     (supplier_id, -total, f"مرتجع {number} {reason or ''}".strip(), user_id, shift_id, created))
+        audit.log("مرتجع مشتريات", f"{number} للمورد #{supplier_id} بقيمة {total}", conn)
+    return {"return_id": rid, "return_number": number, "total": total}
+
+
+def list_purchase_returns(supplier_id=None):
+    sql = """SELECT r.*, s.name AS supplier_name FROM purchase_returns r JOIN suppliers s ON s.id=r.supplier_id"""
+    params = []
+    if supplier_id:
+        sql += " WHERE r.supplier_id=?"
+        params.append(supplier_id)
+    return db.query(sql + " ORDER BY r.id DESC", params)
+
+
+def purchase_return_items(return_id):
+    return db.query("SELECT * FROM purchase_return_items WHERE return_id=?", (return_id,))
 
 
 def pay_supplier(supplier_id, amount, method=PAY_DRAWER, note="", shift_id=None):

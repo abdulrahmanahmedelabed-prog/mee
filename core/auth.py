@@ -30,12 +30,15 @@ PERMISSIONS = {
     "settings": "الإعدادات",
     "users": "المستخدمون",
     "backup": "النسخ الاحتياطي",
+    "accounting": "المحاسبة (القيود والميزانية)",
+    "cheques": "الشيكات",
+    "promotions": "العروض ونقاط الولاء",
 }
 
 ROLE_PERMISSIONS = {
     "admin": set(PERMISSIONS),
     "manager": set(PERMISSIONS) - {"users", "settings"},
-    "cashier": {"pos", "invoices", "customers", "cash"},
+    "cashier": {"pos", "invoices", "customers", "cash"},  # الشيكات والمحاسبة للمدير فقط
 }
 
 # ---------------- كلمات المرور ----------------

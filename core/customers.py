@@ -5,7 +5,8 @@ from core import db, auth, audit
 from core.utils import money, fmt_money
 
 PAYMENT_METHODS = ["نقدي", "بطاقة", "تحويل"]
-TYPE_LABELS = {"sale": "فاتورة آجلة", "payment": "تسديد", "return": "مرتجع", "opening": "رصيد سابق", "adjust": "تسوية"}
+TYPE_LABELS = {"sale": "فاتورة آجلة", "payment": "تسديد", "return": "مرتجع", "opening": "رصيد سابق", "adjust": "تسوية",
+               "bounced": "شيك راجع"}
 
 
 def add_customer(name, phone="", address="", credit_limit=0, notes="", opening_balance=0):
