@@ -22,6 +22,14 @@ def free_port():
     return port
 
 
+def _start(data, port):
+    proc = subprocess.Popen([sys.executable, os.path.join(ROOT, "tools", "server_headless.py"), str(data), str(port)],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    line = proc.stdout.readline()
+    assert line.startswith("READY"), proc.stderr.read()
+    return proc
+
+
 @pytest.fixture
 def server(tmp_path):
     data = tmp_path / "server_data"
@@ -77,8 +85,10 @@ def test_two_terminals_share_data(server):
     assert shifts.current_shift() is None
     assert products.get_product(pid)["quantity"] == 8
 
-    # جلسة منتهية/مزورة
+    # جلسة منتهية: إعادة دخول تلقائية بالبيانات المحفوظة في الذاكرة، وبدونها رفض
     client.token = "fake"
+    assert products.get_all_products()
+    client.token, client._creds = "fake", None
     with pytest.raises(remote.RemoteError):
         products.get_all_products()
     remote.uninstall_client()
@@ -110,3 +120,47 @@ def test_owner_page_and_server_side_permissions(server):
     assert license.status()["state"] == "trial"                   # حالة الترخيص تأتي من الجهاز الرئيسي
     remote.uninstall_client()
     auth.set_current_user(local_user)
+
+
+
+def test_offline_selling_and_sync(tmp_path):
+    from core import offline
+    data = tmp_path / "srv"
+    data.mkdir()
+    (data / "terminal.json").write_text(json.dumps({"mode": "server", "link_code": "ABC123",
+                                                    "terminal_name": "الرئيسي"}), encoding="utf-8")
+    port = free_port()
+    proc = _start(data, port)
+    local_user = auth.current_user()
+    try:
+        remote.install_client("127.0.0.1", port, "ABC123", "كاشير 5")
+        assert auth.login("admin", "admin")
+        pid = products.add_product("خبز", "b100", "", 1, 2, 5, 0)
+        sid = shifts.open_shift(50)
+        assert offline.refresh_cache() == 1
+        # الجهاز الرئيسي ينطفئ
+        proc.terminate()
+        proc.wait(timeout=10)
+        with pytest.raises(remote.ConnectionFailed):
+            products.lookup_code("b100")
+        p, q, unit = offline.lookup_code("b100")
+        assert p["name"] == "خبز"
+        cart = [{"product_id": pid, "product_name": "خبز", "quantity": 8, "unit_price": 2}]   # أكثر من المخزون
+        pay = offline.queue_sale(cart, 0, 0, 16, 0, 20, sid)
+        assert pay["change"] == 4 and offline.pending_count() == 1
+        assert offline.sync() == (0, 0) and offline.pending_count() == 1       # ما زال منقطعاً
+        # يعود الجهاز الرئيسي (الجلسة ضاعت ← دخول تلقائي)
+        proc = _start(data, port)
+        assert offline.sync() == (1, 0) and offline.pending_count() == 0
+        inv = sales.get_invoices(limit=1)[0]
+        assert inv["total"] == 16 and inv["created_at"] == pay["created_at"] and "انقطاع" in inv["note"]
+        assert products.get_product(pid)["quantity"] == -3                     # البيع تم فعلاً فيُسجّل
+        assert shifts.summary(sid)["expected_cash"] == 66
+        # ترحيل مكرر (انقطع قبل وصول الرد) لا يُنشئ فاتورة ثانية
+        assert sales.import_offline_sale(pay)["duplicate"] is True
+        assert len(sales.get_invoices()) == 1
+    finally:
+        remote.uninstall_client()
+        auth.set_current_user(local_user)
+        proc.terminate()
+        proc.wait(timeout=10)

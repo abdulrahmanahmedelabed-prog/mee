@@ -185,6 +185,13 @@ class MainWindow(QMainWindow):
         self.go("pos" if u["role"] == "cashier" else (first or "pos"))
 
     def update_header(self):
+        try:
+            self._update_header()
+        except remote.RemoteError:   # نقطة بيع فرعية فقدت الاتصال: نقطة البيع تعمل محلياً
+            self.shift_chip.setText("⚠ لا اتصال بالجهاز الرئيسي")
+            self.tick()
+
+    def _update_header(self):
         self.brand.setText(f"🏪 {settings.get('shop_name')}")
         self.setWindowTitle(f"{settings.get('shop_name')} — برنامج المحاسبة ونقاط البيع")
         s = shifts.current_shift()

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QRadioButton, QButtonGroup
 )
 
-from core import products, sales, settings, auth, receipts, customers, drawer, audit, loyalty
+from core import products, sales, settings, auth, receipts, customers, drawer, audit, loyalty, remote, offline
 from core.sales import SaleError
 from core.utils import money, fmt_qty, qty as round_qty
 from ui import printing
@@ -238,6 +238,8 @@ class POSScreen(QWidget):
         self.customer = None
         self.last_invoice_id = None
         self._rendering = False
+        self.offline_mode = False   # نقطة بيع فرعية فقدت الاتصال بالجهاز الرئيسي وتبيع من النسخة المحلية
+        self.last_shift_id = None
         self.build_ui()
         self.setup_shortcuts()
         self.render_cart()
@@ -263,6 +265,16 @@ class POSScreen(QWidget):
         self.customer_btn.setMinimumHeight(48)
         top.addWidget(self.customer_btn)
         main.addLayout(top)
+        self.offline_bar = QLabel("")
+        self.offline_bar.setWordWrap(True)
+        self.offline_bar.setStyleSheet("background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; border-radius:8px;"
+                                       " padding:6px 10px; font-weight:800;")
+        self.offline_bar.hide()
+        main.addWidget(self.offline_bar)
+        if remote.is_client():
+            self._net_timer = QTimer(self)
+            self._net_timer.timeout.connect(self.network_tick)
+            self._net_timer.start(15000)
 
         self.flash = QLabel("")
         self.flash.setMinimumHeight(22)
@@ -387,7 +399,62 @@ class POSScreen(QWidget):
 
     def refresh(self):
         self.load_favorites()
+        if remote.is_client() and not self.offline_mode:
+            age = offline.cache_age()
+            if age is None or age > offline.CACHE_MAX_AGE:
+                self._try(offline.refresh_cache, lambda: None)
+        self.update_offline_bar()
         self.focus_search()
+
+    # ------------------------------------------------------------------ انقطاع الشبكة
+    def _try(self, fn, fallback):
+        """نفّذ على الجهاز الرئيسي، وإن انقطع الاتصال انتقل لوضع عدم الاتصال واستخدم النسخة المحلية"""
+        if self.offline_mode:
+            return fallback()
+        try:
+            return fn()
+        except remote.ConnectionFailed:
+            self.go_offline()
+            return fallback()
+
+    def go_offline(self):
+        if not self.offline_mode:
+            self.offline_mode = True
+            self.show_flash("⚠ انقطع الاتصال بالجهاز الرئيسي — البيع مستمر من النسخة المحلية", "err")
+        self.update_offline_bar()
+
+    def update_offline_bar(self):
+        if not remote.is_client():
+            return
+        pending = offline.pending_count()
+        failed = len(offline.queue()) - pending
+        if self.offline_mode:
+            self.offline_bar.setText(f"⚠ وضع عدم الاتصال: البيع نقدي/بطاقة فقط من النسخة المحلية — "
+                                     f"{pending} فاتورة بانتظار الترحيل. ستُرحَّل تلقائياً عند عودة الشبكة.")
+        elif pending or failed:
+            self.offline_bar.setText(f"⏳ {pending} فاتورة بانتظار الترحيل" +
+                                     (f" — {failed} متعذرة (راجع المدير)" if failed else ""))
+        self.offline_bar.setVisible(self.offline_mode or bool(pending or failed))
+
+    def network_tick(self):
+        """كل 15 ثانية: هل عاد الاتصال؟ رحّل الفواتير المعلقة وحدّث النسخة المحلية"""
+        try:
+            if self.offline_mode:
+                remote.CLIENT.ping()
+                self.offline_mode = False
+                self.show_flash("✓ عاد الاتصال بالجهاز الرئيسي", "ok")
+            if offline.pending_count():
+                synced, failed = offline.sync()
+                if synced:
+                    self.show_flash(f"✓ رُحّلت {synced} فاتورة للجهاز الرئيسي", "ok")
+            age = offline.cache_age()
+            if age is None or age > offline.CACHE_MAX_AGE:
+                offline.refresh_cache()
+        except remote.RemoteError:
+            self.offline_mode = True
+        except Exception:
+            pass
+        self.update_offline_bar()
 
     def focus_search(self):
         self.results.hide()
@@ -408,13 +475,14 @@ class POSScreen(QWidget):
             w = self.fav_grid.takeAt(0).widget()
             if w:
                 w.deleteLater()
-        favs = products.get_all_products(favorites_only=True)
+        favs = self._try(lambda: products.get_all_products(favorites_only=True),
+                         lambda: offline.search("", favorites_only=True))
         self.fav_area.setVisible(bool(favs))
         cols = 6
         for i, p in enumerate(favs):
             b = button(f"{p['name']}\n{m(p['sale_price'])}", "favBtn")
             b.setFocusPolicy(Qt.NoFocus)
-            b.clicked.connect(lambda _=False, pid=p["id"]: self.add_product(products.get_product(pid)))
+            b.clicked.connect(lambda _=False, pid=p["id"]: self.add_product(self._get_product(pid)))
             self.fav_grid.addWidget(b, i // cols, i % cols)
 
     # ------------------------------------------------------------------ البحث
@@ -457,7 +525,7 @@ class POSScreen(QWidget):
         if "*" in text:
             text = text.split("*", 1)[1].strip()
         if len(text) >= 2 and not text.isdigit():
-            rows = products.get_all_products(search=text)[:60]
+            rows = self._try(lambda: products.get_all_products(search=text)[:60], lambda: offline.search(text)[:60])
             self.results.set_rows([[r["name"], r["barcode"] or "", float(r["sale_price"]), qty_cell(r["quantity"])]
                                    for r in rows], rows,
                                   colors=["#FEE2E2" if r["quantity"] <= 0 else None for r in rows])
@@ -484,7 +552,7 @@ class POSScreen(QWidget):
             code = code.strip()
         if not code:
             return
-        product, scale_qty, unit = products.lookup_code(code)
+        product, scale_qty, unit = self._try(lambda: products.lookup_code(code), lambda: offline.lookup_code(code))
         if product:
             self.add_product(product, scale_qty or multiplier, unit)
             self.search.clear()
@@ -503,7 +571,7 @@ class POSScreen(QWidget):
     def add_selected_result(self, multiplier=None):
         p = self.results.selected_data()
         if p:
-            self.add_product(products.get_product(p["id"]), multiplier if isinstance(multiplier, float) else None)
+            self.add_product(self._get_product(p["id"]), multiplier if isinstance(multiplier, float) else None)
             self.search.clear()
             self.results.hide()
             self.search.setFocus()
@@ -553,7 +621,7 @@ class POSScreen(QWidget):
             idx = len(self.cart) - 1
         self.render_cart(select=idx)
         msg, kind = f"✓ {line['product_name']}  ×{fmt_qty(quantity)}", "ok"
-        exp = products.expiry_status(product["id"])
+        exp = self._try(lambda: products.expiry_status(product["id"]), lambda: None)
         if exp:
             exp_date, days_left = exp
             if days_left < 0:
@@ -624,7 +692,8 @@ class POSScreen(QWidget):
         subtotal = sales.compute_totals(self.cart)["subtotal"]
         self.discount = min(self.discount, subtotal)
         if self.cart:
-            disc = sales.cart_discounts(self.cart, self.discount, self.points)
+            disc = self._try(lambda: sales.cart_discounts(self.cart, self.discount, self.points),
+                             lambda: offline.discounts(self.cart, self.discount))
         else:
             disc = {"total": 0.0, "promo_lines": [], "points_value": 0.0}
         t = sales.compute_totals(self.cart, disc["total"])
@@ -745,7 +814,7 @@ class POSScreen(QWidget):
         for it in self.cart:
             if float(it.get("factor", 1) or 1) != 1 or money(it["unit_price"]) != money(it["list_price"]):
                 continue
-            p = products.get_product(it["product_id"])
+            p = self._get_product(it["product_id"])
             if p:
                 new = products.price_for(p, self.customer)
                 it["unit_price"] = it["list_price"] = new
@@ -798,7 +867,13 @@ class POSScreen(QWidget):
             self.show_flash(f"🔍 {name}: {m(price)} {settings.get('currency_symbol')} — المتوفر {fmt_qty(p['quantity'])}", "info")
         self.focus_search()
 
+    def _get_product(self, pid):
+        return self._try(lambda: products.get_product(pid), lambda: offline.get_product(pid))
+
     def pick_customer(self):
+        if self.offline_mode:
+            self.show_flash("اختيار العملاء والبيع الآجل يحتاج الاتصال بالجهاز الرئيسي", "err")
+            return
         dlg = CustomerPicker(self)
         res = dlg.exec()
         if res == QDialog.Accepted:
@@ -884,9 +959,16 @@ class POSScreen(QWidget):
             self.focus_search()
 
     def finish_sale(self, pay, print_it=False):
-        shift_id, ok = ensure_shift(self)
+        if self.offline_mode:
+            return self.finish_offline_sale(pay, print_it)
+        try:
+            shift_id, ok = ensure_shift(self)
+        except remote.ConnectionFailed:
+            self.go_offline()
+            return self.finish_offline_sale(pay, print_it)
         if not ok:
             return
+        self.last_shift_id = shift_id
         cid = self.customer["id"] if self.customer else None
         kwargs = dict(discount=self.discount, customer_id=cid, cash_amount=pay["cash_amount"],
                       card_amount=pay["card_amount"], credit_amount=pay["credit_amount"],
@@ -903,6 +985,9 @@ class POSScreen(QWidget):
         except SaleError as e:
             warn(self, str(e))
             return
+        except remote.ConnectionFailed:
+            self.go_offline()
+            return self.finish_offline_sale(pay, print_it)
         except Exception as e:
             error(self, f"تعذر حفظ الفاتورة:\n{e}")
             return
@@ -931,6 +1016,30 @@ class POSScreen(QWidget):
             except Exception as e:
                 warn(self, f"تم حفظ الفاتورة لكن تعذرت الطباعة:\n{e}")
         self.sale_completed.emit()
+        self.focus_search()
+
+    def finish_offline_sale(self, pay, print_it=False):
+        """حفظ الفاتورة محلياً أثناء انقطاع الشبكة، وتُرحَّل تلقائياً لاحقاً"""
+        if pay["credit_amount"] or self.points or self.customer:
+            warn(self, "أثناء انقطاع الشبكة: البيع نقدي أو بطاقة فقط، بدون عميل أو نقاط ولاء.")
+            return
+        disc = offline.discounts(self.cart, self.discount)
+        try:
+            p = offline.queue_sale(self.cart, self.discount, disc["promo"], pay["cash_amount"], pay["card_amount"],
+                                   pay["cash_received"], self.last_shift_id)
+        except SaleError as e:
+            warn(self, str(e))
+            return
+        if pay["cash_amount"] > 0 and settings.get_bool("drawer_on_cash_sale"):
+            self.open_drawer(silent=True)
+        self.lbl_change.setText(f"✓ حُفظت محلياً (بانتظار الترحيل)\nالباقي للزبون: {m(p['change'])}")
+        self.clear_cart()
+        if print_it:
+            try:
+                printing.print_html(self, receipts.offline_receipt_html(p))
+            except Exception as e:
+                warn(self, f"حُفظت الفاتورة لكن تعذرت الطباعة:\n{e}")
+        self.update_offline_bar()
         self.focus_search()
 
     def open_drawer(self, silent=False, reason="فتح يدوي"):

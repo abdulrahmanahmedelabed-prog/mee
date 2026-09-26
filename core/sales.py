@@ -70,7 +70,8 @@ def cart_discounts(cart, manual_discount=0.0, points=0.0):
 
 
 def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
-                cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0):
+                cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0,
+                offline=None):
     """
     cart: قائمة dict: product_id, product_name, quantity, unit_price
           (اختياري) factor, unit_name للبيع بوحدة أكبر مثل الكرتونة
@@ -80,8 +81,15 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
     """
     if not cart:
         raise SaleError("السلة فارغة")
+    # offline: فاتورة بيعت فعلاً على جهاز فرعي أثناء انقطاع الشبكة وتُرحَّل الآن
+    # {"ref": معرّف فريد، "created_at": وقت البيع، "promo_discount": خصم العروض كما حُسب وقتها}
+    if offline:
+        existing = db.query_one("SELECT * FROM invoices WHERE offline_ref=?", (offline["ref"],))
+        if existing:   # رُحّلت سابقاً (انقطع الاتصال قبل وصول الرد): لا نكررها
+            return {"invoice_id": existing["id"], "invoice_number": existing["invoice_number"],
+                    "total": existing["total"], "duplicate": True}
     try:
-        license.require_active()
+        license.require_active()   # حتى الفواتير المرحّلة: تبقى في الانتظار حتى التفعيل (لا تجاوز للترخيص)
     except license.LicenseError as e:
         raise SaleError(str(e))
     for item in cart:
@@ -91,7 +99,12 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
             raise SaleError(f"سعر غير صحيح للمنتج {item['product_name']}")
 
     points_redeemed = float(points_redeemed or 0)
-    disc = cart_discounts(cart, discount, points_redeemed)
+    if offline:
+        promo = money(offline.get("promo_discount") or 0)
+        disc = {"manual": money(discount or 0), "promo": promo, "promo_lines": [], "points_value": 0.0,
+                "total": money(money(discount or 0) + promo)}
+    else:
+        disc = cart_discounts(cart, discount, points_redeemed)
     subtotal = compute_totals(cart)["subtotal"]
     if points_redeemed and disc["total"] > subtotal + 0.009:
         raise SaleError("قيمة النقاط المستبدلة أكبر من قيمة الفاتورة بعد الخصم")
@@ -113,9 +126,14 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
     change = money(cash_received - cash_amount)
 
     user_id = auth.current_user_id()
-    allow_negative = settings.get_bool("allow_negative_stock")
+    allow_negative = settings.get_bool("allow_negative_stock") or bool(offline)
 
     with db.tx() as conn:
+        if offline:
+            dup = conn.execute("SELECT id, invoice_number, total FROM invoices WHERE offline_ref=?", (offline["ref"],)).fetchone()
+            if dup:
+                return {"invoice_id": dup["id"], "invoice_number": dup["invoice_number"], "total": dup["total"],
+                        "duplicate": True}
         # ---- التحقق من المخزون (مجمّع لكل منتج) ----
         needed = {}
         for item in cart:
@@ -131,7 +149,7 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
                 short.append(f"{p['name']} (المتوفر {fmt_qty(p['quantity'])})")
         if short:
             raise SaleError("الكمية غير كافية في المخزون:\n" + "\n".join(short))
-        if settings.get_bool("block_expired_sale"):
+        if settings.get_bool("block_expired_sale") and not offline:
             expired = []
             for pid in needed:
                 r = conn.execute("""SELECT MIN(expiry_date) FROM product_batches WHERE product_id=? AND remaining > 0""",
@@ -164,7 +182,9 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
             note = f"{note} | {promo_note}" if note else promo_note
 
         number = db.next_number(conn, "invoice", "INV")
-        created = db.now()
+        created = (offline or {}).get("created_at") or db.now()
+        if offline:
+            note = (note + " | " if note else "") + "بيع أثناء انقطاع الشبكة"
         cost_total = money(sum(products[i["product_id"]]["cost_price"] * i["quantity"] * i.get("factor", 1) for i in cart))
         cur = conn.execute("""
             INSERT INTO invoices (invoice_number, customer_id, subtotal, discount, tax, total, cost_total, paid,
@@ -177,6 +197,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
               cash_amount, card_amount, credit_amount, money(cash_received), change, note, user_id, shift_id,
               context.terminal(), disc["promo"], points_redeemed, disc["points_value"], points_earned, created))
         invoice_id = cur.lastrowid
+        if offline:
+            conn.execute("UPDATE invoices SET offline_ref=? WHERE id=?", (offline["ref"], invoice_id))
         if points_redeemed:
             loyalty._record(conn, customer_id, -points_redeemed, invoice_id, f"استبدال في الفاتورة {number}", user_id)
         if points_earned:
@@ -206,6 +228,15 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
     return {"invoice_id": invoice_id, "invoice_number": number, "change": change, **t,
             "cash_amount": cash_amount, "card_amount": card_amount, "credit_amount": credit_amount,
             "promo_discount": disc["promo"], "points_value": disc["points_value"], "points_earned": points_earned}
+
+
+def import_offline_sale(payload):
+    """ترحيل فاتورة بيعت أثناء انقطاع الشبكة (نقدي/بطاقة فقط). آمن للتكرار: نفس الفاتورة لا تُسجل مرتين"""
+    return create_sale(payload["cart"], discount=payload.get("discount", 0), cash_amount=payload["cash_amount"],
+                       card_amount=payload.get("card_amount", 0), cash_received=payload.get("cash_received"),
+                       shift_id=payload.get("shift_id"),
+                       offline={"ref": payload["ref"], "created_at": payload["created_at"],
+                                "promo_discount": payload.get("promo_discount", 0)})
 
 
 # ---------------------------------------------------------------------------

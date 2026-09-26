@@ -208,3 +208,29 @@ def test_wholesale_customer_reprices_and_customer_display(pos):
     assert sales.get_invoice(pos.last_invoice_id)["total"] == 42
     config.save({"customer_display": "0"})
     assert customer_display.get() is None
+
+
+def test_pos_keeps_selling_when_network_drops(pos, monkeypatch):
+    from core import offline, remote, promotions
+    pid = products.add_product("حمص", "h1", "", 2, 4, 10, 0)
+    promotions.add_promotion("3 بـ 10", "bundle", product_id=pid, bundle_qty=3, bundle_price=10)
+    offline.refresh_cache()
+
+    def down(*a, **k):
+        raise remote.ConnectionFailed("الشبكة مقطوعة")
+    monkeypatch.setattr(products, "lookup_code", down)
+    monkeypatch.setattr(sales, "cart_discounts", down)
+    monkeypatch.setattr(sales, "create_sale", down)
+    pos.search.setText("3*h1")
+    pos.on_enter()
+    assert pos.offline_mode and len(pos.cart) == 1
+    assert pos.update_totals()["total"] == 10                       # العرض محسوب من النسخة المحلية
+    pos.finish_sale({"cash_amount": 10, "card_amount": 0, "credit_amount": 0, "cash_received": 20, "change": 10})
+    assert pos.cart == [] and offline.pending_count() == 1 and "الباقي" in pos.lbl_change.text()
+    from core import receipts
+    assert "10.00" in receipts.offline_receipt_html(offline.queue()[0])
+    monkeypatch.undo()
+    assert offline.sync() == (1, 0)
+    inv = sales.get_invoices(limit=1)[0]
+    assert inv["total"] == 10 and inv["promo_discount"] == 2
+    assert products.get_product(pid)["quantity"] == 7

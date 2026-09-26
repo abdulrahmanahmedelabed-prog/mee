@@ -35,7 +35,8 @@ LOCAL_ONLY = {
     "auth": {"hash_password", "verify_password", "login", "set_current_user", "current_user", "current_user_id",
              "logout", "has_permission", "ensure_admin"},
     "sales": {"compute_totals", "payment_label"},
-    "products": {"is_loss_reason", "export_csv", "import_csv"},
+    "products": {"is_loss_reason", "export_csv", "import_csv", "price_for"},
+    "promotions": {"compute"},
     "backup": {"restore_backup", "validate_backup", "auto_daily_backup"},
     "ledger": {"account_type", "is_debit_normal"},
     "loyalty": {"enabled", "points_for", "value_of"},
@@ -64,6 +65,8 @@ def check_permission(key, user, args, kwargs):
         if target != user["id"] and not auth.has_permission("users", user):
             raise PermissionError("لا يمكنك تغيير كلمة مرور مستخدم آخر")
         return
+    if key == ("sales", "create_sale") and ("offline" in kwargs or len(args) > 12):
+        raise PermissionError("الترحيل يتم عبر import_offline_sale فقط")
     perm = REQUIRED_PERMISSION.get(key)
     if perm and not auth.has_permission(perm, user):
         raise PermissionError(f"ليست لديك صلاحية: {auth.PERMISSIONS.get(perm, perm)}")
@@ -78,6 +81,11 @@ class RemoteError(Exception):
 
 
 class ConnectionFailed(RemoteError):
+    pass
+
+
+class SessionExpired(RemoteError):
+    """الجهاز الرئيسي أُعيد تشغيله فضاعت الجلسة: نعيد تسجيل الدخول تلقائياً"""
     pass
 
 
@@ -304,6 +312,8 @@ class Client:
                 raise sales.SaleError(err["message"])
             if err["type"] in ("ValueError",):
                 raise ValueError(err["message"])
+            if err["type"] == "Auth" and path == "/rpc":
+                raise SessionExpired(err["message"])
             raise RemoteError(err["message"])
         return body
 
@@ -319,12 +329,19 @@ class Client:
         body = self._post("/login", {"username": username, "password": password, "link_code": self.link_code,
                                      "terminal": self.terminal})
         self.token = body["token"]
+        self._creds = (username, password)   # في الذاكرة فقط، لإعادة الدخول بعد إعادة تشغيل الجهاز الرئيسي
         return body["user"]
 
     def call(self, module, func, *args, **kwargs):
-        body = self._post("/rpc", {"token": self.token, "terminal": self.terminal, "module": module, "func": func,
-                                   "args": list(args), "kwargs": kwargs})
-        return body.get("result")
+        payload = {"terminal": self.terminal, "module": module, "func": func, "args": list(args), "kwargs": kwargs}
+        try:
+            return self._post("/rpc", dict(payload, token=self.token)).get("result")
+        except SessionExpired:
+            creds = getattr(self, "_creds", None)
+            if not creds:
+                raise
+            self.login(*creds)
+            return self._post("/rpc", dict(payload, token=self.token)).get("result")
 
 
 CLIENT = None

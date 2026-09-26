@@ -90,6 +90,31 @@ def invoice_html(invoice_id, copy=False):
     return _wrap(body)
 
 
+def offline_receipt_html(p):
+    """إيصال فاتورة بيعت أثناء انقطاع الشبكة (رقمها الرسمي يُعطى عند الترحيل)"""
+    sym = settings.get("currency_symbol")
+    rows = "".join(
+        f"<tr><td colspan='3'>{escape(i['product_name'])}</td></tr>"
+        f"<tr><td>{fmt_qty(i['quantity'])} × {_m(i['unit_price'])}</td><td></td>"
+        f"<td class='l'>{_m(i['quantity'] * i['unit_price'])}</td></tr>" for i in p["cart"])
+    lines = [f"<tr><td>المجموع</td><td class='l'>{_m(p['subtotal'])}</td></tr>"]
+    if p["discount"]:
+        lines.append(f"<tr><td>الخصم</td><td class='l'>-{_m(p['discount'])}</td></tr>")
+    if p["promo_discount"]:
+        lines.append(f"<tr><td>خصم العروض 🎁</td><td class='l'>-{_m(p['promo_discount'])}</td></tr>")
+    lines.append(f"<tr class='tot'><td>الإجمالي</td><td class='l'>{_m(p['total'])} {sym}</td></tr>")
+    if p["cash_amount"]:
+        lines.append(f"<tr><td>نقداً</td><td class='l'>{_m(p['cash_amount'])}</td></tr>")
+        if p["change"]:
+            lines.append(f"<tr><td>الباقي للزبون</td><td class='l'>{_m(p['change'])}</td></tr>")
+    if p["card_amount"]:
+        lines.append(f"<tr><td>بطاقة</td><td class='l'>{_m(p['card_amount'])}</td></tr>")
+    body = (_header() + f"<hr><div>مرجع: {escape(p['ref'][-10:].upper())}</div><div>التاريخ: {p['created_at']}</div>"
+            f"<hr><table>{rows}</table><hr><table>{''.join(lines)}</table><hr>"
+            f"<div class='c'>{escape(settings.get('receipt_footer') or '')}</div>")
+    return _wrap(body)
+
+
 def return_html(return_id):
     r = sales.get_return(return_id)
     items = sales.get_return_items(return_id)

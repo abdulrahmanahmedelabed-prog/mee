@@ -88,6 +88,11 @@ def apply(cart):
     ids = sorted({i["product_id"] for i in cart})
     marks = ",".join("?" * len(ids))
     cats = {r["id"]: r["category"] for r in db.query(f"SELECT id, category FROM products WHERE id IN ({marks})", ids)}
+    return compute(cart, promos, cats)
+
+
+def compute(cart, promos, cats):
+    """الحساب نفسه بدون قاعدة بيانات (يُستخدم أيضاً في نقطة البيع أثناء انقطاع الشبكة)"""
 
     # الكمية بالحبة وأقل سعر حبة لكل منتج (العروض بالقطعة لا تنطبق على الكرتونة)
     single = {}
