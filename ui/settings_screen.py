@@ -1,0 +1,431 @@
+# -*- coding: utf-8 -*-
+"""الإعدادات: بيانات المحل، الضريبة، الطباعة، البيع والمخزون، الميزان، المستخدمون، النسخ الاحتياطي"""
+
+import os
+
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QFormLayout, QLineEdit, QCheckBox,
+                               QComboBox, QDoubleSpinBox, QSpinBox, QLabel, QDialog, QFileDialog, QTextEdit)
+
+from PySide6.QtCore import Qt
+
+from core import settings, auth, backup, receipts, drawer, config, remote, shifts
+from ui import printing
+from ui.dialogs import ChangePasswordDialog, NetworkDialog
+from ui.widgets import Table, button, page, title, hint, warn, info, ask, error, ok_cancel, card, require_permission
+
+
+class UserDialog(QDialog):
+    def __init__(self, parent, user=None):
+        super().__init__(parent)
+        self.user = user
+        self.setWindowTitle("تعديل مستخدم" if user else "مستخدم جديد")
+        lay = QFormLayout(self)
+        self.username = QLineEdit()
+        self.full_name = QLineEdit()
+        self.password = QLineEdit()
+        self.password.setEchoMode(QLineEdit.Password)
+        self.role = QComboBox()
+        for k, v in auth.ROLES.items():
+            self.role.addItem(v, k)
+        self.active = QCheckBox("فعّال")
+        self.active.setChecked(True)
+        lay.addRow("اسم الدخول:", self.username)
+        lay.addRow("الاسم الكامل:", self.full_name)
+        if not user:
+            lay.addRow("كلمة المرور:", self.password)
+        lay.addRow("الدور:", self.role)
+        lay.addRow("", self.active)
+        perms = QLabel()
+        perms.setWordWrap(True)
+        perms.setObjectName("hint")
+        lay.addRow("الصلاحيات:", perms)
+        self.role.currentIndexChanged.connect(
+            lambda: perms.setText("، ".join(auth.PERMISSIONS[p] for p in auth.PERMISSIONS
+                                            if p in auth.ROLE_PERMISSIONS[self.role.currentData()])))
+        if user:
+            self.username.setText(user["username"])
+            self.username.setEnabled(False)
+            self.full_name.setText(user["full_name"] or "")
+            self.role.setCurrentIndex(self.role.findData(user["role"]))
+            self.active.setChecked(bool(user["is_active"]))
+        else:
+            self.role.setCurrentIndex(self.role.findData("cashier"))
+        self.role.currentIndexChanged.emit(self.role.currentIndex())
+        ok_cancel(self, lay)
+
+    def accept(self):
+        try:
+            if self.user:
+                auth.update_user(self.user["id"], self.full_name.text(), self.role.currentData(), self.active.isChecked())
+            else:
+                auth.create_user(self.username.text(), self.full_name.text(), self.password.text(), self.role.currentData())
+        except Exception as e:
+            warn(self, str(e))
+            return
+        super().accept()
+
+
+class SettingsScreen(QWidget):
+    def __init__(self):
+        super().__init__()
+        w, lay = page()
+        QVBoxLayout(self).addWidget(w)
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        head = QHBoxLayout()
+        head.addStretch()
+        self.save_btn = button("💾 حفظ الإعدادات", "successBtn", self.save)
+        head.addWidget(self.save_btn)
+        lay.addLayout(head)
+        self.tabs = QTabWidget()
+        lay.addWidget(self.tabs, 1)
+        self.fields = {}
+
+        # --- بيانات المحل
+        f = self._form_tab("بيانات المحل")
+        self._line(f, "shop_name", "اسم المحل:")
+        self._line(f, "shop_address", "العنوان:")
+        self._line(f, "shop_phone", "الهاتف:")
+        self._line(f, "tax_number", "الرقم الضريبي / المشتغل المرخص:")
+
+        # --- العملة والضريبة
+        f = self._form_tab("العملة والضريبة")
+        self._line(f, "currency_symbol", "رمز العملة:")
+        self._line(f, "currency_name", "اسم العملة:")
+        self._check(f, "vat_enabled", "تفعيل ضريبة القيمة المضافة")
+        self._num(f, "vat_rate", "نسبة الضريبة %:", 0, 100)
+        self._check(f, "prices_include_vat", "أسعار البيع شاملة للضريبة (الأشيع في المحلات)")
+        f.addRow("", hint("عند التفعيل تظهر الضريبة في الفاتورة وتُطرح من الإيراد في تقرير الأرباح."))
+
+        # --- الطباعة
+        f = self._form_tab("الطباعة ودرج النقود")
+        f.addRow(hint("إعدادات الطابعة والدرج خاصة بهذا الجهاز (كل كاشير له طابعته)."))
+        self.printer = QComboBox()
+        self.printer.addItem("الطابعة الافتراضية", "")
+        for p in printing.available_printers():
+            self.printer.addItem(p, p)
+        f.addRow("الطابعة:", self.printer)
+        self.width = QComboBox()
+        self.width.addItem("80 مم (حرارية)", "80")
+        self.width.addItem("58 مم (حرارية صغيرة)", "58")
+        self.width.addItem("A4", "210")
+        f.addRow("عرض الورق:", self.width)
+        self._line(f, "receipt_footer", "رسالة أسفل الفاتورة:")
+        self._check(f, "auto_print_receipt", "طباعة الفاتورة تلقائياً بعد كل بيع")
+        f.addRow("", button("🖨 معاينة فاتورة تجريبية", "secondaryBtn", self.test_print))
+        dm = QComboBox()
+        for k, v in drawer.MODES.items():
+            dm.addItem(v, k)
+        self.fields["drawer_mode"] = dm
+        f.addRow("درج النقود:", dm)
+        self._line(f, "drawer_printer", "اسم طابعة الدرج (فارغ = طابعة الفواتير):")
+        self._line(f, "drawer_host", "IP طابعة الشبكة:")
+        self._num(f, "drawer_port", "منفذ طابعة الشبكة:", 1, 65535, decimals=0)
+        self._line(f, "drawer_serial", "منفذ COM:")
+        self._check(f, "drawer_on_cash_sale", "فتح الدرج تلقائياً عند كل بيع نقدي")
+        f.addRow("", button("💰 تجربة فتح الدرج", "secondaryBtn", self.test_drawer))
+
+        # --- البيع والمخزون
+        f = self._form_tab("البيع والمخزون")
+        self._check(f, "require_shift", "إلزام فتح وردية قبل البيع (لضبط الصندوق)")
+        self._check(f, "allow_negative_stock", "السماح بالبيع عند نفاد الكمية (مخزون سالب)")
+        self._num(f, "cashier_max_discount_percent", "أقصى خصم للكاشير بدون إذن مدير %:", 0, 100)
+        self._num(f, "expiry_alert_days", "التنبيه قبل انتهاء الصلاحية بـ (يوم):", 1, 365, decimals=0)
+        self._check(f, "block_expired_sale", "منع البيع إذا وُجدت دفعة منتهية من الصنف لم تُتلف")
+        self._line(f, "whatsapp_country_code", "رمز الدولة لأرقام واتساب (970 فلسطين، 972، 962 الأردن):")
+        cats = QTextEdit()
+        cats.setMaximumHeight(80)
+        self.fields["expense_categories"] = cats
+        f.addRow("أنواع المصاريف (مفصولة بفاصلة):", cats)
+
+        # --- الميزان
+        f = self._form_tab("باركود الميزان")
+        f.addRow(hint("موازين الملحمة والخضار تطبع ملصقاً بباركود يحتوي رمز الصنف والوزن. عرّف رمز الميزان (PLU) "
+                      "في بطاقة المنتج، وسيقرأ البرنامج الوزن تلقائياً عند المسح.\n"
+                      "الصيغة: بادئة (2 رقم) + رمز الصنف + الوزن بالغرام أو السعر + رقم تحقق = 13 رقماً."))
+        self._check(f, "scale_enabled", "تفعيل قراءة باركود الميزان")
+        self._line(f, "scale_prefixes", "البادئات (مفصولة بفاصلة):")
+        mode = QComboBox()
+        mode.addItem("الوزن بالغرام", "weight")
+        mode.addItem("السعر (بالأغورة/القرش)", "price")
+        self.fields["scale_mode"] = mode
+        f.addRow("القيمة في الباركود:", mode)
+        self._num(f, "scale_code_length", "عدد خانات رمز الصنف:", 4, 6, decimals=0)
+
+        # --- المستخدمون
+        users = QWidget()
+        ul = QVBoxLayout(users)
+        row = QHBoxLayout()
+        row.addWidget(button("+ مستخدم", "successBtn", self.add_user))
+        row.addWidget(button("✏ تعديل", "secondaryBtn", self.edit_user))
+        row.addWidget(button("🔑 تغيير كلمة المرور", "secondaryBtn", self.reset_pw))
+        row.addStretch()
+        ul.addLayout(row)
+        self.users = Table(["#", "اسم الدخول", "الاسم", "الدور", "الحالة", "تاريخ الإنشاء"], stretch=2)
+        self.users.doubleClicked.connect(self.edit_user)
+        ul.addWidget(self.users)
+        ul.addWidget(hint("الكاشير: بيع، فواتير، عملاء، صندوق. مدير المحل: كل شيء عدا الإعدادات والمستخدمين. "
+                          "عند حاجة الكاشير لعملية غير مسموحة (خصم كبير، مرتجع، تغيير سعر) يُطلب إذن المدير فوراً."))
+        # --- هذا الجهاز والشبكة
+        net = QWidget()
+        nl = QVBoxLayout(net)
+        c, cl = card()
+        self.net_info = QLabel()
+        self.net_info.setWordWrap(True)
+        self.net_info.setObjectName("subTitle")
+        cl.addWidget(self.net_info)
+        cl.addWidget(button("🖧 إعداد الشبكة ونقاط البيع المتعددة", None, self.network_settings), alignment=Qt.AlignRight)
+        nl.addWidget(c)
+        nl.addWidget(title("الورديات المفتوحة على كل الأجهزة", "subTitle"))
+        self.open_shifts = Table(["#", "الجهاز", "الكاشير", "منذ", "الرصيد الافتتاحي"])
+        nl.addWidget(self.open_shifts)
+        self.tabs.addTab(net, "هذا الجهاز والشبكة")
+
+        self.users_tab = self.tabs.addTab(users, "المستخدمون")
+
+        # --- النسخ الاحتياطي
+        bk = QWidget()
+        bl = QVBoxLayout(bk)
+        f2 = QFormLayout()
+        self.backup_dir = QLineEdit()
+        self.fields["backup_dir"] = self.backup_dir
+        r = QHBoxLayout()
+        r.addWidget(self.backup_dir)
+        r.addWidget(button("اختيار...", "secondaryBtn", self.choose_backup_dir))
+        f2.addRow("مجلد النسخ (يُفضّل فلاشة أو مجلد Google Drive/OneDrive):", r)
+        keep = QSpinBox()
+        keep.setRange(3, 365)
+        self.fields["backup_keep"] = keep
+        f2.addRow("عدد النسخ المحفوظة:", keep)
+        self.mirror_dir = QLineEdit()
+        self.mirror_dir.setPlaceholderText("مثال: C:/Users/اسمك/Google Drive/نسخ المحل")
+        self.fields["backup_mirror_dir"] = self.mirror_dir
+        r2 = QHBoxLayout()
+        r2.addWidget(self.mirror_dir)
+        r2.addWidget(button("اختيار...", "secondaryBtn", self.choose_mirror_dir))
+        f2.addRow("نسخة ثانية تلقائية في مجلد سحابي:", r2)
+        f2.addRow("", hint("ثبّت Google Drive أو OneDrive على الجهاز واختر مجلداً داخله: كل نسخة تُرفع للسحابة تلقائياً، "
+                           "فتبقى بياناتك آمنة حتى لو تعطّل الجهاز أو سُرق."))
+        bl.addLayout(f2)
+        row = QHBoxLayout()
+        row.addWidget(button("💾 نسخة احتياطية الآن", "successBtn", self.backup_now))
+        self.restore_btn = button("♻ استعادة المحددة", "dangerBtn", self.restore)
+        self.restore_file_btn = button("📂 استعادة من ملف...", "secondaryBtn", self.restore_file)
+        row.addWidget(self.restore_btn)
+        row.addWidget(self.restore_file_btn)
+        row.addStretch()
+        bl.addLayout(row)
+        self.backups = Table(["الملف", "الحجم", "التاريخ"])
+        bl.addWidget(self.backups)
+        bl.addWidget(hint("يأخذ البرنامج نسخة تلقائية يومياً عند التشغيل، ونسخة عند الإغلاق."))
+        self.tabs.addTab(bk, "النسخ الاحتياطي")
+
+    # ---------------------------------------------------------------- مساعدات
+    def _form_tab(self, name):
+        from PySide6.QtWidgets import QScrollArea, QFrame
+        wdg = QWidget()
+        outer = QVBoxLayout(wdg)
+        c, cl = card()
+        form = QFormLayout()
+        form.setSpacing(10)
+        cl.addLayout(form)
+        outer.addWidget(c)
+        outer.addStretch()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(wdg)
+        scroll.setStyleSheet("QScrollArea { background: transparent; } QScrollArea > QWidget > QWidget { background: #F1F5F9; }")
+        self.tabs.addTab(scroll, name)
+        return form
+
+    def _line(self, form, key, label):
+        w = QLineEdit()
+        self.fields[key] = w
+        form.addRow(label, w)
+
+    def _check(self, form, key, label):
+        w = QCheckBox(label)
+        self.fields[key] = w
+        form.addRow("", w)
+
+    def _num(self, form, key, label, lo, hi, decimals=2):
+        w = QDoubleSpinBox()
+        w.setRange(lo, hi)
+        w.setDecimals(decimals)
+        self.fields[key] = w
+        form.addRow(label, w)
+
+    # ---------------------------------------------------------------- تحميل وحفظ
+    def refresh(self):
+        settings.reload()
+        for k, w in self.fields.items():
+            v = settings.get(k, "")
+            if isinstance(w, QCheckBox):
+                w.setChecked(v == "1")
+            elif isinstance(w, (QDoubleSpinBox, QSpinBox)):
+                w.setValue(float(v or 0) if isinstance(w, QDoubleSpinBox) else int(float(v or 0)))
+            elif isinstance(w, QComboBox):
+                w.setCurrentIndex(max(0, w.findData(v)))
+            elif isinstance(w, QTextEdit):
+                w.setPlainText(v)
+            else:
+                w.setText(v)
+        self.printer.setCurrentIndex(max(0, self.printer.findData(settings.get("printer_name"))))
+        self.width.setCurrentIndex(max(0, self.width.findData(settings.get("receipt_width_mm"))))
+        is_admin = auth.has_permission("users")
+        self.save_btn.setEnabled(auth.has_permission("settings"))
+        for i in range(self.tabs.count() - 2):
+            self.tabs.setTabEnabled(i, auth.has_permission("settings"))
+        self.tabs.setTabEnabled(self.users_tab, is_admin)
+        self.load_users()
+        self.load_backups()
+        self.load_network()
+        client = remote.is_client()
+        for b in (self.restore_btn, self.restore_file_btn):
+            b.setEnabled(not client)
+            b.setToolTip("الاستعادة تتم من الجهاز الرئيسي فقط" if client else "")
+
+    def save(self):
+        values = {}
+        for k, w in self.fields.items():
+            if isinstance(w, QCheckBox):
+                values[k] = "1" if w.isChecked() else "0"
+            elif isinstance(w, QDoubleSpinBox):
+                values[k] = f"{w.value():g}"
+            elif isinstance(w, QSpinBox):
+                values[k] = str(w.value())
+            elif isinstance(w, QComboBox):
+                values[k] = w.currentData()
+            elif isinstance(w, QTextEdit):
+                values[k] = ",".join(x.strip() for x in w.toPlainText().replace("\n", ",").split(",") if x.strip())
+            else:
+                values[k] = w.text().strip()
+        values["printer_name"] = self.printer.currentData() or ""
+        values["receipt_width_mm"] = self.width.currentData()
+        if not values.get("shop_name"):
+            warn(self, "اسم المحل مطلوب")
+            return
+        settings.set_many(values)
+        info(self, "تم حفظ الإعدادات")
+        w = self.window()
+        if hasattr(w, "update_header"):
+            w.update_header()
+
+    def test_drawer(self):
+        self.save_local_drawer()
+        try:
+            if drawer.open_drawer():
+                info(self, "تم إرسال أمر فتح الدرج ✓")
+            else:
+                warn(self, "اختر طريقة توصيل الدرج أولاً")
+        except drawer.DrawerError as e:
+            warn(self, str(e))
+
+    def save_local_drawer(self):
+        keys = ["drawer_mode", "drawer_printer", "drawer_host", "drawer_port", "drawer_serial", "drawer_on_cash_sale"]
+        vals = {}
+        for k in keys:
+            w = self.fields[k]
+            vals[k] = (w.currentData() if isinstance(w, QComboBox) else "1" if isinstance(w, QCheckBox) and w.isChecked()
+                       else "0" if isinstance(w, QCheckBox) else f"{w.value():g}" if isinstance(w, QDoubleSpinBox)
+                       else w.text().strip())
+        config.save(vals)
+
+    def load_network(self):
+        cfg = config.load()
+        if cfg["mode"] == config.MODE_SERVER:
+            text = (f"🖧 هذا هو الجهاز الرئيسي «{cfg['terminal_name']}».\nأدخل في كل نقطة بيع فرعية:  العنوان "
+                    f"{config.local_ip()}   •   المنفذ {cfg['server_port']}   •   رمز الربط {cfg['link_code']}")
+            conns = remote.connected_terminals()
+            if conns:
+                text += "\nأجهزة اتصلت مؤخراً: " + "، ".join(f"{k} ({v[11:16]})" for k, v in conns.items())
+        elif cfg["mode"] == config.MODE_CLIENT:
+            text = (f"💻 نقطة بيع فرعية «{cfg['terminal_name']}» متصلة بالجهاز الرئيسي "
+                    f"{cfg['server_host']}:{cfg['server_port']}")
+        else:
+            text = f"💻 جهاز مستقل «{cfg['terminal_name']}». لتشغيل أكثر من كاشير اضغط الزر بالأسفل."
+        self.net_info.setText(text)
+        rows = shifts.open_shifts()
+        self.open_shifts.set_rows([[r["id"], r["terminal"] or "", r["full_name"] or r["username"] or "",
+                                    (r["opened_at"] or "")[:16], float(r["opening_cash"])] for r in rows])
+
+    def network_settings(self):
+        if not auth.has_permission("settings") and not require_permission(self, "settings"):
+            return
+        NetworkDialog(self).exec()
+        self.load_network()
+
+    def choose_mirror_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "اختر مجلد النسخة السحابية")
+        if d:
+            self.mirror_dir.setText(d)
+
+    def test_print(self):
+        body = ("<div class='c big'><b>" + settings.get("shop_name") + "</b></div><hr>"
+                "<table><tr><td>منتج تجريبي</td><td class='l'>10.00</td></tr>"
+                "<tr class='tot'><td>الإجمالي</td><td class='l'>10.00 " + settings.get("currency_symbol") + "</td></tr></table>"
+                "<hr><div class='c'>" + (settings.get("receipt_footer") or "") + "</div>")
+        printing.print_html(self, receipts._wrap(body, int(self.width.currentData())), width_mm=int(self.width.currentData()),
+                            preview=True)
+
+    # ---------------------------------------------------------------- المستخدمون
+    def load_users(self):
+        rows = auth.list_users()
+        self.users.set_rows([[u["id"], u["username"], u["full_name"] or "", auth.ROLES.get(u["role"], u["role"]),
+                              "فعّال" if u["is_active"] else "موقوف", (u["created_at"] or "")[:10]] for u in rows], rows)
+
+    def add_user(self):
+        if UserDialog(self).exec() == QDialog.Accepted:
+            self.load_users()
+
+    def edit_user(self):
+        u = self.users.selected_data()
+        if u and UserDialog(self, u).exec() == QDialog.Accepted:
+            self.load_users()
+
+    def reset_pw(self):
+        u = self.users.selected_data()
+        if u:
+            ChangePasswordDialog(self, u["id"]).exec()
+
+    # ---------------------------------------------------------------- النسخ الاحتياطي
+    def load_backups(self):
+        rows = backup.list_backups()
+        self.backups.set_rows([[os.path.basename(f), f"{size / 1024:.0f} KB", dt]
+                               for f, size, dt in rows], [f for f, _, _ in rows])
+
+    def choose_backup_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "اختر مجلد النسخ الاحتياطي")
+        if d:
+            self.backup_dir.setText(d)
+
+    def backup_now(self):
+        if self.backup_dir.text().strip() != (settings.get("backup_dir") or ""):
+            settings.set("backup_dir", self.backup_dir.text().strip())
+        try:
+            path = backup.create_backup()
+            info(self, f"تم حفظ النسخة:\n{path}")
+        except Exception as e:
+            error(self, e)
+        self.load_backups()
+
+    def _restore(self, path):
+        if not ask(self, "سيتم استبدال كل البيانات الحالية بمحتوى النسخة المختارة (مع حفظ نسخة من الوضع الحالي أولاً).\n"
+                         "هل أنت متأكد؟"):
+            return
+        try:
+            backup.restore_backup(path)
+            info(self, "تمت الاستعادة بنجاح. يُفضّل إعادة تشغيل البرنامج.")
+        except Exception as e:
+            error(self, e)
+        self.load_backups()
+
+    def restore(self):
+        path = self.backups.selected_data()
+        if path:
+            self._restore(path)
+
+    def restore_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "اختر ملف النسخة", "", "Database (*.db)")
+        if path:
+            self._restore(path)

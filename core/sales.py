@@ -1,0 +1,346 @@
+# -*- coding: utf-8 -*-
+"""
+المبيعات: الفواتير، الدفع المختلط/الآجل، المرتجعات، الفواتير المعلّقة.
+
+قواعد محاسبية مطبّقة:
+- الإجمالي = المجموع - الخصم (+ الضريبة إن كانت الأسعار غير شاملة لها).
+- الدفع يُقسَّم: نقدي + بطاقة + آجل = الإجمالي بالضبط. الجزء الآجل يُسجَّل ديناً على العميل.
+- الربح = (صافي المبيعات بدون ضريبة) - تكلفة البضاعة المباعة، أي أن الخصم يُطرح من الربح.
+- المرتجع يعيد الكمية للمخزون ويُرجع المبلغ نقداً أو يخصمه من دين العميل.
+"""
+
+import json
+
+from core import db, auth, audit, settings, context
+from core.products import _move_stock
+from core.utils import money, qty, fmt_qty
+
+METHOD_CASH = "نقدي"
+METHOD_CARD = "بطاقة"
+METHOD_CREDIT = "آجل"
+METHOD_MIXED = "مختلط"
+
+REFUND_CASH = "نقدي"
+REFUND_DEBT = "خصم من الدين"
+
+
+class SaleError(ValueError):
+    pass
+
+
+def compute_totals(cart, discount=0.0):
+    """حساب المجموع والخصم والضريبة والإجمالي لسلة (يُستخدم في الواجهة وعند الحفظ)"""
+    subtotal = money(sum(money(i["quantity"] * i["unit_price"]) for i in cart))
+    discount = money(min(max(discount or 0, 0), subtotal))
+    net = money(subtotal - discount)
+    tax = 0.0
+    total = net
+    if settings.get_bool("vat_enabled"):
+        rate = settings.get_float("vat_rate", 0)
+        if settings.get_bool("prices_include_vat"):
+            tax = money(net * rate / (100 + rate))
+        else:
+            tax = money(net * rate / 100)
+            total = money(net + tax)
+    return {"subtotal": subtotal, "discount": discount, "tax": tax, "total": total}
+
+
+def payment_label(cash, card, credit):
+    used = [m for m, v in ((METHOD_CASH, cash), (METHOD_CARD, card), (METHOD_CREDIT, credit)) if v > 0.004]
+    if len(used) == 1:
+        return used[0]
+    if not used:
+        return METHOD_CASH
+    return METHOD_MIXED
+
+
+def _customer_balance(conn, customer_id):
+    return conn.execute("SELECT COALESCE(SUM(amount),0) FROM customer_transactions WHERE customer_id=?",
+                        (customer_id,)).fetchone()[0]
+
+
+def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
+                cash_received=None, note="", shift_id=None, allow_over_limit=False):
+    """
+    cart: قائمة dict: product_id, product_name, quantity, unit_price
+          (اختياري) factor, unit_name للبيع بوحدة أكبر مثل الكرتونة
+    إذا لم يُحدد cash_amount يُعتبر الباقي كله نقداً.
+    يرجع dict فيه رقم الفاتورة ومعرّفها والإجماليات.
+    """
+    if not cart:
+        raise SaleError("السلة فارغة")
+    for item in cart:
+        if item["quantity"] <= 0:
+            raise SaleError(f"كمية غير صحيحة للمنتج {item['product_name']}")
+        if item["unit_price"] < 0:
+            raise SaleError(f"سعر غير صحيح للمنتج {item['product_name']}")
+
+    t = compute_totals(cart, discount)
+    total = t["total"]
+    card_amount = money(card_amount or 0)
+    credit_amount = money(credit_amount or 0)
+    if cash_amount is None:
+        cash_amount = money(total - card_amount - credit_amount)
+    cash_amount = money(cash_amount)
+    if min(cash_amount, card_amount, credit_amount) < 0:
+        raise SaleError("مبالغ الدفع لا يمكن أن تكون سالبة")
+    if abs(money(cash_amount + card_amount + credit_amount) - total) > 0.009:
+        raise SaleError("مجموع المدفوع لا يساوي إجمالي الفاتورة")
+    if credit_amount > 0 and not customer_id:
+        raise SaleError("البيع الآجل يتطلب اختيار عميل")
+    if cash_received is None or cash_received < cash_amount:
+        cash_received = cash_amount
+    change = money(cash_received - cash_amount)
+
+    user_id = auth.current_user_id()
+    allow_negative = settings.get_bool("allow_negative_stock")
+
+    with db.tx() as conn:
+        # ---- التحقق من المخزون (مجمّع لكل منتج) ----
+        needed = {}
+        for item in cart:
+            needed[item["product_id"]] = needed.get(item["product_id"], 0) + item["quantity"] * item.get("factor", 1)
+        products = {}
+        short = []
+        for pid, q in needed.items():
+            p = conn.execute("SELECT * FROM products WHERE id=?", (pid,)).fetchone()
+            if not p:
+                raise SaleError("منتج غير موجود")
+            products[pid] = p
+            if not allow_negative and p["quantity"] + 1e-9 < q:
+                short.append(f"{p['name']} (المتوفر {fmt_qty(p['quantity'])})")
+        if short:
+            raise SaleError("الكمية غير كافية في المخزون:\n" + "\n".join(short))
+        if settings.get_bool("block_expired_sale"):
+            expired = []
+            for pid in needed:
+                r = conn.execute("""SELECT MIN(expiry_date) FROM product_batches WHERE product_id=? AND remaining > 0""",
+                                 (pid,)).fetchone()[0]
+                if r and r < db.today():
+                    expired.append(products[pid]["name"])
+            if expired:
+                raise SaleError("يوجد في المخزون دفعات منتهية الصلاحية من:\n" + "\n".join(expired) +
+                                "\nقم بإتلافها أولاً من شاشة الصلاحية.")
+
+        # ---- حد الدين للعميل ----
+        if credit_amount > 0:
+            cust = conn.execute("SELECT * FROM customers WHERE id=?", (customer_id,)).fetchone()
+            if not cust:
+                raise SaleError("العميل غير موجود")
+            limit = cust["credit_limit"] or 0
+            if limit > 0 and not allow_over_limit:
+                bal = _customer_balance(conn, customer_id)
+                if bal + credit_amount > limit + 0.009:
+                    raise SaleError(f"تجاوز حد الدين للعميل {cust['name']}: الرصيد الحالي {money(bal)} والحد {money(limit)}")
+
+        number = db.next_number(conn, "invoice", "INV")
+        created = db.now()
+        cost_total = money(sum(products[i["product_id"]]["cost_price"] * i["quantity"] * i.get("factor", 1) for i in cart))
+        cur = conn.execute("""
+            INSERT INTO invoices (invoice_number, customer_id, subtotal, discount, tax, total, cost_total, paid,
+                                  payment_method, cash_amount, card_amount, credit_amount, cash_received, change_given,
+                                  status, note, user_id, shift_id, terminal, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?)
+        """, (number, customer_id, t["subtotal"], t["discount"], t["tax"], total, cost_total,
+              money(cash_amount + card_amount), payment_label(cash_amount, card_amount, credit_amount),
+              cash_amount, card_amount, credit_amount, money(cash_received), change, note, user_id, shift_id,
+              context.terminal(), created))
+        invoice_id = cur.lastrowid
+
+        for item in cart:
+            p = products[item["product_id"]]
+            q = qty(item["quantity"])
+            factor = float(item.get("factor", 1) or 1)
+            conn.execute("""
+                INSERT INTO invoice_items (invoice_id, product_id, product_name, quantity, unit_price, cost_price, total,
+                                           unit_name, factor)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (invoice_id, p["id"], item.get("product_name") or p["name"], q, money(item["unit_price"]),
+                  money(p["cost_price"] * factor), money(q * item["unit_price"]),
+                  item.get("unit_name") or p["unit"], factor))
+            _move_stock(conn, p["id"], -qty(q * factor), f"بيع - فاتورة {number}")
+            list_price = item.get("list_price", p["sale_price"] if factor == 1 else item["unit_price"])
+            if money(item["unit_price"]) != money(list_price):
+                audit.log("تغيير سعر في البيع", f"{number}: {p['name']} {list_price} ← {item['unit_price']}", conn)
+
+        if credit_amount > 0:
+            conn.execute("""INSERT INTO customer_transactions (customer_id, type, amount, invoice_id, note, user_id, shift_id, created_at)
+                            VALUES (?, 'sale', ?, ?, ?, ?, ?, ?)""",
+                         (customer_id, credit_amount, invoice_id, f"فاتورة {number}", user_id, shift_id, created))
+
+    return {"invoice_id": invoice_id, "invoice_number": number, "change": change, **t,
+            "cash_amount": cash_amount, "card_amount": card_amount, "credit_amount": credit_amount}
+
+
+# ---------------------------------------------------------------------------
+# المرتجعات
+# ---------------------------------------------------------------------------
+
+def returnable_items(invoice_id):
+    return db.query("""SELECT *, (quantity - returned_qty) AS remaining FROM invoice_items
+                       WHERE invoice_id=? ORDER BY id""", (invoice_id,))
+
+
+def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift_id=None):
+    """
+    items: قائمة dict: invoice_item_id, quantity
+    المبلغ المُرجَع يُحسب بنفس نسبة الخصم/الضريبة في الفاتورة الأصلية.
+    """
+    items = [i for i in items if i["quantity"] > 0]
+    if not items:
+        raise SaleError("اختر كمية للإرجاع")
+    user_id = auth.current_user_id()
+    with db.tx() as conn:
+        inv = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
+        if not inv:
+            raise SaleError("الفاتورة غير موجودة")
+        if refund_method == REFUND_DEBT and not inv["customer_id"]:
+            raise SaleError("لا يمكن الخصم من الدين لفاتورة بدون عميل")
+        ratio = (inv["total"] / inv["subtotal"]) if inv["subtotal"] else 0
+        tax_ratio = (inv["tax"] / inv["total"]) if inv["total"] else 0
+
+        lines = []
+        for it in items:
+            row = conn.execute("SELECT * FROM invoice_items WHERE id=? AND invoice_id=?",
+                               (it["invoice_item_id"], invoice_id)).fetchone()
+            if not row:
+                raise SaleError("بند غير موجود في الفاتورة")
+            remaining = qty(row["quantity"] - row["returned_qty"])
+            q = qty(it["quantity"])
+            if q > remaining + 1e-9:
+                raise SaleError(f"الكمية المرتجعة من {row['product_name']} أكبر من المتبقي ({fmt_qty(remaining)})")
+            lines.append((row, q, money(row["unit_price"] * q * ratio)))
+
+        total = money(sum(l[2] for l in lines))
+        max_refund = money(inv["total"] - inv["returned_total"])
+        total = min(total, max_refund)
+        tax = money(total * tax_ratio)
+        cost_total = money(sum(l[0]["cost_price"] * l[1] for l in lines))
+
+        number = db.next_number(conn, "return", "RET")
+        created = db.now()
+        cur = conn.execute("""INSERT INTO returns (return_number, invoice_id, total, tax, cost_total, refund_method, reason,
+                                                   user_id, shift_id, created_at)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (number, invoice_id, total, tax, cost_total, refund_method, reason, user_id, shift_id, created))
+        ret_id = cur.lastrowid
+        for row, q, line_total in lines:
+            factor = row["factor"] or 1
+            conn.execute("""INSERT INTO return_items (return_id, invoice_item_id, product_id, product_name, quantity,
+                                                      unit_price, cost_price, total, factor)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                         (ret_id, row["id"], row["product_id"], row["product_name"], q, row["unit_price"],
+                          row["cost_price"], line_total, factor))
+            conn.execute("UPDATE invoice_items SET returned_qty = ROUND(returned_qty + ?, 3) WHERE id=?", (q, row["id"]))
+            _move_stock(conn, row["product_id"], qty(q * factor), f"مرتجع {number} من فاتورة {inv['invoice_number']}")
+
+        new_returned = money(inv["returned_total"] + total)
+        left = conn.execute("SELECT COALESCE(SUM(quantity - returned_qty),0) FROM invoice_items WHERE invoice_id=?",
+                            (invoice_id,)).fetchone()[0]
+        status = "returned" if left <= 1e-9 else "partially_returned"
+        conn.execute("UPDATE invoices SET returned_total=?, status=? WHERE id=?", (new_returned, status, invoice_id))
+
+        if refund_method == REFUND_DEBT:
+            conn.execute("""INSERT INTO customer_transactions (customer_id, type, amount, invoice_id, note, user_id, shift_id, created_at)
+                            VALUES (?, 'return', ?, ?, ?, ?, ?, ?)""",
+                         (inv["customer_id"], -total, invoice_id, f"مرتجع {number}", user_id, shift_id, created))
+        audit.log("مرتجع", f"{number} من {inv['invoice_number']} بقيمة {total} ({refund_method})", conn)
+
+    return {"return_id": ret_id, "return_number": number, "total": total}
+
+
+# ---------------------------------------------------------------------------
+# الاستعلامات
+# ---------------------------------------------------------------------------
+
+STATUS_LABELS = {"completed": "مكتملة", "partially_returned": "مرتجع جزئي", "returned": "مرتجعة بالكامل"}
+
+
+def get_invoices(date_from=None, date_to=None, search=None, customer_id=None, limit=2000):
+    sql = """SELECT i.*, c.name AS customer_name, u.username AS cashier
+             FROM invoices i LEFT JOIN customers c ON c.id=i.customer_id LEFT JOIN users u ON u.id=i.user_id"""
+    cond, params = [], []
+    if date_from and date_to:
+        cond.append("date(i.created_at) BETWEEN date(?) AND date(?)")
+        params += [date_from, date_to]
+    if search:
+        cond.append("(i.invoice_number LIKE ? OR c.name LIKE ? OR c.phone LIKE ?)")
+        params += [f"%{search}%"] * 3
+    if customer_id:
+        cond.append("i.customer_id=?")
+        params.append(customer_id)
+    if cond:
+        sql += " WHERE " + " AND ".join(cond)
+    sql += " ORDER BY i.id DESC LIMIT ?"
+    params.append(limit)
+    return db.query(sql, params)
+
+
+def get_invoice(invoice_id):
+    return db.query_one("""SELECT i.*, c.name AS customer_name, c.phone AS customer_phone, u.full_name AS cashier_name,
+                                  u.username AS cashier
+                           FROM invoices i LEFT JOIN customers c ON c.id=i.customer_id
+                           LEFT JOIN users u ON u.id=i.user_id WHERE i.id=?""", (invoice_id,))
+
+
+def get_invoice_by_number(number):
+    return db.query_one("SELECT * FROM invoices WHERE invoice_number=?", (number.strip(),))
+
+
+def get_invoice_items(invoice_id):
+    return db.query("SELECT * FROM invoice_items WHERE invoice_id=? ORDER BY id", (invoice_id,))
+
+
+def get_return(return_id):
+    return db.query_one("SELECT r.*, i.invoice_number FROM returns r JOIN invoices i ON i.id=r.invoice_id WHERE r.id=?",
+                        (return_id,))
+
+
+def get_return_items(return_id):
+    return db.query("SELECT * FROM return_items WHERE return_id=?", (return_id,))
+
+
+def get_returns(invoice_id=None, date_from=None, date_to=None):
+    sql = """SELECT r.*, i.invoice_number, u.username FROM returns r JOIN invoices i ON i.id=r.invoice_id
+             LEFT JOIN users u ON u.id=r.user_id"""
+    cond, params = [], []
+    if invoice_id:
+        cond.append("r.invoice_id=?")
+        params.append(invoice_id)
+    if date_from and date_to:
+        cond.append("date(r.created_at) BETWEEN date(?) AND date(?)")
+        params += [date_from, date_to]
+    if cond:
+        sql += " WHERE " + " AND ".join(cond)
+    return db.query(sql + " ORDER BY r.id DESC", params)
+
+
+# ---------------------------------------------------------------------------
+# الفواتير المعلّقة (زبون نسي غرضاً أو سيعود بعد قليل)
+# ---------------------------------------------------------------------------
+
+def hold_cart(cart, discount=0, customer_id=None, label=""):
+    data = json.dumps({"cart": cart, "discount": discount, "customer_id": customer_id}, ensure_ascii=False)
+    with db.tx() as conn:
+        cur = conn.execute("INSERT INTO held_carts(label, data, user_id, terminal, created_at) VALUES (?, ?, ?, ?, ?)",
+                           (label, data, auth.current_user_id(), context.terminal(), db.now()))
+        return cur.lastrowid
+
+
+def list_held_carts():
+    rows = db.query("SELECT * FROM held_carts ORDER BY id")
+    out = []
+    for r in rows:
+        d = json.loads(r["data"])
+        out.append({"id": r["id"], "label": r["label"], "created_at": r["created_at"], "terminal": r["terminal"],
+                    "items": len(d["cart"]), "total": compute_totals(d["cart"], d.get("discount", 0))["total"]})
+    return out
+
+
+def take_held_cart(held_id):
+    with db.tx() as conn:
+        r = conn.execute("SELECT data FROM held_carts WHERE id=?", (held_id,)).fetchone()
+        if not r:
+            return None
+        conn.execute("DELETE FROM held_carts WHERE id=?", (held_id,))
+    return json.loads(r["data"])
