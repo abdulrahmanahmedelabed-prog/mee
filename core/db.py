@@ -427,12 +427,14 @@ ADDED_COLUMNS = {
         ("is_weighted", "INTEGER NOT NULL DEFAULT 0"),
         ("is_favorite", "INTEGER NOT NULL DEFAULT 0"),  # يظهر كزر سريع في نقطة البيع
         ("updated_at", "TEXT"),
+        ("wholesale_price", "REAL NOT NULL DEFAULT 0"),   # سعر الجملة (0 = لا يوجد)
     ],
     "customers": [
         ("address", "TEXT"),
         ("credit_limit", "REAL NOT NULL DEFAULT 0"),  # 0 = بلا حد
         ("notes", "TEXT"),
         ("is_active", "INTEGER NOT NULL DEFAULT 1"),
+        ("price_level", "TEXT NOT NULL DEFAULT 'retail'"),  # retail = مفرق / wholesale = جملة
     ],
     "invoices": [
         ("subtotal", "REAL NOT NULL DEFAULT 0"),
@@ -444,6 +446,7 @@ ADDED_COLUMNS = {
         ("cash_received", "REAL NOT NULL DEFAULT 0"),
         ("change_given", "REAL NOT NULL DEFAULT 0"),
         ("returned_total", "REAL NOT NULL DEFAULT 0"),
+        ("offline_ref", "TEXT"),                  # معرّف فاتورة بيعت أثناء انقطاع الشبكة (لمنع التكرار)
         ("status", "TEXT NOT NULL DEFAULT 'completed'"),
         ("note", "TEXT"),
         ("user_id", "INTEGER"),
@@ -503,6 +506,7 @@ CREATE INDEX IF NOT EXISTS ix_jlines_entry ON journal_lines(entry_id);
 CREATE INDEX IF NOT EXISTS ix_cheques_due ON cheques(status, due_date);
 CREATE INDEX IF NOT EXISTS ix_loyalty_customer ON loyalty_transactions(customer_id);
 CREATE INDEX IF NOT EXISTS ix_shifts_terminal ON shifts(terminal, id);
+CREATE INDEX IF NOT EXISTS ix_invoices_offline ON invoices(offline_ref);
 """
 
 

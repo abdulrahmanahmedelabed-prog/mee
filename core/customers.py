@@ -9,14 +9,18 @@ TYPE_LABELS = {"sale": "فاتورة آجلة", "payment": "تسديد", "return
                "bounced": "شيك راجع"}
 
 
-def add_customer(name, phone="", address="", credit_limit=0, notes="", opening_balance=0):
+PRICE_LEVELS = {"retail": "مفرق (سعر البيع العادي)", "wholesale": "جملة (سعر الجملة)"}
+
+
+def add_customer(name, phone="", address="", credit_limit=0, notes="", opening_balance=0, price_level="retail"):
     name = (name or "").strip()
     if not name:
         raise ValueError("اسم العميل مطلوب")
     with db.tx() as conn:
-        cur = conn.execute("""INSERT INTO customers(name, phone, address, credit_limit, notes, is_active, created_at)
-                              VALUES (?, ?, ?, ?, ?, 1, ?)""",
-                           (name, phone.strip(), address.strip(), money(credit_limit), notes, db.now()))
+        cur = conn.execute("""INSERT INTO customers(name, phone, address, credit_limit, notes, is_active, created_at,
+                                                    price_level) VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                           (name, phone.strip(), address.strip(), money(credit_limit), notes, db.now(),
+                            price_level if price_level in PRICE_LEVELS else "retail"))
         cid = cur.lastrowid
         if opening_balance:
             conn.execute("""INSERT INTO customer_transactions(customer_id, type, amount, note, user_id, created_at)
@@ -25,12 +29,14 @@ def add_customer(name, phone="", address="", credit_limit=0, notes="", opening_b
     return cid
 
 
-def update_customer(customer_id, name, phone, address, credit_limit, notes):
+def update_customer(customer_id, name, phone, address, credit_limit, notes, price_level=None):
     if not (name or "").strip():
         raise ValueError("اسم العميل مطلوب")
     with db.tx() as conn:
         conn.execute("UPDATE customers SET name=?, phone=?, address=?, credit_limit=?, notes=? WHERE id=?",
                      (name.strip(), phone.strip(), address.strip(), money(credit_limit), notes, customer_id))
+        if price_level in PRICE_LEVELS:
+            conn.execute("UPDATE customers SET price_level=? WHERE id=?", (price_level, customer_id))
 
 
 def deactivate_customer(customer_id):

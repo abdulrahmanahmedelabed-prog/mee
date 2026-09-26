@@ -535,7 +535,7 @@ class POSScreen(QWidget):
         quantity = round_qty(quantity or 1)
         if quantity <= 0:
             return
-        price = unit["sale_price"] if unit else product["sale_price"]
+        price = unit["sale_price"] if unit else products.price_for(product, self.customer)
         line = {"product_id": product["id"], "base_name": product["name"],
                 "product_name": f"{product['name']} ({unit['name']})" if unit else product["name"],
                 "quantity": quantity, "unit_price": price, "list_price": price, "factor": factor,
@@ -611,6 +611,15 @@ class POSScreen(QWidget):
             self.cart_table.scrollToItem(self.cart_table.item(select, 0))
         self.update_totals()
 
+    def _update_display(self, totals, disc):
+        from ui import customer_display
+        try:
+            d = customer_display.get()
+            if d:
+                d.show_cart(self.cart, totals, disc)
+        except Exception:
+            pass  # شاشة الزبون لا يجب أن توقف البيع أبداً
+
     def update_totals(self):
         subtotal = sales.compute_totals(self.cart)["subtotal"]
         self.discount = min(self.discount, subtotal)
@@ -623,6 +632,7 @@ class POSScreen(QWidget):
         if disc["points_value"]:
             parts.append(f"⭐ {self.points:g} نقطة: −{m(disc['points_value'])}")
         self.lbl_promo.setText("\n".join(parts))
+        self._update_display(t, disc)
         sym = settings.get("currency_symbol")
         self.lbl_items.setText(str(len(self.cart)))
         self.lbl_sub.setText(m(t["subtotal"]))
@@ -720,6 +730,7 @@ class POSScreen(QWidget):
         if (customer["id"] if customer else None) != (self.customer["id"] if self.customer else None):
             self.points = 0.0
         self.customer = customer
+        self._reprice_for_customer()
         if customer:
             bal = customers.balance(customer["id"])
             pts = f" • 🎁 {loyalty.balance(customer['id']):g} نقطة" if loyalty.enabled() else ""
@@ -728,6 +739,18 @@ class POSScreen(QWidget):
             self.customer_btn.setText("👤  زبون نقدي (F4)")
         if hasattr(self, "lbl_promo"):
             self.update_totals()
+
+    def _reprice_for_customer(self):
+        """عند اختيار عميل جملة تتحول أسعار الحبة لسعر الجملة، وتعود عند إلغائه (ما لم يُعدَّل السعر يدوياً)"""
+        for it in self.cart:
+            if float(it.get("factor", 1) or 1) != 1 or money(it["unit_price"]) != money(it["list_price"]):
+                continue
+            p = products.get_product(it["product_id"])
+            if p:
+                new = products.price_for(p, self.customer)
+                it["unit_price"] = it["list_price"] = new
+        if self.cart and hasattr(self, "lbl_promo"):
+            self.render_cart()
 
     def redeem_points(self):
         if not loyalty.enabled():
@@ -894,6 +917,13 @@ class POSScreen(QWidget):
         if res.get("points_earned"):
             msg += f"\n🎁 +{res['points_earned']:g} نقطة"
         self.lbl_change.setText(msg)
+        from ui import customer_display
+        try:
+            d = customer_display.get()
+            if d:
+                d.show_paid(res["total"], res["change"], res.get("points_earned") or 0)
+        except Exception:
+            pass
         self.clear_cart()
         if print_it:
             try:

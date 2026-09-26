@@ -122,6 +122,7 @@ class SettingsScreen(QWidget):
         self._num(f, "drawer_port", "منفذ طابعة الشبكة:", 1, 65535, decimals=0)
         self._line(f, "drawer_serial", "منفذ COM:")
         self._check(f, "drawer_on_cash_sale", "فتح الدرج تلقائياً عند كل بيع نقدي")
+        self._check(f, "customer_display", "شاشة الزبون: عرض الأصناف والإجمالي والباقي على الشاشة الثانية")
         f.addRow("", button("💰 تجربة فتح الدرج", "secondaryBtn", self.test_drawer))
 
         # --- البيع والمخزون

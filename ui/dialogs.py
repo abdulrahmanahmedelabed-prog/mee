@@ -186,11 +186,15 @@ class CustomerDialog(QDialog):
         self.limit.setToolTip("0 = بدون حد")
         self.opening = MoneySpin()
         self.notes = QLineEdit()
+        self.level = QComboBox()
+        for k, v in customers.PRICE_LEVELS.items():
+            self.level.addItem(v, k)
         lay.addRow("الاسم:", self.name)
         lay.addRow("الهاتف:", self.phone)
         lay.addRow("العنوان:", self.address)
         lay.addRow("حد الدين المسموح:", self.limit)
         lay.addRow("", hint("0 = بدون حد. عند التجاوز يُطلب إذن المدير."))
+        lay.addRow("مستوى السعر:", self.level)
         if not customer:
             lay.addRow("دين سابق (إن وجد):", self.opening)
         lay.addRow("ملاحظات:", self.notes)
@@ -200,6 +204,7 @@ class CustomerDialog(QDialog):
             self.address.setText(customer["address"] or "")
             self.limit.setValue(customer["credit_limit"] or 0)
             self.notes.setText(customer["notes"] or "")
+            self.level.setCurrentIndex(max(0, self.level.findData(customer["price_level"] or "retail")))
         ok_cancel(self, lay)
         self.new_id = None
 
@@ -207,10 +212,11 @@ class CustomerDialog(QDialog):
         try:
             if self.customer:
                 customers.update_customer(self.customer["id"], self.name.text(), self.phone.text(), self.address.text(),
-                                          self.limit.value(), self.notes.text())
+                                          self.limit.value(), self.notes.text(), self.level.currentData())
             else:
                 self.new_id = customers.add_customer(self.name.text(), self.phone.text(), self.address.text(),
-                                                     self.limit.value(), self.notes.text(), self.opening.value())
+                                                     self.limit.value(), self.notes.text(), self.opening.value(),
+                                                     self.level.currentData())
         except ValueError as e:
             warn(self, str(e))
             return
@@ -295,6 +301,8 @@ class ProductDialog(QDialog):
         self.unit.addItems(products.UNITS)
         self.cost = MoneySpin()
         self.price = MoneySpin()
+        self.wholesale = MoneySpin()
+        self.wholesale.setToolTip("يُطبَّق تلقائياً عند البيع لعميل مستواه «جملة». 0 = نفس سعر البيع")
         self.margin = QLabel("")
         self.margin.setObjectName("hint")
         self.qty = MoneySpin(decimals=3)
@@ -311,6 +319,7 @@ class ProductDialog(QDialog):
         lay.addRow("سعر التكلفة:", self.cost)
         lay.addRow("سعر البيع:", self.price)
         lay.addRow("", self.margin)
+        lay.addRow("سعر الجملة (اختياري):", self.wholesale)
         if not product:
             lay.addRow("الكمية الافتتاحية:", self.qty)
         lay.addRow("حد التنبيه (نواقص):", self.min_qty)
@@ -361,6 +370,7 @@ class ProductDialog(QDialog):
             self.unit.setCurrentText(product["unit"] or "قطعة")
             self.cost.setValue(product["cost_price"])
             self.price.setValue(product["sale_price"])
+            self.wholesale.setValue(product["wholesale_price"] or 0)
             self.min_qty.setValue(product["min_quantity"])
             self.weighted.setChecked(bool(product["is_weighted"]))
             self.plu.setText(product["plu_code"] or "")
@@ -414,7 +424,8 @@ class ProductDialog(QDialog):
             args = dict(name=self.name.text(), barcode=self.barcode.text(), category=self.category.currentText(),
                         cost_price=self.cost.value(), sale_price=self.price.value(), min_quantity=self.min_qty.value(),
                         unit=self.unit.currentText(), plu_code=self.plu.text() if self.weighted.isChecked() else None,
-                        is_weighted=self.weighted.isChecked(), is_favorite=self.fav.isChecked())
+                        is_weighted=self.weighted.isChecked(), is_favorite=self.fav.isChecked(),
+                        wholesale_price=self.wholesale.value())
             if self.product:
                 products.update_product(self.product["id"], **args)
                 self.saved_id = self.product["id"]

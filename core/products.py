@@ -16,7 +16,8 @@ def _clean_barcode(barcode):
 
 
 def add_product(name, barcode=None, category="", cost_price=0, sale_price=0, quantity=0, min_quantity=0,
-                unit="قطعة", plu_code=None, is_weighted=False, is_favorite=False, opening_expiry=None):
+                unit="قطعة", plu_code=None, is_weighted=False, is_favorite=False, opening_expiry=None,
+                wholesale_price=0):
     name = (name or "").strip()
     if not name:
         raise ValueError("اسم المنتج مطلوب")
@@ -28,10 +29,11 @@ def add_product(name, barcode=None, category="", cost_price=0, sale_price=0, qua
         _check_unique(conn, barcode, plu_code)
         cur = conn.execute("""
             INSERT INTO products (name, barcode, category, cost_price, sale_price, quantity, min_quantity, unit,
-                                  plu_code, is_weighted, is_favorite, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+                                  plu_code, is_weighted, is_favorite, created_at, updated_at, wholesale_price)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (name, barcode, (category or "").strip(), money(cost_price), money(sale_price), qty(min_quantity),
-              unit or "قطعة", plu_code, 1 if is_weighted else 0, 1 if is_favorite else 0, db.now(), db.now()))
+              unit or "قطعة", plu_code, 1 if is_weighted else 0, 1 if is_favorite else 0, db.now(), db.now(),
+              money(wholesale_price or 0)))
         pid = cur.lastrowid
         if quantity:
             _move_stock(conn, pid, quantity, "رصيد افتتاحي", expiry_date=opening_expiry)
@@ -56,7 +58,7 @@ def _check_unique(conn, barcode, plu_code, exclude_id=None):
 
 
 def update_product(product_id, name, barcode, category, cost_price, sale_price, min_quantity, unit,
-                   plu_code=None, is_weighted=False, is_favorite=False):
+                   plu_code=None, is_weighted=False, is_favorite=False, wholesale_price=None):
     name = (name or "").strip()
     if not name:
         raise ValueError("اسم المنتج مطلوب")
@@ -71,6 +73,8 @@ def update_product(product_id, name, barcode, category, cost_price, sale_price, 
             WHERE id=?
         """, (name, barcode, (category or "").strip(), money(cost_price), money(sale_price), qty(min_quantity),
               unit or "قطعة", plu_code, 1 if is_weighted else 0, 1 if is_favorite else 0, db.now(), product_id))
+        if wholesale_price is not None:
+            conn.execute("UPDATE products SET wholesale_price=? WHERE id=?", (money(wholesale_price), product_id))
         if old and (money(old["sale_price"]) != money(sale_price) or money(old["cost_price"]) != money(cost_price)):
             audit.log("تعديل سعر", f"{name}: البيع {old['sale_price']} ← {sale_price} | التكلفة {old['cost_price']} ← {cost_price}", conn)
 
@@ -330,7 +334,8 @@ def inventory_value():
 
 # ---------------- استيراد وتصدير CSV (يفتح في Excel) ----------------
 
-CSV_HEADERS = ["الاسم", "الباركود", "الفئة", "الوحدة", "سعر التكلفة", "سعر البيع", "الكمية", "الحد الأدنى", "رمز الميزان"]
+CSV_HEADERS = ["الاسم", "الباركود", "الفئة", "الوحدة", "سعر التكلفة", "سعر البيع", "الكمية", "الحد الأدنى", "رمز الميزان",
+               "سعر الجملة"]
 
 
 def export_csv(path):
@@ -340,7 +345,7 @@ def export_csv(path):
         w.writerow(CSV_HEADERS)
         for p in rows:
             w.writerow([p["name"], p["barcode"] or "", p["category"] or "", p["unit"] or "", p["cost_price"],
-                        p["sale_price"], p["quantity"], p["min_quantity"], p["plu_code"] or ""])
+                        p["sale_price"], p["quantity"], p["min_quantity"], p["plu_code"] or "", p["wholesale_price"] or ""])
     return len(rows)
 
 
@@ -354,20 +359,41 @@ def import_csv(path):
         for i, row in enumerate(reader, start=2):
             if not row or not any(c.strip() for c in row):
                 continue
-            row = (row + [""] * 9)[:9]
-            name, barcode, category, unit, cost, price, q, minq, plu = [c.strip() for c in row]
+            row = (row + [""] * 10)[:10]
+            name, barcode, category, unit, cost, price, q, minq, plu, wholesale = [c.strip() for c in row]
             try:
                 existing = get_product_by_barcode(barcode) if barcode else None
                 if existing:
                     update_product(existing["id"], name or existing["name"], barcode, category or existing["category"],
                                    to_float(cost, existing["cost_price"]), to_float(price, existing["sale_price"]),
                                    to_float(minq, existing["min_quantity"]), unit or existing["unit"],
-                                   plu or existing["plu_code"], existing["is_weighted"], existing["is_favorite"])
+                                   plu or existing["plu_code"], existing["is_weighted"], existing["is_favorite"],
+                                   to_float(wholesale, existing["wholesale_price"]) if wholesale else None)
                     updated += 1
                 else:
                     add_product(name, barcode, category, to_float(cost), to_float(price), to_float(q),
-                                to_float(minq), unit or "قطعة", plu or None, is_weighted=(unit in ("كغم", "غرام")))
+                                to_float(minq), unit or "قطعة", plu or None, is_weighted=(unit in ("كغم", "غرام")),
+                                wholesale_price=to_float(wholesale, 0))
                     added += 1
             except Exception as e:
                 errors.append(f"سطر {i}: {e}")
     return added, updated, errors
+
+
+def price_for(product, customer=None):
+    """سعر بيع الحبة حسب مستوى سعر العميل (جملة أو مفرق)"""
+    if customer is not None and _level(customer) == "wholesale" and (product["wholesale_price"] or 0) > 0:
+        return product["wholesale_price"]
+    return product["sale_price"]
+
+
+def _level(customer):
+    try:
+        return customer["price_level"] or "retail"
+    except (KeyError, IndexError, TypeError):
+        return "retail"
+
+
+def all_units():
+    """كل وحدات البيع (للنسخة المحلية في وضع عدم الاتصال)"""
+    return [dict(r) for r in db.query("SELECT * FROM product_units")]

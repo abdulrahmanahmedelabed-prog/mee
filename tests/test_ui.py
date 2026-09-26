@@ -184,3 +184,27 @@ def test_new_screens_actions(app):
     assert cs.table.rowCount() == 1
     rs = ReorderScreen()
     rs.refresh()
+
+
+def test_wholesale_customer_reprices_and_customer_display(pos):
+    from core import config
+    pid = products.add_product("سكر كيس", "w1", "", 3, 5, 100, 0, wholesale_price=4.2)
+    retail = customers.add_customer("زبون مفرق")
+    whole = customers.add_customer("تاجر جملة", price_level="wholesale")
+    config.save({"customer_display": "1"})
+    pos.search.setText("10*w1")
+    pos.on_enter()
+    assert pos.update_totals()["total"] == 50
+    from ui import customer_display
+    d = customer_display.get()
+    assert "50.00" in d.total.text()
+    pos.set_customer(customers.get_customer(whole))
+    assert pos.cart[0]["unit_price"] == 4.2 and pos.update_totals()["total"] == 42
+    pos.set_customer(customers.get_customer(retail))
+    assert pos.cart[0]["unit_price"] == 5
+    pos.set_customer(customers.get_customer(whole))
+    pos.finish_sale({"cash_amount": 42, "card_amount": 0, "credit_amount": 0, "cash_received": 50, "change": 8})
+    assert "8.00" in d.total.text() and "شكراً" in d.items.text()
+    assert sales.get_invoice(pos.last_invoice_id)["total"] == 42
+    config.save({"customer_display": "0"})
+    assert customer_display.get() is None

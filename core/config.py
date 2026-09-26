@@ -21,6 +21,8 @@ DEFAULTS = {
     "server_port": 8765,
     "link_code": "",               # رمز الربط السري بين الأجهزة
     "owner_web": "0",              # تشغيل لوحة المالك على الجوال في الوضع المستقل
+    "customer_display": "0",       # شاشة الزبون على الشاشة الثانية
+    "language": "ar",              # لغة الواجهة: ar / en
     # الطباعة
     "printer_name": "",
     "receipt_width_mm": "80",
@@ -36,7 +38,8 @@ DEFAULTS = {
 
 # مفاتيح تُقرأ من إعدادات الجهاز بدل إعدادات المحل العامة
 LOCAL_KEYS = {"printer_name", "receipt_width_mm", "auto_print_receipt", "drawer_mode", "drawer_printer",
-              "drawer_host", "drawer_port", "drawer_serial", "drawer_on_cash_sale", "owner_web"}
+              "drawer_host", "drawer_port", "drawer_serial", "drawer_on_cash_sale", "owner_web",
+              "customer_display", "language"}
 
 _cache = None
 
