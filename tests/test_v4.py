@@ -308,3 +308,23 @@ def test_insights_abc_and_bulk_prices():
     assert products.get_product(b)["sale_price"] == 15
     up = insights.price_update_preview("percent", 10, category="منظفات")
     assert up == [{"id": d, "name": "راكد", "cost": 20, "old": 30, "new": 33}]
+
+
+def test_input_vat_on_purchases_and_vat_report():
+    settings.set_many({"vat_enabled": "1", "vat_rate": "16", "prices_include_vat": "1"})
+    pid = products.add_product("عصير", "v1", "", 0, 11.6, 0, 0)
+    sup = suppliers.add_supplier("مورد ضريبي")
+    suppliers.create_purchase(sup, [{"product_id": pid, "quantity": 10, "unit_cost": 5.8}], tax=8)   # 58 شامل 8
+    assert products.get_product(pid)["cost_price"] == 5          # التكلفة بدون ضريبة المدخلات
+    assert suppliers.balance(sup) == 58
+    with pytest.raises(ValueError):
+        suppliers.create_purchase(sup, [{"product_id": pid, "quantity": 1, "unit_cost": 5}], tax=9)
+    sales.create_sale([item(pid, 5, 11.6)])                       # 58 منها 8 ضريبة مخرجات
+    t = db.today()
+    v = reports.vat_report(t, t)
+    assert v["output_tax"] == 8 and v["input_tax"] == 8 and v["net_due"] == 0
+    tb = ledger.trial_balance(t, t)
+    bal = {r["code"]: r["closing"] for r in tb["rows"]}
+    assert tb["totals"]["balanced"] and bal[ledger.VAT_INPUT] == 8 and bal[ledger.VAT] == -8
+    assert bal[ledger.INVENTORY] == pytest.approx(products.inventory_value()["cost_value"], abs=0.01)
+    assert ledger.income_statement(t, t)["net_income"] == reports.profit_and_loss(t, t)["net_profit"] == 25

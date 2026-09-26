@@ -61,13 +61,14 @@ def list_suppliers(search=None):
 
 
 def create_purchase(supplier_id, items, paid=0.0, payment_method=PAY_DRAWER, supplier_ref="", note="",
-                    shift_id=None, update_sale_prices=True):
+                    shift_id=None, update_sale_prices=True, tax=0.0):
     """
     items: dict: product_id, quantity, unit_cost, (اختياري) sale_price للحبة،
            factor + unit_name عند الشراء بالكرتونة، expiry_date + batch_no لتتبع الصلاحية
     - يزيد المخزون
     - يحدّث سعر التكلفة بطريقة المتوسط المرجّح (أدق لحساب الأرباح)
     - الجزء غير المدفوع يُسجّل ديناً للمورد
+    - tax: ضريبة القيمة المضافة المشمولة في الإجمالي (ضريبة مدخلات تُخصم من المستحق للضريبة، ولا تدخل في التكلفة)
     """
     items = [i for i in items if i["quantity"] > 0]
     if not items:
@@ -78,21 +79,26 @@ def create_purchase(supplier_id, items, paid=0.0, payment_method=PAY_DRAWER, sup
         raise ValueError("المبلغ المدفوع غير صحيح")
     if not supplier_id and abs(paid - total) > 0.009:
         raise ValueError("المشتريات بدون مورد يجب أن تُدفع كاملة")
+    tax = money(tax or 0)
+    if tax < 0 or tax >= total:
+        raise ValueError("قيمة الضريبة غير صحيحة")
+    net_ratio = (total - tax) / total if total else 1.0
     user_id = auth.current_user_id()
     created = db.now()
     with db.tx() as conn:
         number = db.next_number(conn, "purchase", "PUR")
         cur = conn.execute("""INSERT INTO purchases(purchase_number, supplier_id, supplier_ref, total, paid, payment_method,
-                                                    note, user_id, shift_id, created_at)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                           (number, supplier_id, supplier_ref, total, paid, payment_method, note, user_id, shift_id, created))
+                                                    note, user_id, shift_id, created_at, tax)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (number, supplier_id, supplier_ref, total, paid, payment_method, note, user_id, shift_id, created,
+                            tax))
         pid = cur.lastrowid
         for it in items:
             p = conn.execute("SELECT * FROM products WHERE id=?", (it["product_id"],)).fetchone()
             factor = float(it.get("factor", 1) or 1)
             entered_q, entered_cost = qty(it["quantity"]), money(it["unit_cost"])
             q = qty(entered_q * factor)                    # بالوحدة الأساسية
-            cost = entered_cost / factor                   # تكلفة الحبة
+            cost = entered_cost / factor * net_ratio       # تكلفة الحبة بدون ضريبة المدخلات
             old_q = max(p["quantity"], 0)
             new_cost = money((old_q * p["cost_price"] + q * cost) / (old_q + q)) if (old_q + q) > 0 else money(cost)
             conn.execute("""INSERT INTO purchase_items(purchase_id, product_id, product_name, quantity, unit_cost, total,

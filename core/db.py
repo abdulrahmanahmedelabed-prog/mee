@@ -465,6 +465,9 @@ ADDED_COLUMNS = {
     "return_items": [
         ("factor", "REAL NOT NULL DEFAULT 1"),
     ],
+    "purchases": [
+        ("tax", "REAL NOT NULL DEFAULT 0"),       # ضريبة المدخلات المشمولة في إجمالي فاتورة المورد
+    ],
     "purchase_items": [
         ("unit_name", "TEXT"),
         ("factor", "REAL NOT NULL DEFAULT 1"),

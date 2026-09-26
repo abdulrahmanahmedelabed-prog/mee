@@ -201,3 +201,22 @@ def daily_summary_text(day=None):
     if due:
         lines.append(f"🏦 {len(due)} شيك يستحق خلال 3 أيام بقيمة {sum(c['amount'] for c in due):,.2f}")
     return "\n".join(lines)
+
+
+def vat_report(date_from, date_to):
+    """إقرار ضريبة القيمة المضافة: ضريبة المخرجات (المبيعات) − ضريبة المدخلات (المشتريات) = الصافي المستحق"""
+    p = (date_from, date_to)
+    sales_ = db.query_one(f"""SELECT COUNT(*) AS cnt, COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax
+                              FROM invoices WHERE {_RANGE.format(col='created_at')}""", p)
+    rets = db.query_one(f"""SELECT COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax
+                            FROM returns WHERE {_RANGE.format(col='created_at')}""", p)
+    pur = db.query_one(f"""SELECT COUNT(*) AS cnt, COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax
+                           FROM purchases WHERE {_RANGE.format(col='created_at')}""", p)
+    output_tax = money(sales_["tax"] - rets["tax"])
+    input_tax = money(pur["tax"])
+    taxable_sales = money(sales_["total"] - rets["total"] - output_tax)
+    return {"sales_count": sales_["cnt"], "sales_total": money(sales_["total"] - rets["total"]),
+            "taxable_sales": taxable_sales, "output_tax": output_tax,
+            "purchases_count": pur["cnt"], "purchases_total": money(pur["total"]),
+            "taxable_purchases": money(pur["total"] - input_tax), "input_tax": input_tax,
+            "net_due": money(output_tax - input_tax)}

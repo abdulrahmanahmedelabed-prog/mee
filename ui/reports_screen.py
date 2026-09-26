@@ -113,6 +113,10 @@ class ReportsScreen(QWidget):
         self.stock_table = Table(["الصنف", "الفئة", "الكمية", "الحد الأدنى", "التكلفة", "قيمة المخزون", "الحالة"])
         self._add_tab(self.stock_table, "تقييم المخزون", self.stock_table)
 
+        # 9ب) ضريبة القيمة المضافة
+        self.vat_table = Table(["البند", "المبلغ"], stretch=0, sortable=False)
+        self._add_tab(self.vat_table, "ضريبة القيمة المضافة", self.vat_table)
+
         # 10) سجل العمليات
         self.audit_table = Table(["الوقت", "المستخدم", "العملية", "التفاصيل"], stretch=3)
         self._add_tab(self.audit_table, "سجل العمليات", self.audit_table)
@@ -191,6 +195,17 @@ class ReportsScreen(QWidget):
                              float(p["cost_price"]), float(max(p["quantity"], 0) * p["cost_price"]), st])
             self.stock_table.set_rows(data, colors=[("#FEE2E2" if d[6] == "نفد" else "#FEF3C7" if d[6] == "منخفض" else None)
                                                     for d in data])
+        elif name == "ضريبة القيمة المضافة":
+            v = reports.vat_report(a, b)
+            rows = [("المبيعات شاملة الضريبة (بعد المرتجعات)", v["sales_total"]),
+                    ("المبيعات الخاضعة بدون ضريبة", v["taxable_sales"]),
+                    ("ضريبة المخرجات (على المبيعات)", v["output_tax"]), ("", None),
+                    ("المشتريات شاملة الضريبة", v["purchases_total"]),
+                    ("المشتريات بدون ضريبة", v["taxable_purchases"]),
+                    ("ضريبة المدخلات (على المشتريات)", v["input_tax"]), ("", None),
+                    ("= صافي الضريبة المستحقة للدفع (مخرجات − مدخلات)", v["net_due"])]
+            self.vat_table.set_rows([[k, float(x) if x is not None else ""] for k, x in rows],
+                                    colors=[("#EFF6FF" if k.startswith("=") else None) for k, _ in rows])
         elif name == "سجل العمليات":
             rows = audit.recent(1000, a, b)
             self.audit_table.set_rows([[r["created_at"], r["username"] or "", r["action"], r["details"] or ""] for r in rows])

@@ -23,6 +23,7 @@ BANK = "1120"            # البنك: البطاقات والتحويلات و�
 CHEQUES_IN = "1130"      # شيكات مستلمة من العملاء لم تُصرف بعد
 RECEIVABLES = "1210"     # ديون العملاء
 INVENTORY = "1310"
+VAT_INPUT = "1410"       # ضريبة مدخلات على المشتريات قابلة للخصم
 FIXED_ASSETS = "1510"
 PAYABLES = "2110"        # مستحقات الموردين
 CHEQUES_OUT = "2120"     # شيكات أعطيناها للموردين ولم تُصرف بعد
@@ -49,6 +50,7 @@ SYSTEM_ACCOUNTS = [
     (CHEQUES_IN, "شيكات واردة برسم التحصيل", "asset"),
     (RECEIVABLES, "ذمم العملاء (الديون)", "asset"),
     (INVENTORY, "المخزون (البضاعة)", "asset"),
+    (VAT_INPUT, "ضريبة مدخلات قابلة للخصم", "asset"),
     (FIXED_ASSETS, "أصول ثابتة (أثاث ومعدات)", "asset"),
     (PAYABLES, "ذمم الموردين", "liability"),
     (CHEQUES_OUT, "شيكات صادرة مؤجلة", "liability"),
@@ -275,11 +277,14 @@ def entries(date_from=None, date_to=None):
             add(r["created_at"], f"C-{r['id']}", desc, "customer", lines)
 
         # 4) حركات حسابات الموردين
-        for r in q("""SELECT t.*, s.name FROM supplier_transactions t JOIN suppliers s ON s.id=t.supplier_id
+        for r in q("""SELECT t.*, s.name, COALESCE(p.tax, 0) AS tax FROM supplier_transactions t
+                      JOIN suppliers s ON s.id=t.supplier_id LEFT JOIN purchases p ON p.id=t.purchase_id AND t.type='purchase'
                       WHERE t.type IN ('purchase','payment','opening','adjust','bounced') {cond}""", "t.created_at"):
             a = r["amount"]
             if r["type"] == "purchase":
-                lines, desc = _pair(INVENTORY, PAYABLES, a), f"مشتريات من المورد {r['name']}"
+                tax = money(r["tax"])
+                lines = [(INVENTORY, money(a - tax), 0.0), (VAT_INPUT, tax, 0.0), (PAYABLES, 0.0, money(a))]
+                desc = f"مشتريات من المورد {r['name']}"
             elif r["type"] == "payment":
                 lines = _pair(PAYABLES, SUPPLIER_METHOD_ACCOUNT.get(r["method"], CASH), -a)
                 desc = f"دفعة للمورد {r['name']} ({r['method'] or ''})"
@@ -294,8 +299,10 @@ def entries(date_from=None, date_to=None):
 
         # 5) مشتريات نقدية بدون مورد
         for r in q("""SELECT * FROM purchases WHERE supplier_id IS NULL {cond}""", "created_at"):
+            tax = money(r["tax"] or 0)
             add(r["created_at"], r["purchase_number"], "مشتريات نقدية", "purchase",
-                _pair(INVENTORY, SUPPLIER_METHOD_ACCOUNT.get(r["payment_method"], CASH), r["total"]))
+                [(INVENTORY, money(r["total"] - tax), 0.0), (VAT_INPUT, tax, 0.0),
+                 (SUPPLIER_METHOD_ACCOUNT.get(r["payment_method"], CASH), 0.0, money(r["total"]))])
 
         # 6) مرتجعات المشتريات (إرجاع بضاعة للمورد)
         for r in q("""SELECT p.*, s.name FROM purchase_returns p JOIN suppliers s ON s.id=p.supplier_id

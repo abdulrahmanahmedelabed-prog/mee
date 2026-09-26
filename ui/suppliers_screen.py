@@ -126,11 +126,18 @@ class PurchaseDialog(QDialog):
         self.pay_all.toggled.connect(self.update_total)
         self.update_prices = QCheckBox("تحديث أسعار البيع للمنتجات")
         self.update_prices.setChecked(True)
+        self.tax = MoneySpin()
+        tax_row = QHBoxLayout()
+        tax_row.addWidget(self.tax)
+        tax_row.addWidget(button("احسب بنسبة الضريبة", "secondaryBtn", self.calc_tax))
         bottom.addRow("الإجمالي:", self.total_lbl)
         bottom.addRow("", self.pay_all)
         bottom.addRow("المدفوع الآن:", self.paid)
         bottom.addRow("طريقة الدفع:", self.method)
         bottom.addRow("", self.update_prices)
+        from core import settings as _st
+        if _st.get_bool("vat_enabled"):
+            bottom.addRow("منها ضريبة القيمة المضافة (مدخلات):", tax_row)
         lay.addLayout(bottom)
         ok_cancel(self, lay, "حفظ الفاتورة")
         self._busy = False
@@ -240,6 +247,12 @@ class PurchaseDialog(QDialog):
     def total(self):
         return money(sum(money(l["quantity"] * l["unit_cost"]) for l in self.lines))
 
+    def calc_tax(self):
+        """الضريبة المشمولة في إجمالي فاتورة المورد حسب نسبة الضريبة في الإعدادات"""
+        from core import settings as _st
+        rate = _st.get_float("vat_rate", 0)
+        self.tax.setValue(money(self.total() * rate / (100 + rate)) if rate else 0)
+
     def update_total(self):
         t = self.total()
         self.total_lbl.setText(m(t))
@@ -258,7 +271,8 @@ class PurchaseDialog(QDialog):
                   "sale_price": l["sale_price"], "factor": l["factor"], "unit_name": l["unit_name"],
                   "expiry_date": l["expiry"] or None} for l in self.lines],
                 paid=self.paid.value(), payment_method=self.method.currentText(), supplier_ref=self.ref.text(),
-                shift_id=shifts.current_shift_id(), update_sale_prices=self.update_prices.isChecked())
+                shift_id=shifts.current_shift_id(), update_sale_prices=self.update_prices.isChecked(),
+                tax=self.tax.value())
         except ValueError as e:
             warn(self, str(e))
             return
