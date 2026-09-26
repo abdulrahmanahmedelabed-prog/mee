@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox, QPushButton, QToolTip
 )
 
-from core import auth
+from core import auth, i18n
 from core.utils import money, fmt_qty
 
 
@@ -21,19 +21,19 @@ from core.utils import money, fmt_qty
 # ---------------------------------------------------------------------------
 
 def info(parent, text, title="تم"):
-    QMessageBox.information(parent, title, text)
+    QMessageBox.information(parent, i18n.tr(title), i18n.tr(text))
 
 
 def warn(parent, text, title="تنبيه"):
-    QMessageBox.warning(parent, title, text)
+    QMessageBox.warning(parent, i18n.tr(title), i18n.tr(text))
 
 
 def error(parent, text, title="خطأ"):
-    QMessageBox.critical(parent, title, str(text))
+    QMessageBox.critical(parent, i18n.tr(title), i18n.tr(str(text)))
 
 
 def ask(parent, text, title="تأكيد"):
-    box = QMessageBox(QMessageBox.Question, title, text, QMessageBox.Yes | QMessageBox.No, parent)
+    box = QMessageBox(QMessageBox.Question, i18n.tr(title), i18n.tr(text), QMessageBox.Yes | QMessageBox.No, parent)
     box.button(QMessageBox.Yes).setText("نعم")
     box.button(QMessageBox.No).setText("لا")
     box.setDefaultButton(QMessageBox.No)
@@ -101,10 +101,10 @@ class Table(QTableWidget):
                     item = SortItem(str(val), val)
                     item.setTextAlignment(Qt.AlignCenter)
                 elif isinstance(val, tuple):  # (نص, قيمة ترتيب)
-                    item = SortItem(val[0], val[1])
+                    item = SortItem(i18n.tr(val[0]), val[1])
                     item.setTextAlignment(Qt.AlignCenter)
                 else:
-                    item = SortItem("" if val is None else str(val))
+                    item = SortItem("" if val is None else i18n.tr(str(val)))
                 item.setData(Qt.UserRole, r)
                 if colors and colors[r]:
                     item.setBackground(QColor(colors[r]))
@@ -259,7 +259,7 @@ class DateRange(QWidget):
         lay.addWidget(QLabel("إلى"))
         lay.addWidget(self.d_to)
         self._busy = False
-        self.preset.currentTextChanged.connect(self._apply_preset)
+        self.preset.currentIndexChanged.connect(lambda _: self._apply_preset(self.preset.currentText()))
         self.preset.setCurrentText(default)
         self._apply_preset(default)
 
@@ -413,5 +413,5 @@ def open_whatsapp(parent, url, fallback_text=None):
         return True
     if fallback_text is not None:
         from ui.dialogs import TextDialog
-        TextDialog(parent, "لا يوجد رقم هاتف صالح - انسخ الرسالة", fallback_text).exec()
+        TextDialog(parent, "لا يوجد رقم هاتف صالح - انسخ الرسالة", i18n.tr(fallback_text)).exec()
     return False

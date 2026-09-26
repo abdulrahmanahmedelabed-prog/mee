@@ -7,9 +7,18 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit,
 from core import settings, db, remote
 from ui.widgets import ok_cancel, hint, title, warn
 
-CURRENCIES = [("₪", "شيكل"), ("د.أ", "دينار"), ("$", "دولار"), ("ج.م", "جنيه"), ("ر.س", "ريال"), ("د.إ", "درهم")]
+CURRENCIES = [("₪", "شيكل"), ("د.أ", "دينار"), ("$", "دولار"), ("ج.م", "جنيه"), ("ر.س", "ريال"), ("د.إ", "درهم"),
+              ("€", "Euro"), ("£", "Pound"), ("₺", "Lira"), ("₹", "Rupee"), ("KWD", "Dinar"), ("QAR", "Riyal"),
+              ("MAD", "Dirham"), ("TND", "Dinar"), ("DZD", "Dinar"), ("IQD", "Dinar")]
 COUNTRY_CODES = [("970", "فلسطين"), ("972", "الداخل"), ("962", "الأردن"), ("20", "مصر"), ("966", "السعودية"),
-                 ("971", "الإمارات"), ("961", "لبنان"), ("963", "سوريا"), ("964", "العراق")]
+                 ("971", "الإمارات"), ("961", "لبنان"), ("963", "سوريا"), ("964", "العراق"), ("965", "Kuwait"),
+                 ("974", "Qatar"), ("973", "Bahrain"), ("968", "Oman"), ("967", "Yemen"), ("212", "Morocco"),
+                 ("213", "Algeria"), ("216", "Tunisia"), ("218", "Libya"), ("249", "Sudan"), ("90", "Türkiye"),
+                 ("1", "USA / Canada"), ("44", "United Kingdom"), ("49", "Germany"), ("33", "France"), ("91", "India"),
+                 ("92", "Pakistan"), ("62", "Indonesia"), ("60", "Malaysia"), ("234", "Nigeria"), ("254", "Kenya")]
+EN_DEFAULTS = {"receipt_footer": "Thank you for your visit",
+               "expense_categories": "Rent,Electricity,Water,Salaries,Internet & phone,Transport,Maintenance,Cleaning,"
+                                     "Hospitality,Other"}
 
 
 def needs_setup():
@@ -29,6 +38,12 @@ class SetupWizard(QDialog):
         lay = QFormLayout(self)
         lay.addRow(title("🏪 لنجهّز برنامجك خلال دقيقة"))
         lay.addRow(hint("يمكنك تعديل كل شيء لاحقاً من شاشة الإعدادات."))
+        from core import i18n, config
+        self.lang = QComboBox()
+        for code, name in i18n.LANGUAGES.items():
+            self.lang.addItem(name, code)
+        self.lang.setCurrentIndex(max(0, self.lang.findData(config.get("language") or "ar")))
+        lay.addRow("اللغة / Language:", self.lang)
         self.name = QLineEdit(settings.get("shop_name") if settings.get("shop_name") != "محلي" else "")
         self.name.setPlaceholderText("مثل: سوبرماركت الأمل")
         self.phone = QLineEdit(settings.get("shop_phone"))
@@ -74,5 +89,10 @@ class SetupWizard(QDialog):
                            "whatsapp_country_code": self.country.currentData(), "vat_enabled": self.vat.isChecked(),
                            "vat_rate": f"{self.vat_rate.value():g}", "loyalty_enabled": self.loyalty.isChecked(),
                            "owner_whatsapp": self.owner.text().strip(), "require_shift": self.require_shift.isChecked()})
+        from core import config
+        lang = self.lang.currentData()
+        config.save({"language": lang})
+        if lang != "ar":
+            settings.set_many(EN_DEFAULTS)
         db.set_meta("setup_done", "1")
         super().accept()

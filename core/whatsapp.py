@@ -35,6 +35,8 @@ def link(phone, text):
     num = normalize_phone(phone)
     if not num:
         return None
+    from core import i18n
+    text = i18n.tr(text)
     return f"https://wa.me/{num}?text={quote(text)}"
 
 

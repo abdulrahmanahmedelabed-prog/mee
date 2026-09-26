@@ -54,7 +54,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.resize(1360, 820)
-        self.setLayoutDirection(Qt.RightToLeft)
+        from ui.i18n_qt import direction
+        self.setLayoutDirection(direction())
         self.pages = {}
         self.nav_buttons = {}
 
@@ -179,7 +180,8 @@ class MainWindow(QMainWindow):
             self.nav_buttons[key].setVisible(allowed)
             if allowed and first is None:
                 first = key
-        self.user_lbl.setText(f"👤 {u['full_name'] or u['username']} — {auth.ROLES.get(u['role'], u['role'])}")
+        from core.i18n import tr
+        self.user_lbl.setText(f"👤 {u['full_name'] or u['username']} — {tr(auth.ROLES.get(u['role'], u['role']))}")
         self.update_header()
         # الكاشير يبدأ مباشرة بنقطة البيع
         self.go("pos" if u["role"] == "cashier" else (first or "pos"))

@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import os
 
-from core import db, context
+from core import db, context, i18n
 
 ROLES = {
     "admin": "مدير النظام",
@@ -64,7 +64,8 @@ def ensure_admin():
     if db.scalar("SELECT COUNT(*) FROM users") == 0:
         with db.tx() as conn:
             conn.execute("""INSERT INTO users(username, full_name, password_hash, role, must_change_password, created_at)
-                            VALUES ('admin', 'المدير', ?, 'admin', 1, ?)""", (hash_password("admin"), db.now()))
+                            VALUES ('admin', ?, ?, 'admin', 1, ?)""",
+                         ("المدير" if i18n.is_rtl() else "Administrator", hash_password("admin"), db.now()))
 
 
 def authenticate(username, password):

@@ -802,8 +802,9 @@ class POSScreen(QWidget):
         self._reprice_for_customer()
         if customer:
             bal = customers.balance(customer["id"])
-            pts = f" • 🎁 {loyalty.balance(customer['id']):g} نقطة" if loyalty.enabled() else ""
-            self.customer_btn.setText(f"👤  {customer['name']}  (رصيده {m(bal)}{pts})")
+            from core.i18n import tr
+            pts = tr(f" • 🎁 {loyalty.balance(customer['id']):g} نقطة") if loyalty.enabled() else ""
+            self.customer_btn.setText(tr(f"👤  {customer['name']}  (رصيده {m(bal)}") + pts + ")")
         else:
             self.customer_btn.setText("👤  زبون نقدي (F4)")
         if hasattr(self, "lbl_promo"):

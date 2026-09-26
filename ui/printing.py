@@ -29,6 +29,8 @@ def _make_printer(width_mm=None):
 
 
 def _doc(html, printer):
+    from core import i18n
+    html = i18n.tr_html(html)
     doc = QTextDocument()
     doc.setHtml(html)
     doc.setPageSize(printer.pageRect(QPrinter.Point).size())

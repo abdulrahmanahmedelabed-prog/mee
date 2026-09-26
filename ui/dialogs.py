@@ -43,13 +43,24 @@ class LoginDialog(QDialog):
         btn = button("دخول", slot=self.try_login)
         btn.setMinimumHeight(42)
         lay.addWidget(btn)
-        from core import remote, config
+        from core import remote, config, i18n
+        lang = QComboBox()
+        for code, name in i18n.LANGUAGES.items():
+            lang.addItem(name, code)
+        lang.setCurrentIndex(max(0, lang.findData(config.get("language") or "ar")))
+        lang.currentIndexChanged.connect(lambda _: self.change_language(lang.currentData()))
+        lay.addWidget(lang, alignment=Qt.AlignCenter)
         if remote.is_client():
             lay.addWidget(hint(f"نقطة بيع فرعية «{config.get('terminal_name')}» متصلة بالجهاز الرئيسي "
                                f"{config.get('server_host')}"))
         elif auth.authenticate("admin", "admin"):
             lay.addWidget(hint("أول تشغيل: المستخدم admin وكلمة المرور admin (سيُطلب تغييرها)"))
         self.user.setFocus()
+
+    def change_language(self, code):
+        from core import config
+        config.save({"language": code})
+        info(self, "أعد تشغيل البرنامج لتطبيق اللغة.\nRestart the program to apply the language.")
 
     def try_login(self):
         if auth.login(self.user.text(), self.pw.text()):

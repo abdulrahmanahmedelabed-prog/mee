@@ -66,14 +66,17 @@ def connect_as_client(app):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Shop Accounting")
-    app.setLayoutDirection(Qt.RightToLeft)
+    from ui import i18n_qt
+    i18n_qt.apply_language(os.environ.get("SHOP_LANG") or config.load().get("language") or "ar", app)
+    app.setLayoutDirection(i18n_qt.direction())
     QLocale.setDefault(QLocale(QLocale.English, QLocale.UnitedStates))  # أرقام لاتينية وفاصلة عشرية نقطة
     font = QFont()
     font.setFamilies(["Segoe UI", "Tahoma", "Noto Sans Arabic", "Noto Naskh Arabic"])
     font.setPointSize(10)
     app.setFont(font)
     from ui.style import STYLE_SHEET
-    app.setStyleSheet(STYLE_SHEET)
+    from ui.i18n_qt import adapt_style
+    app.setStyleSheet(adapt_style(STYLE_SHEET))
     sys.excepthook = excepthook
 
     mode = config.load()["mode"]
@@ -100,6 +103,8 @@ def main():
     from ui.setup_wizard import SetupWizard, needs_setup
     if auth.has_permission("settings") and needs_setup():
         SetupWizard().exec()
+        i18n_qt.apply_language(config.load().get("language") or "ar", app)   # إن اختار الإنجليزية في المعالج
+        app.setStyleSheet(adapt_style(STYLE_SHEET))
 
     from ui.main_window import MainWindow
     window = MainWindow()

@@ -86,6 +86,13 @@ class SettingsScreen(QWidget):
         self._line(f, "shop_address", "العنوان:")
         self._line(f, "shop_phone", "الهاتف:")
         self._line(f, "tax_number", "الرقم الضريبي / المشتغل المرخص:")
+        lang = QComboBox()
+        from core import i18n as _i18n
+        for code, name in _i18n.LANGUAGES.items():
+            lang.addItem(name, code)
+        self.fields["language"] = lang
+        f.addRow("اللغة / Language:", lang)
+        f.addRow("", hint("تغيير اللغة يُطبَّق بعد إعادة تشغيل البرنامج. Restart the program to apply the language."))
 
         # --- العملة والضريبة
         f = self._form_tab("العملة والضريبة")

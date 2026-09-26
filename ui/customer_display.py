@@ -39,7 +39,8 @@ class CustomerDisplay(QWidget):
     def __init__(self):
         super().__init__(None, Qt.Window | Qt.FramelessWindowHint)
         self.setWindowTitle("شاشة الزبون")
-        self.setLayoutDirection(Qt.RightToLeft)
+        from ui.i18n_qt import direction
+        self.setLayoutDirection(direction())
         self.setStyleSheet("QWidget#cd { background:#0F172A; } QLabel { color:white; background:transparent; }")
         self.setObjectName("cd")
         lay = QVBoxLayout(self)

@@ -46,8 +46,9 @@ button{width:100%;padding:12px;border:0;border-radius:8px;background:var(--accen
 
 
 def _page(body, refresh=False):
+    from core import i18n
     meta = "<meta http-equiv='refresh' content='60'>" if refresh else ""
-    return (f"<!doctype html><html lang='ar' dir='rtl'><head><meta charset='utf-8'>"
+    return i18n.tr_html(f"<!doctype html><html lang='ar' dir='rtl'><head><meta charset='utf-8'>"
             f"<meta name='viewport' content='width=device-width,initial-scale=1'>{meta}"
             f"<title>لوحة المالك</title><style>{CSS}</style></head><body>{body}</body></html>")
 

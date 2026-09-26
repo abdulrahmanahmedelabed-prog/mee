@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
 from PySide6.QtCore import Qt
 
 from core import customers, receipts, shifts, whatsapp, loyalty
+from core.i18n import tr
 from ui import printing
 from ui.dialogs import CustomerDialog, TextDialog
 from ui.widgets import (Table, button, page, title, hint, warn, info, ask, error, MoneySpin, ok_cancel, m, card,
@@ -157,7 +158,7 @@ class CustomersScreen(QWidget):
         self.balance_lbl.setText(f"الرصيد: {m(bal)}" + (f"   🎁 {pts:g} نقطة" if pts else ""))
         self.balance_lbl.setStyleSheet(f"color:{'#DC2626' if bal > 0 else '#16A34A'};")
         rows = list(reversed(rows))
-        self.statement.set_rows([[r["created_at"][:16], f"{r['type_label']} {r['note'] or ''}".strip(),
+        self.statement.set_rows([[r["created_at"][:16], f"{tr(r['type_label'])} {tr(r['note'] or '')}".strip(),
                                   float(r["debit"]) if r["debit"] else "", float(r["credit"]) if r["credit"] else "",
                                   float(r["running"])] for r in rows], rows)
 

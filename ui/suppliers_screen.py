@@ -463,7 +463,9 @@ class SuppliersScreen(QWidget):
             return
         self.sup_title.setText(f"{s['name']} — المستحق: {m(suppliers.balance(s['id']))}")
         rows = list(reversed(suppliers.statement(s["id"])))
-        self.statement.set_rows([[r["created_at"][:16], f"{r['type_label']} {r['note'] or ''} {r['method'] or ''}".strip(),
+        from core.i18n import tr
+        self.statement.set_rows([[r["created_at"][:16],
+                                  f"{tr(r['type_label'])} {tr(r['note'] or '')} {tr(r['method'] or '')}".strip(),
                                   float(r["amount"]), float(r["running"])] for r in rows], rows)
 
     def load_purchases(self):
