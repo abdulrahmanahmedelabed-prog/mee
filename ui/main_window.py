@@ -26,11 +26,13 @@ from ui.accounting_screen import AccountingScreen
 from ui.cheques_screen import ChequesScreen
 from ui.promotions_screen import PromotionsScreen
 from ui.reorder_screen import ReorderScreen
+from ui.insights_screen import InsightsScreen
 
 VERSION = vendor.VERSION
 
 PAGES = [
     ("dashboard", "🏠   لوحة التحكم", ("dashboard",), DashboardScreen),
+    ("insights", "🤖   المستشار الذكي", ("reports",), InsightsScreen),
     ("pos", "🧾   نقطة البيع", ("pos",), POSScreen),
     ("invoices", "📄   الفواتير والمرتجعات", ("invoices",), InvoicesScreen),
     ("inventory", "📦   المخزون", ("inventory",), InventoryScreen),
@@ -161,6 +163,7 @@ class MainWindow(QMainWindow):
         self.pages["pos"].sale_completed.connect(self.update_header)
         self.pages["cash"].shift_changed.connect(self.update_header)
         self.pages["dashboard"].navigate.connect(self.go)
+        self.pages["insights"].navigate.connect(self.go)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.tick)

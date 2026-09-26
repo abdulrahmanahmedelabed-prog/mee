@@ -282,3 +282,29 @@ def test_owner_web_and_daily_summary():
     assert "المبيعات: 8.00" in txt and "تحت الحد الأدنى" in txt
     owner_web.logout(f"{owner_web.COOKIE}={token}")
     assert owner_web.user_from_cookie(f"{owner_web.COOKIE}={token}") is None
+
+
+def test_insights_abc_and_bulk_prices():
+    from core import insights
+    a = products.add_product("رابح", "i1", "مواد", 5, 10, 100, 5)
+    b = products.add_product("خاسر", "i2", "مواد", 12, 10, 50, 5)
+    c = products.add_product("نادر", "i3", "مواد", 1, 2, 3, 5)
+    d = products.add_product("راكد", "i4", "منظفات", 20, 30, 40, 1)
+    cid = customers.add_customer("زبون")
+    for _ in range(5):
+        sales.create_sale([item(a, 10, 10), item(b, 1, 10)])
+    sales.create_sale([item(a, 2, 10), item(c, 1, 2)], customer_id=cid)
+    cards = {x["key"]: x for x in insights.insights(30)}
+    assert "loss_pricing" in cards and cards["loss_pricing"]["severity"] == "danger"
+    assert "dead_stock" in cards and "راكد" in "".join(cards["dead_stock"]["items"])
+    assert list(cards)[0] in ("loss_pricing", "stockout")        # الأخطر أولاً
+    abc = insights.abc_analysis(90)
+    assert abc[0]["name"] == "رابح" and abc[0]["class"] == "A"
+    assert insights.bought_together(60)[0]["count"] == 5
+    prev = insights.price_update_preview("margin", 20, rounding=0.5, only_below_target=True)
+    names = {p["name"]: p["new"] for p in prev}
+    assert names["خاسر"] == 15 and "رابح" not in names          # 12 / 0.8 = 15 ؛ الرابح هامشه 50%
+    assert insights.apply_price_update(prev) == len(prev)
+    assert products.get_product(b)["sale_price"] == 15
+    up = insights.price_update_preview("percent", 10, category="منظفات")
+    assert up == [{"id": d, "name": "راكد", "cost": 20, "old": 30, "new": 33}]

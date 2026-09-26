@@ -20,14 +20,14 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
-                  backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license)
+                  backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights)
 
 PROTOCOL_VERSION = 2
 
 MODULES = {"products": products, "sales": sales, "customers": customers, "suppliers": suppliers,
            "expenses": expenses, "shifts": shifts, "reports": reports, "audit": audit, "backup": backup,
            "settings": settings, "auth": auth, "ledger": ledger, "cheques": cheques, "promotions": promotions,
-           "loyalty": loyalty, "reorder": reorder, "license": license}
+           "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -53,6 +53,7 @@ REQUIRED_PERMISSION = {
     ("promotions", "add_promotion"): "promotions", ("promotions", "update_promotion"): "promotions",
     ("promotions", "delete_promotion"): "promotions",
     ("loyalty", "adjust"): "promotions",
+    ("insights", "apply_price_update"): "inventory",
 }
 
 
