@@ -13,7 +13,7 @@ def test_demo_mode_prepares_separate_training_data(tmp_path):
             "print(db.DATA_DIR); print(db.scalar('SELECT COUNT(*) FROM invoices') > 20);"
             "print(db.scalar('SELECT COUNT(*) FROM users WHERE must_change_password=1'));"
             "print(bool(auth.authenticate('cashier','1234')))")
-    env = dict(os.environ, SHOP_DEMO_DIR=str(tmp_path / "demo"), SHOP_DATA_DIR=str(tmp_path / "real"),
+    env = dict(os.environ, SHOP_DEMO_DIR=str(tmp_path / "demo"), SHOP_DATA_DIR=str(tmp_path / "real"), SHOP_DEMO_DAYS="40",
                QT_QPA_PLATFORM="offscreen", PYTHONIOENCODING="utf-8")
     out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", timeout=300)
     assert out.returncode == 0, out.stderr

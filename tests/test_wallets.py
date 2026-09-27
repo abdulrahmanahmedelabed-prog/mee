@@ -137,3 +137,29 @@ def test_fast_ledger_totals_include_wallets():
         f, s = fast.get(k, [0, 0, 0]), slow.get(k, [0, 0, 0])
         assert [round(x, 2) for x in f] == [round(x, 2) for x in s], (k, f, s)
     assert round(fast[ledger.WALLETS][1], 2) == 12
+
+
+def test_daily_sales_entries_equal_per_invoice_entries():
+    setup_wallets()
+    a = products.add_product("قهوة", "500", "مواد", 10, 15, 100, 5)
+    c = customers.add_customer("زبون", "0599")
+    sales.create_sale([item(a, 2, 15)])
+    sales.create_sale([item(a, 1, 15)], card_amount=15)
+    sales.create_sale([item(a, 1, 15)], wallet_amount=15, wallet_name="PalPay")
+    sales.create_sale([item(a, 1, 15)], wallet_amount=15, wallet_name="تحويل بنكي فوري")
+    s = sales.create_sale([item(a, 2, 15)], customer_id=c, cash_amount=0, credit_amount=30)
+    it = sales.returnable_items(s["invoice_id"])[0]
+    sales.create_return(s["invoice_id"], [{"invoice_item_id": it["id"], "quantity": 1}], refund_method=sales.REFUND_DEBT)
+    t = db.today()
+
+    def sums(daily):
+        out = {}
+        for e in ledger.entries(t, t, daily_sales=daily):
+            for acc, d, cr in e["lines"]:
+                out[acc] = round(out.get(acc, 0) + d - cr, 2)
+        return {k: v for k, v in out.items() if v}
+    assert sums(True) == sums(False)
+    daily = [e for e in ledger.journal(t, t, daily_sales=True) if e["source"] == "sale"]
+    assert len(daily) == 1 and "5 فاتورة" in daily[0]["description"]
+    st = ledger.account_statement(ledger.WALLETS, t, t, daily_sales=True)
+    assert st["closing"] == 15 and len(st["rows"]) == 1

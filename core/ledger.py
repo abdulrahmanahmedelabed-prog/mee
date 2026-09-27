@@ -247,7 +247,36 @@ def _range(col, date_from, date_to):
     return (" AND " + " AND ".join(cond)) if cond else "", params
 
 
-def entries(date_from=None, date_to=None, skip_bulk=False):
+def _daily_sales_entries(conn, date_from, date_to):
+    """قيد يومي واحد للمبيعات وآخر للمرتجعات (مثل تقرير Z) بدل قيد لكل فاتورة: مطابق تماماً لمجموع قيود الفواتير"""
+    cond, params = _range("created_at", date_from, date_to)
+    out = []
+    for r in conn.execute(f"""SELECT date(created_at) AS d, COUNT(*) AS n, SUM(cash_amount) AS cash,
+                                     SUM(card_amount) AS card, SUM(credit_amount) AS credit,
+                                     SUM(CASE WHEN wallet_bank=1 THEN wallet_amount ELSE 0 END) AS wbank,
+                                     SUM(CASE WHEN wallet_bank=0 THEN wallet_amount ELSE 0 END) AS wallet,
+                                     SUM(total - tax) AS net, SUM(tax) AS tax, SUM(cost_total) AS cost
+                              FROM invoices WHERE 1=1 {cond} GROUP BY d""", params):
+        out.append({"date": r["d"] + " 23:59:00", "ref": f"Z-{r['d']}", "description": f"مبيعات اليوم ({r['n']} فاتورة)",
+                    "source": "sale", "lines": [ln for ln in [
+                        (CASH, money(r["cash"]), 0.0), (BANK, money(r["card"] + r["wbank"]), 0.0),
+                        (WALLETS, money(r["wallet"]), 0.0), (RECEIVABLES, money(r["credit"]), 0.0),
+                        (SALES, 0.0, money(r["net"])), (VAT, 0.0, money(r["tax"])),
+                        (COGS, money(r["cost"]), 0.0), (INVENTORY, 0.0, money(r["cost"]))] if ln[1] or ln[2]]})
+    for r in conn.execute(f"""SELECT date(created_at) AS d, COUNT(*) AS n,
+                                     SUM(CASE WHEN refund_method='نقدي' THEN total ELSE 0 END) AS cash,
+                                     SUM(CASE WHEN refund_method!='نقدي' THEN total ELSE 0 END) AS debt,
+                                     SUM(total - tax) AS net, SUM(tax) AS tax, SUM(cost_total) AS cost
+                              FROM returns WHERE 1=1 {cond} GROUP BY d""", params):
+        out.append({"date": r["d"] + " 23:59:30", "ref": f"ZR-{r['d']}", "description": f"مرتجعات اليوم ({r['n']})",
+                    "source": "return", "lines": [ln for ln in [
+                        (SALES_RETURNS, money(r["net"]), 0.0), (VAT, money(r["tax"]), 0.0),
+                        (CASH, 0.0, money(r["cash"])), (RECEIVABLES, 0.0, money(r["debt"])),
+                        (INVENTORY, money(r["cost"]), 0.0), (COGS, 0.0, money(r["cost"]))] if ln[1] or ln[2]]})
+    return out
+
+
+def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
     """كل القيود (المولّدة واليدوية) في الفترة، مرتبة زمنياً.
     كل قيد: dict(date, ref, description, source, lines=[(account, debit, credit)])
     skip_bulk: تخطي فواتير البيع والمرتجعات (تُجمع بـ SQL مباشرة في الأرصدة لسرعة الحساب مع البيانات الكبيرة)"""
@@ -263,6 +292,9 @@ def entries(date_from=None, date_to=None, skip_bulk=False):
             if lines:
                 out.append({"date": date, "ref": ref, "description": desc, "source": source, "lines": lines})
 
+        if daily_sales and not skip_bulk:
+            out.extend(_daily_sales_entries(conn, date_from, date_to))
+            skip_bulk = True
         # 1) فواتير البيع
         for r in ([] if skip_bulk else q("""SELECT * FROM invoices WHERE 1=1 {cond}""", "created_at")):
             add(r["created_at"], r["invoice_number"], "فاتورة بيع", "sale", [
@@ -402,11 +434,11 @@ def _in_range(ts, date_from, date_to):
 # التقارير المحاسبية
 # ---------------------------------------------------------------------------
 
-def journal(date_from, date_to):
-    """دفتر اليومية مع أسماء الحسابات"""
+def journal(date_from, date_to, daily_sales=False):
+    """دفتر اليومية مع أسماء الحسابات. daily_sales: قيد مبيعات واحد لكل يوم بدل قيد لكل فاتورة"""
     names = _names()
     out = []
-    for e in entries(date_from, date_to):
+    for e in entries(date_from, date_to, daily_sales=daily_sales):
         e = dict(e)
         e["lines"] = [{"account": a, "name": account_name(a, names), "debit": d, "credit": c} for a, d, c in e["lines"]]
         out.append(e)
@@ -479,14 +511,14 @@ def trial_balance(date_from, date_to):
     return {"rows": rows, "totals": totals}
 
 
-def account_statement(code, date_from, date_to):
-    """كشف حساب (دفتر الأستاذ) لحساب واحد مع الرصيد التراكمي"""
+def account_statement(code, date_from, date_to, daily_sales=False):
+    """كشف حساب (دفتر الأستاذ) لحساب واحد مع الرصيد التراكمي. daily_sales: مبيعات كل يوم في سطر واحد"""
     match = lambda a: a == code or (code == EXPENSES and str(a).startswith(EXPENSES + ":"))
     opening = 0.0
     if date_from:   # الرصيد الافتتاحي من الأرصدة المجمّعة (سريع حتى مع سنوات من البيانات)
         opening = sum(v[0] for a, v in _balances(date_from, date_to).items() if match(a))
     rows = []
-    for e in entries(date_from, date_to):
+    for e in entries(date_from, date_to, daily_sales=daily_sales):
         for a, d, c in e["lines"]:
             if match(a):
                 rows.append({"date": e["date"], "ref": e["ref"], "description": e["description"], "debit": d, "credit": c})

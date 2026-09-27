@@ -179,6 +179,11 @@ class AccountingScreen(QWidget):
         self.range = DateRange("هذه السنة")
         self.range.changed.connect(self.load)
         head.addWidget(self.range)
+        from PySide6.QtWidgets import QCheckBox
+        self.per_invoice = QCheckBox("تفصيل كل فاتورة")
+        self.per_invoice.setToolTip("بدون العلامة: قيد مبيعات واحد لكل يوم (أوضح وأسرع). مع العلامة: قيد لكل فاتورة")
+        self.per_invoice.toggled.connect(self.load)
+        head.addWidget(self.per_invoice)
         head.addStretch()
         head.addWidget(button("➕ عملية مالية (رأس مال، بنك، قرض...)", "successBtn", self.template_entry))
         head.addWidget(button("📤 تصدير", "secondaryBtn", self.export_current))
@@ -339,7 +344,7 @@ class AccountingScreen(QWidget):
                                    f"{'✓ متوازن' if t['balanced'] else '✗ غير متوازن'}")
         elif name == "دفتر اليومية":
             rows, colors, shade = [], [], False
-            for e in ledger.journal(a, b)[-3000:]:
+            for e in ledger.journal(a, b, daily_sales=not self.per_invoice.isChecked())[-3000:]:
                 shade = not shade
                 for i, ln in enumerate(e["lines"]):
                     rows.append([e["date"][:16] if i == 0 else "", e["ref"] if i == 0 else "",
@@ -352,7 +357,7 @@ class AccountingScreen(QWidget):
             code = self.acc_combo.currentData()
             if not code:
                 return
-            st = ledger.account_statement(code, a, b)
+            st = ledger.account_statement(code, a, b, daily_sales=not self.per_invoice.isChecked())
             rows = [["", "", "رصيد أول الفترة", "", "", float(st["opening"])]]
             rows += [[r["date"][:16], r["ref"], r["description"], float(r["debit"]) if r["debit"] else "",
                       float(r["credit"]) if r["credit"] else "", float(r["balance"])] for r in st["rows"]]

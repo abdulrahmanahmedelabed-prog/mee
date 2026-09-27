@@ -73,7 +73,22 @@ def prepare_demo():
     """نسخة التدريب: تُملأ بالبيانات التجريبية أول مرة، والدخول admin/admin أو cashier/1234 بدون تغيير كلمة المرور"""
     if not db.scalar("SELECT COUNT(*) FROM invoices"):
         from tools import demo_data
-        demo_data.main()
+        progress = None
+        if QApplication.instance():
+            from PySide6.QtWidgets import QProgressDialog
+            dlg = QProgressDialog("تجهيز نسخة التدريب: سوبرماركت كامل بمبيعات 3 سنوات (مرة واحدة فقط)...",
+                                  None, 0, 100)
+            dlg.setWindowTitle("نسخة التدريب")
+            dlg.setMinimumDuration(0)
+            dlg.setMinimumWidth(460)
+            dlg.show()
+
+            def progress(frac, day):
+                dlg.setValue(int(frac * 100))
+                if day:
+                    dlg.setLabelText(f"تجهيز نسخة التدريب (مرة واحدة فقط)...\nالمبيعات حتى {day}")
+                QApplication.processEvents()
+        demo_data.main(progress)
     with db.tx() as conn:
         conn.execute("UPDATE users SET must_change_password=0")
 

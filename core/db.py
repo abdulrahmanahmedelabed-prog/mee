@@ -41,7 +41,58 @@ def today():
     return datetime.now().strftime("%Y-%m-%d")
 
 
+_SHARED = None   # اتصال مشترك أثناء bulk_session فقط (توليد بيانات كثيرة بسرعة)
+
+
+class _SharedConn:
+    """غلاف للاتصال المشترك: الإغلاق والحفظ يتمان مرة واحدة في نهاية الجلسة"""
+
+    def __init__(self, conn):
+        self._c = conn
+
+    def __getattr__(self, name):
+        return getattr(self._c, name)
+
+    def close(self):
+        pass
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+
+@contextmanager
+def bulk_session(commit_every=None):
+    """لأدوات التوليد والاستيراد الكبيرة: كل العمليات على اتصال واحد، وكل معاملة تبقى ذرّية بنقطة حفظ (SAVEPOINT).
+    يرجع دالة commit() لحفظ ما سبق دورياً."""
+    global _SHARED
+    conn = sqlite3.connect(DB_PATH, timeout=15, isolation_level=None)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = OFF")
+    conn.execute("BEGIN")
+    _SHARED = _SharedConn(conn)
+
+    def commit():
+        conn.execute("COMMIT")
+        conn.execute("BEGIN")
+    try:
+        yield commit
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+    finally:
+        _SHARED = None
+        conn.close()
+
+
 def get_connection():
+    if _SHARED is not None:
+        return _SHARED
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
@@ -55,6 +106,16 @@ def get_connection():
 def tx():
     """معاملة ذرّية: commit عند النجاح و rollback عند أي خطأ"""
     conn = get_connection()
+    if conn is _SHARED:
+        conn.execute("SAVEPOINT tx")
+        try:
+            yield conn
+            conn.execute("RELEASE tx")
+        except Exception:
+            conn.execute("ROLLBACK TO tx")
+            conn.execute("RELEASE tx")
+            raise
+        return
     try:
         conn.execute("BEGIN IMMEDIATE")
         yield conn

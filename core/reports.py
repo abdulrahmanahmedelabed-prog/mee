@@ -36,8 +36,9 @@ def profit_and_loss(date_from, date_to):
     cust_adj = money(db.scalar(f"SELECT SUM(amount) FROM customer_transactions WHERE type='adjust' AND {_RANGE.format(col='created_at')}", p))
     sup_adj = money(db.scalar(f"SELECT SUM(amount) FROM supplier_transactions WHERE type='adjust' AND {_RANGE.format(col='created_at')}", p))
     pr_diff = money(db.scalar(f"SELECT SUM(total - cost_total) FROM purchase_returns WHERE {_RANGE.format(col='created_at')}", p))
+    manual = _manual_pl(date_from, date_to).get(None, 0.0)
     other = money(cash_diff + cust_adj - sup_adj + pr_diff)
-    net_profit = money(gross_profit - expenses - stock_loss + other)
+    net_profit = money(gross_profit - expenses - stock_loss + other + manual)
     return {
         "invoice_count": inv["cnt"],
         "gross_sales": money(inv["gross"]),
@@ -55,6 +56,7 @@ def profit_and_loss(date_from, date_to):
         "stock_loss": stock_loss,
         "cash_diff": cash_diff,
         "other_adjustments": other,
+        "manual_entries": manual,
         "net_profit": net_profit,
         "cash_sales": money(inv["cash"]),
         "card_sales": money(inv["card"]),
@@ -67,6 +69,21 @@ def profit_and_loss(date_from, date_to):
 
 
 PERIODS = {"day": "يومي", "week": "أسبوعي", "month": "شهري", "year": "سنوي"}
+
+
+def _manual_pl(date_from, date_to, group=None):
+    """أثر العمليات المالية اليدوية على الربح (إيرادات − مصروفات)، مثل عمولات المحافظ والبنوك أو إيرادات أخرى.
+    يرجع {مفتاح الفترة: المبلغ}، أو {None: المجموع} بدون تجميع"""
+    from core.ledger import account_type
+    k = _period_key("e.entry_date", group) if group else "NULL"
+    out = {}
+    for r in db.query(f"""SELECT {k} AS k, l.account_code AS code, SUM(l.credit - l.debit) AS net
+                          FROM journal_lines l JOIN journal_entries e ON e.id = l.entry_id
+                          WHERE e.is_void = 0 AND {_RANGE.format(col='e.entry_date')}
+                          GROUP BY k, l.account_code""", (date_from, date_to)):
+        if account_type(r["code"]) in ("revenue", "expense"):
+            out[r["k"]] = money(out.get(r["k"], 0.0) + (r["net"] or 0))
+    return out
 
 
 def _period_key(col, group):
@@ -122,6 +139,8 @@ def period_summary(date_from, date_to, group="month"):
              "created_at", "other", 1)):
         for r in grouped(sql, col):
             row(r["k"])[field] += sign * (r["v"] or 0)
+    for k, v in _manual_pl(date_from, date_to, group).items():
+        row(k)["other"] += v
     out = []
     for k in sorted(rows):
         x = rows[k]
