@@ -20,7 +20,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
-                  backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders)
+                  backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders,
+                  wallets)
 
 PROTOCOL_VERSION = 2
 
@@ -28,7 +29,7 @@ MODULES = {"products": products, "sales": sales, "customers": customers, "suppli
            "expenses": expenses, "shifts": shifts, "reports": reports, "audit": audit, "backup": backup,
            "settings": settings, "auth": auth, "ledger": ledger, "cheques": cheques, "promotions": promotions,
            "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights,
-           "orders": orders}
+           "orders": orders, "wallets": wallets}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -42,12 +43,14 @@ LOCAL_ONLY = {
     "ledger": {"account_type", "is_debit_normal"},
     "loyalty": {"enabled", "points_for", "value_of"},
     "license": {"normalize_machine", "sign", "verify_signature", "make_key", "parse_key"},
+    "wallets": {"all_wallets", "get", "names", "to_json", "presets", "qr_text"},
 }
 
 # صلاحيات يتحقق منها الخادم نفسه (لا نعتمد على الواجهة وحدها: جهاز فرعي معدّل قد يرسل أي طلب)
 REQUIRED_PERMISSION = {
     ("auth", "create_user"): "users", ("auth", "update_user"): "users", ("auth", "list_users"): "users",
     ("settings", "save_shared"): "settings", ("license", "activate"): "settings",
+    ("wallets", "summary"): "reports", ("wallets", "invoices"): "reports",
     ("backup", "create_backup"): "backup", ("backup", "list_backups"): "backup", ("backup", "prune"): "backup",
     ("backup", "mirror_backup"): "backup",
     ("ledger", "add_manual_entry"): "accounting", ("ledger", "void_entry"): "accounting",

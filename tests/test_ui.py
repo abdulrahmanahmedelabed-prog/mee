@@ -81,7 +81,7 @@ def test_payment_dialog_logic(app):
     d2.credit_chk.setChecked(True)
     data, err = d2.compute()
     assert data == {"cash_amount": 20, "card_amount": 10, "credit_amount": 27.5, "cash_received": 20, "change": 0.0,
-                    "note": "", "card_ref": ""}
+                    "note": "", "card_ref": "", "wallet_amount": 0.0, "wallet_name": "", "wallet_ref": ""}
 
 
 def test_all_screens_open(app):

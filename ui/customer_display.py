@@ -115,6 +115,20 @@ class CustomerDisplay(QWidget):
         self.total.setText(f"{_m(totals['total'])} {self._sym()}")
         self.footer.setText(f"عدد الأصناف: {len(cart)}")
 
+    def show_wallet(self, wallet, amount):
+        """الزبون يدفع بمحفظة أو تطبيق بنكي: رمز QR ورقم الحساب بخط كبير أمامه"""
+        from core import wallets
+        from core.einvoice import qr_data_uri
+        self._timer.stop()
+        uri = qr_data_uri(wallets.qr_text(wallet)) if wallets.qr_text(wallet) else None
+        img = f"<img src='{uri}' width='300' height='300'><br>" if uri else ""
+        acc = f"<div style='font-size:40px; font-weight:900; color:#FACC15'>{wallet['account']}</div>" if wallet["account"] else ""
+        self.items.setText(f"<div style='text-align:center'><div style='font-size:36px'>ادفع عبر {wallet['name']}</div>"
+                           f"<br>{img}{acc}</div>")
+        self.saving.setText("")
+        self.total.setText(f"{_m(amount)} {self._sym()}")
+        self.footer.setText("أرِ الكاشير إشعار التحويل بعد الدفع")
+
     def show_paid(self, total, change, points=0):
         self.items.setText("<div style='text-align:center; font-size:44px'><br>شكراً لتسوقكم 🌷</div>")
         self.saving.setText(f"🎁 +{points:g} نقطة" if points else "")

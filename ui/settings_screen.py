@@ -112,6 +112,14 @@ class SettingsScreen(QWidget):
         self._check(f, "einvoice_qr", "طباعة رمز QR للفاتورة الإلكترونية (صيغة الفوترة المبسطة المعتمدة في السعودية)")
         self._line(f, "extra_currencies", "عملات إضافية للدفع النقدي (مثل USD=3.65,JOD=5.15):")
 
+        # --- الدفع الإلكتروني
+        f = self._form_tab("الدفع الإلكتروني")
+        f.addRow(hint("المحافظ الإلكترونية وتطبيقات البنوك التي يدفع بها زبائنك. لكل واحدة يظهر زر في نافذة الدفع، "
+                      "يعرض للزبون رقم حسابك ورمز QR، ويسجّل رقم العملية. كل طريقة لها تقرير مطابقة في التقارير."))
+        self.wallet_table = WalletsEditor()
+        f.addRow(self.wallet_table)
+        self._check(f, "wallet_ref_required", "إلزام الكاشير بكتابة رقم العملية من إشعار الزبون (موصى به)")
+
         # --- الطباعة
         f = self._form_tab("الطباعة ودرج النقود")
         f.addRow(hint("إعدادات الطابعة والدرج خاصة بهذا الجهاز (كل كاشير له طابعته)."))
@@ -371,6 +379,8 @@ class SettingsScreen(QWidget):
         self.load_network()
         self.load_license()
         self.load_logo()
+        from core import wallets
+        self.wallet_table.set_items(wallets.all_wallets())
         port = config.get("server_port") or 8765
         running = remote.SERVER.httpd is not None
         self.owner_url.setText(
@@ -402,6 +412,12 @@ class SettingsScreen(QWidget):
         values["receipt_width_mm"] = self.width.currentData()
         if not values.get("shop_name"):
             warn(self, "اسم المحل مطلوب")
+            return
+        from core import wallets
+        try:
+            values["wallets"] = wallets.to_json(self.wallet_table.items())
+        except ValueError as e:
+            warn(self, str(e))
             return
         settings.set_many(values)
         w = self.window()
@@ -637,3 +653,72 @@ class SettingsScreen(QWidget):
             warn(self, str(e))
             return
         (info if st.get("ok") else warn)(self, f"{'✓ متصل' if st.get('ok') else '✗'} {st.get('terminal') or st.get('message', '')}")
+
+
+class WalletsEditor(QWidget):
+    """جدول بسيط لطرق الدفع الإلكتروني: الاسم، الحساب، أين يصل المال، رمز QR"""
+
+    def __init__(self):
+        super().__init__()
+        from PySide6.QtWidgets import QTableWidget, QHeaderView
+        from core import wallets
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["الاسم", "رقم الحساب أو الهاتف أو الاسم المستعار", "يصل المال إلى",
+                                              "نص رمز QR من التطبيق (اختياري)"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setMinimumHeight(220)
+        lay.addWidget(self.table)
+        row = QHBoxLayout()
+        row.addWidget(button("+ إضافة طريقة دفع", "secondaryBtn", lambda: self.add_row({})))
+        row.addWidget(button("حذف المحددة", "secondaryBtn", self.remove_row))
+        row.addWidget(button("✨ اقتراحات لبلدي", "secondaryBtn", self.suggest))
+        row.addStretch()
+        lay.addLayout(row)
+        self._dests = wallets.DESTS
+
+    def add_row(self, w):
+        from PySide6.QtWidgets import QTableWidgetItem
+        r = self.table.rowCount()
+        self.table.insertRow(r)
+        self.table.setItem(r, 0, QTableWidgetItem(w.get("name", "")))
+        self.table.setItem(r, 1, QTableWidgetItem(w.get("account", "")))
+        combo = QComboBox()
+        for k, label in self._dests.items():
+            combo.addItem(label, k)
+        combo.setCurrentIndex(max(0, combo.findData(w.get("dest", "wallet"))))
+        self.table.setCellWidget(r, 2, combo)
+        self.table.setItem(r, 3, QTableWidgetItem(w.get("qr", "")))
+
+    def remove_row(self):
+        r = self.table.currentRow()
+        if r >= 0:
+            self.table.removeRow(r)
+
+    def suggest(self):
+        from core import wallets
+        have = {w["name"] for w in self.items()}
+        added = 0
+        for w in wallets.presets():
+            if w["name"] not in have:
+                self.add_row(w)
+                added += 1
+        if added:
+            info(self, "أُضيفت طرق الدفع الشائعة في بلدك. اكتب رقم حسابك أو هاتفك لكل واحدة، واحذف ما لا تستخدمه، ثم احفظ.")
+
+    def set_items(self, items):
+        self.table.setRowCount(0)
+        for w in items:
+            self.add_row(w)
+
+    def items(self):
+        out = []
+        for r in range(self.table.rowCount()):
+            cell = lambda c: (self.table.item(r, c).text().strip() if self.table.item(r, c) else "")
+            combo = self.table.cellWidget(r, 2)
+            if cell(0):
+                out.append({"name": cell(0), "account": cell(1), "dest": combo.currentData() if combo else "wallet",
+                            "qr": cell(3)})
+        return out
+

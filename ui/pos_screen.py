@@ -91,6 +91,27 @@ class PaymentDialog(QDialog):
             tb = button("💳 دفع بالبطاقة عبر الجهاز", "secondaryBtn", self.pay_terminal)
             tb.setFocusPolicy(Qt.NoFocus)
             form.addRow("", tb)
+        # المحافظ الإلكترونية وتطبيقات البنوك
+        from core import wallets
+        self.wallet, self.wallet_amt, self.wallet_ref = None, 0.0, ""
+        wl = wallets.all_wallets()
+        if wl:
+            wrow = QHBoxLayout()
+            for w in wl[:6]:
+                b = button(f"📲 {w['name']}", "billBtn")
+                b.setFocusPolicy(Qt.NoFocus)
+                b.clicked.connect(lambda _=False, w=w: self.pay_wallet(w))
+                wrow.addWidget(b)
+            form.addRow("دفع إلكتروني:", wrow)
+            wsel = QHBoxLayout()
+            self.wallet_lbl = QLabel("")
+            self.wallet_lbl.setStyleSheet("font-weight:800; color:#7C3AED;")
+            self.wallet_clear = button("✕", "billBtn", self.clear_wallet)
+            self.wallet_clear.setFocusPolicy(Qt.NoFocus)
+            self.wallet_clear.setVisible(False)
+            wsel.addWidget(self.wallet_lbl, 1)
+            wsel.addWidget(self.wallet_clear)
+            form.addRow("", wsel)
         self.credit_chk = QCheckBox("الباقي دين على العميل (آجل)")
         self.credit_chk.setEnabled(bool(customer))
         if not customer:
@@ -168,6 +189,34 @@ class PaymentDialog(QDialog):
             self.card_ref = dlg.result_data["reference"]
             self.recalc()
 
+    def pay_wallet(self, w):
+        """الزبون يدفع بمحفظة أو تطبيق بنكي: يُعرض له الحساب ورمز QR ويُسجَّل رقم العملية"""
+        due = money(self.total - self.card.value())
+        cash_now = money(self.cash.value())
+        amount = money(due - cash_now) if 0 < cash_now < due else due
+        if amount <= 0:
+            return
+        dlg = WalletDialog(self, w, amount)
+        if dlg.exec() == QDialog.Accepted:
+            self.wallet, self.wallet_amt, self.wallet_ref = w, amount, dlg.ref.text().strip()
+            self.cash.setValue(money(due - amount))
+            self._show_wallet()
+            self.recalc()
+
+    def clear_wallet(self):
+        if self.wallet_amt:
+            self.cash.setValue(money(self.cash.value() + self.wallet_amt))
+        self.wallet, self.wallet_amt, self.wallet_ref = None, 0.0, ""
+        self._show_wallet()
+        self.recalc()
+
+    def _show_wallet(self):
+        if hasattr(self, "wallet_lbl"):
+            self.wallet_lbl.setText(f"📲 {self.wallet['name']}: {m(self.wallet_amt)}"
+                                    + (f"  (رقم العملية {self.wallet_ref})" if self.wallet_ref else "")
+                                    if self.wallet else "")
+            self.wallet_clear.setVisible(bool(self.wallet))
+
     def pay_foreign(self, code, rate):
         """الزبون يدفع بعملة أخرى: يُحوَّل المبلغ لعملة المحل بسعر الصرف ويُسجَّل في ملاحظة الفاتورة"""
         due = money(self.total - self.card.value())
@@ -178,27 +227,33 @@ class PaymentDialog(QDialog):
             self.fx_note = f"دفع {val:g} {code} بسعر {rate:g}"
 
     def all_credit(self):
+        self.clear_wallet()
         self.card.setValue(0)
         self.cash.setValue(0)
         self.credit_chk.setChecked(True)
 
     def all_card(self):
+        self.clear_wallet()
         self.card.setValue(self.total)
         self.cash.setValue(0)
 
     def compute(self):
         card = money(self.card.value())
-        if card > self.total + 0.009:
-            return None, "مبلغ البطاقة أكبر من المطلوب"
-        due = money(self.total - card)
+        wallet = money(getattr(self, "wallet_amt", 0.0))
+        if card + wallet > self.total + 0.009:
+            return None, "مبلغ البطاقة والدفع الإلكتروني أكبر من المطلوب"
+        due = money(self.total - card - wallet)
         received = money(self.cash.value())
+        extra = {"note": self.fx_note, "card_ref": self.card_ref, "wallet_amount": wallet,
+                 "wallet_name": self.wallet["name"] if wallet and getattr(self, "wallet", None) else "",
+                 "wallet_ref": getattr(self, "wallet_ref", "") if wallet else ""}
         if received >= due:
             return {"cash_amount": due, "card_amount": card, "credit_amount": 0.0, "cash_received": received,
-                    "change": money(received - due), "note": self.fx_note, "card_ref": self.card_ref}, None
+                    "change": money(received - due), **extra}, None
         short = money(due - received)
         if self.credit_chk.isChecked() and self.customer:
             return {"cash_amount": received, "card_amount": card, "credit_amount": short, "cash_received": received,
-                    "change": 0.0, "note": self.fx_note, "card_ref": self.card_ref}, None
+                    "change": 0.0, **extra}, None
         return None, f"ناقص: {m(short)}"
 
     def recalc(self):
@@ -224,6 +279,64 @@ class PaymentDialog(QDialog):
             return
         self.result_data = data
         self.accept()
+
+
+class WalletDialog(QDialog):
+    """الدفع بمحفظة إلكترونية أو تطبيق بنكي: الحساب ورمز QR للزبون، ورقم العملية من إشعاره"""
+
+    def __init__(self, parent, wallet, amount):
+        super().__init__(parent)
+        from core import wallets
+        from core.einvoice import qr_data_uri
+        self.setWindowTitle(wallet["name"])
+        self.setMinimumWidth(420)
+        lay = QVBoxLayout(self)
+        t = QLabel(f"📲 {wallet['name']}: {m(amount)} {settings.get('currency_symbol')}")
+        t.setAlignment(Qt.AlignCenter)
+        t.setStyleSheet("font-size:26px; font-weight:900; color:#7C3AED;")
+        lay.addWidget(t)
+        text = wallets.qr_text(wallet)
+        uri = qr_data_uri(text) if text else None
+        if uri:
+            import base64
+            from PySide6.QtGui import QPixmap
+            pm = QPixmap()
+            pm.loadFromData(base64.b64decode(uri.split(",", 1)[1]))
+            q = QLabel()
+            q.setPixmap(pm.scaled(220, 220, Qt.KeepAspectRatio, Qt.FastTransformation))
+            q.setAlignment(Qt.AlignCenter)
+            lay.addWidget(q)
+        if wallet["account"]:
+            a = QLabel(wallet["account"])
+            a.setAlignment(Qt.AlignCenter)
+            a.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            a.setStyleSheet("font-size:24px; font-weight:900; letter-spacing:1px;")
+            lay.addWidget(a)
+        lay.addWidget(hint("الزبون يحوّل المبلغ من تطبيقه ويريك إشعار التحويل. تأكد من المبلغ واسم المحل في الإشعار، "
+                           "ثم اكتب رقم العملية."))
+        self.required = settings.get_bool("wallet_ref_required")
+        self.ref = QLineEdit()
+        self.ref.setPlaceholderText("رقم العملية من إشعار الزبون" + (" (إلزامي)" if self.required else " (اختياري)"))
+        lay.addWidget(self.ref)
+        row = QHBoxLayout()
+        row.addWidget(button("إلغاء", "secondaryBtn", self.reject))
+        row.addWidget(button("✓ تم استلام المبلغ", "successBtn", self.accept))
+        lay.addLayout(row)
+        self.ref.returnPressed.connect(self.accept)
+        self.ref.setFocus()
+        try:
+            from ui import customer_display
+            d = customer_display.get()
+            if d:
+                d.show_wallet(wallet, amount)
+        except Exception:
+            pass
+
+    def accept(self):
+        if self.required and not self.ref.text().strip():
+            warn(self, "اكتب رقم العملية من إشعار الزبون")
+            return
+        super().accept()
 
 
 class TerminalDialog(QDialog):
@@ -1108,7 +1221,9 @@ class POSScreen(QWidget):
         kwargs = dict(discount=self.discount, customer_id=cid, cash_amount=pay["cash_amount"],
                       card_amount=pay["card_amount"], credit_amount=pay["credit_amount"],
                       cash_received=pay["cash_received"], shift_id=shift_id, points_redeemed=self.points,
-                      note=pay.get("note") or "", card_ref=pay.get("card_ref") or "")
+                      note=pay.get("note") or "", card_ref=pay.get("card_ref") or "",
+                      wallet_amount=pay.get("wallet_amount", 0.0), wallet_name=pay.get("wallet_name") or "",
+                      wallet_ref=pay.get("wallet_ref") or "")
         try:
             try:
                 res = sales.create_sale(self.cart, **kwargs)
@@ -1187,12 +1302,14 @@ class POSScreen(QWidget):
     def finish_offline_sale(self, pay, print_it=False):
         """حفظ الفاتورة محلياً أثناء انقطاع الشبكة، وتُرحَّل تلقائياً لاحقاً"""
         if pay["credit_amount"] or self.points or self.customer:
-            warn(self, "أثناء انقطاع الشبكة: البيع نقدي أو بطاقة فقط، بدون عميل أو نقاط ولاء.")
+            warn(self, "أثناء انقطاع الشبكة: البيع نقدي أو بطاقة أو دفع إلكتروني فقط، بدون عميل أو نقاط ولاء.")
             return
         disc = offline.discounts(self.cart, self.discount)
         try:
             p = offline.queue_sale(self.cart, self.discount, disc["promo"], pay["cash_amount"], pay["card_amount"],
-                                   pay["cash_received"], self.last_shift_id)
+                                   pay["cash_received"], self.last_shift_id, wallet_amount=pay.get("wallet_amount", 0.0),
+                                   wallet_name=pay.get("wallet_name") or "", wallet_ref=pay.get("wallet_ref") or "",
+                                   card_ref=pay.get("card_ref") or "")
         except SaleError as e:
             warn(self, str(e))
             return

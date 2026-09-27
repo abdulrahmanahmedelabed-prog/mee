@@ -21,6 +21,7 @@ from core.utils import money
 CASH = "1110"            # النقد في أدراج الكاشير
 BANK = "1120"            # البنك: البطاقات والتحويلات والشيكات المحصلة
 CHEQUES_IN = "1130"      # شيكات مستلمة من العملاء لم تُصرف بعد
+WALLETS = "1140"         # أرصدة المحافظ الإلكترونية (قبل تحويلها للبنك)
 RECEIVABLES = "1210"     # ديون العملاء
 INVENTORY = "1310"
 VAT_INPUT = "1410"       # ضريبة مدخلات على المشتريات قابلة للخصم
@@ -48,6 +49,7 @@ SYSTEM_ACCOUNTS = [
     (CASH, "الصندوق (النقد في الأدراج)", "asset"),
     (BANK, "البنك (بطاقات وتحويلات)", "asset"),
     (CHEQUES_IN, "شيكات واردة برسم التحصيل", "asset"),
+    (WALLETS, "المحافظ الإلكترونية", "asset"),
     (RECEIVABLES, "ذمم العملاء (الديون)", "asset"),
     (INVENTORY, "المخزون (البضاعة)", "asset"),
     (VAT_INPUT, "ضريبة مدخلات قابلة للخصم", "asset"),
@@ -71,6 +73,18 @@ SYSTEM_ACCOUNTS = [
 
 # طرق الدفع ← الحساب المقابل
 CUSTOMER_METHOD_ACCOUNT = {"نقدي": CASH, "بطاقة": BANK, "تحويل": BANK, "شيك": CHEQUES_IN}
+PAYMENT_FEES = EXPENSES + ":عمولات الدفع الإلكتروني"
+
+
+def customer_method_account(method):
+    """الحساب المقابل لتسديد عميل: الطرق الثابتة، أو محفظة إلكترونية/تطبيق بنكي معرّف في الإعدادات"""
+    if method in CUSTOMER_METHOD_ACCOUNT:
+        return CUSTOMER_METHOD_ACCOUNT[method]
+    from core import wallets
+    w = wallets.get(method)
+    if w:
+        return BANK if w["dest"] == wallets.DEST_BANK else WALLETS
+    return BANK
 SUPPLIER_METHOD_ACCOUNT = {"نقدي من الصندوق": CASH, "نقدي من خارج الصندوق": OWNER, "تحويل بنكي / شيك": BANK,
                            "شيك مؤجل": CHEQUES_OUT}
 
@@ -110,7 +124,7 @@ def list_accounts(active_only=True):
     sql = "SELECT * FROM accounts" + (" WHERE is_active=1" if active_only else "") + " ORDER BY code"
     rows = [dict(r) for r in db.query(sql)]
     from core import settings
-    for cat in settings.expense_categories():
+    for cat in list(dict.fromkeys(settings.expense_categories() + [PAYMENT_FEES.split(":", 1)[1]])):
         rows.append({"code": f"{EXPENSES}:{cat}", "name": f"مصاريف - {cat}", "type": "expense", "is_system": 1,
                      "is_active": 1})
     rows.sort(key=lambda r: r["code"])
@@ -201,6 +215,11 @@ TEMPLATES = [
     ("سداد قسط قرض من البنك", LOANS, BANK),
     ("دفع مصروف من البنك", EXPENSES, BANK),
     ("رصيد بنك افتتاحي", BANK, OPENING),
+    ("تحويل رصيد المحافظ الإلكترونية إلى البنك", BANK, WALLETS),
+    ("عمولة خصمتها المحفظة الإلكترونية", PAYMENT_FEES, WALLETS),
+    ("عمولة خصمها البنك على الدفع الإلكتروني أو البطاقات", PAYMENT_FEES, BANK),
+    ("سحب المالك من رصيد المحفظة الإلكترونية", OWNER, WALLETS),
+    ("رصيد محفظة إلكترونية افتتاحي", WALLETS, OPENING),
 ]
 
 
@@ -248,6 +267,7 @@ def entries(date_from=None, date_to=None, skip_bulk=False):
         for r in ([] if skip_bulk else q("""SELECT * FROM invoices WHERE 1=1 {cond}""", "created_at")):
             add(r["created_at"], r["invoice_number"], "فاتورة بيع", "sale", [
                 (CASH, money(r["cash_amount"]), 0.0), (BANK, money(r["card_amount"]), 0.0),
+                (BANK if r["wallet_bank"] else WALLETS, money(r["wallet_amount"]), 0.0),
                 (RECEIVABLES, money(r["credit_amount"]), 0.0),
                 (SALES, 0.0, money(r["total"] - r["tax"])), (VAT, 0.0, money(r["tax"])),
                 (COGS, money(r["cost_total"]), 0.0), (INVENTORY, 0.0, money(r["cost_total"]))])
@@ -266,7 +286,7 @@ def entries(date_from=None, date_to=None, skip_bulk=False):
                       WHERE t.type IN ('payment','opening','adjust','bounced') {cond}""", "t.created_at"):
             a = r["amount"]
             if r["type"] == "payment":
-                lines = _pair(CUSTOMER_METHOD_ACCOUNT.get(r["method"], BANK), RECEIVABLES, -a)
+                lines = _pair(customer_method_account(r["method"]), RECEIVABLES, -a)
                 desc = f"تسديد من العميل {r['name']} ({r['method'] or ''})"
             elif r["type"] == "opening":
                 lines, desc = _pair(RECEIVABLES, OPENING, a), f"رصيد افتتاحي للعميل {r['name']}"
@@ -397,13 +417,15 @@ def _bulk_lines(conn, date_from, date_to):
     """مجاميع فواتير البيع والمرتجعات في الفترة كأسطر قيد (مكافئة تماماً لقيودها التفصيلية)"""
     cond, params = _range("created_at", date_from, date_to)
     i = conn.execute(f"""SELECT COALESCE(SUM(cash_amount),0), COALESCE(SUM(card_amount),0), COALESCE(SUM(credit_amount),0),
-                                COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0)
+                                COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0),
+                                COALESCE(SUM(CASE WHEN wallet_bank=1 THEN wallet_amount END),0),
+                                COALESCE(SUM(CASE WHEN wallet_bank=0 THEN wallet_amount END),0)
                          FROM invoices WHERE 1=1 {cond}""", params).fetchone()
     r = conn.execute(f"""SELECT COALESCE(SUM(CASE WHEN refund_method='نقدي' THEN total END),0),
                                 COALESCE(SUM(CASE WHEN refund_method!='نقدي' THEN total END),0),
                                 COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0)
                          FROM returns WHERE 1=1 {cond}""", params).fetchone()
-    return [(CASH, i[0], 0.0), (BANK, i[1], 0.0), (RECEIVABLES, i[2], 0.0), (SALES, 0.0, i[3]), (VAT, 0.0, i[4]),
+    return [(CASH, i[0], 0.0), (BANK, i[1] + i[6], 0.0), (WALLETS, i[7], 0.0), (RECEIVABLES, i[2], 0.0), (SALES, 0.0, i[3]), (VAT, 0.0, i[4]),
             (COGS, i[5], 0.0), (INVENTORY, 0.0, i[5]),
             (SALES_RETURNS, r[2], 0.0), (VAT, r[3], 0.0), (CASH, 0.0, r[0]), (RECEIVABLES, 0.0, r[1]),
             (INVENTORY, r[4], 0.0), (COGS, 0.0, r[4])]

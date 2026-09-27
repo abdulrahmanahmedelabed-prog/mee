@@ -68,6 +68,10 @@ def invoice_html(invoice_id, copy=False):
         lines.append(f"<tr><td>بطاقة</td><td class='l'>{_m(inv['card_amount'])}</td></tr>")
         if inv["card_ref"]:
             lines.append(f"<tr><td colspan='2'>{escape(inv['card_ref'])}</td></tr>")
+    if inv["wallet_amount"]:
+        lines.append(f"<tr><td>{escape(inv['wallet_name'] or 'دفع إلكتروني')}</td><td class='l'>{_m(inv['wallet_amount'])}</td></tr>")
+        if inv["wallet_ref"]:
+            lines.append(f"<tr><td colspan='2'>رقم العملية: {escape(inv['wallet_ref'])}</td></tr>")
     if inv["credit_amount"]:
         lines.append(f"<tr><td>آجل (دين)</td><td class='l'>{_m(inv['credit_amount'])}</td></tr>")
     if inv["customer_id"]:
@@ -121,6 +125,8 @@ def offline_receipt_html(p):
             lines.append(f"<tr><td>الباقي للزبون</td><td class='l'>{_m(p['change'])}</td></tr>")
     if p["card_amount"]:
         lines.append(f"<tr><td>بطاقة</td><td class='l'>{_m(p['card_amount'])}</td></tr>")
+    if p.get("wallet_amount"):
+        lines.append(f"<tr><td>{escape(p.get('wallet_name') or 'دفع إلكتروني')}</td><td class='l'>{_m(p['wallet_amount'])}</td></tr>")
     body = (_header() + f"<hr><div>مرجع: {escape(p['ref'][-10:].upper())}</div><div>التاريخ: {p['created_at']}</div>"
             f"<hr><table>{rows}</table><hr><table>{''.join(lines)}</table><hr>"
             f"<div class='c'>{escape(settings.get('receipt_footer') or '')}</div>")
@@ -149,6 +155,7 @@ def shift_html(shift_id):
         ("إجمالي المبيعات", d["sales_total"]),
         ("مبيعات نقدية", d["cash_sales"]),
         ("مبيعات بطاقة", d["card_sales"]),
+        ("مبيعات دفع إلكتروني (محافظ وتطبيقات)", d["wallet_sales"]),
         ("مبيعات آجلة", d["credit_sales"]),
         ("الخصومات", d["discounts"]),
         ("مرتجعات نقدية", d["cash_refunds"]),

@@ -15,7 +15,7 @@ def profit_and_loss(date_from, date_to):
         SELECT COUNT(*) AS cnt, COALESCE(SUM(subtotal),0) AS gross, COALESCE(SUM(discount),0) AS discount,
                COALESCE(SUM(total),0) AS net, COALESCE(SUM(tax),0) AS tax, COALESCE(SUM(cost_total),0) AS cogs,
                COALESCE(SUM(cash_amount),0) AS cash, COALESCE(SUM(card_amount),0) AS card,
-               COALESCE(SUM(credit_amount),0) AS credit
+               COALESCE(SUM(credit_amount),0) AS credit, COALESCE(SUM(wallet_amount),0) AS wallet
         FROM invoices WHERE {_RANGE.format(col='created_at')}""", p)
     ret = db.query_one(f"""SELECT COUNT(*) AS cnt, COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax,
                                   COALESCE(SUM(cost_total),0) AS cost
@@ -58,11 +58,82 @@ def profit_and_loss(date_from, date_to):
         "net_profit": net_profit,
         "cash_sales": money(inv["cash"]),
         "card_sales": money(inv["card"]),
+        "wallet_sales": money(inv["wallet"]),
         "credit_sales": money(inv["credit"]),
         "debt_collected": collected,
         "purchases": purchases,
         "avg_basket": money(inv["net"] / inv["cnt"]) if inv["cnt"] else 0.0,
     }
+
+
+PERIODS = {"day": "يومي", "week": "أسبوعي", "month": "شهري", "year": "سنوي"}
+
+
+def _period_key(col, group):
+    if group == "week":        # الأسبوع من السبت إلى الجمعة، ويُسمّى بتاريخ السبت
+        return f"date({col}, '-6 days', 'weekday 6')"
+    if group == "month":
+        return f"strftime('%Y-%m', {col})"
+    if group == "year":
+        return f"strftime('%Y', {col})"
+    return f"date({col})"
+
+
+def period_summary(date_from, date_to, group="month"):
+    """ملخص المبيعات والأرباح وطرق الدفع لكل يوم/أسبوع/شهر/سنة. مجموع الفترات = تقرير الأرباح والخسائر للمدة كلها"""
+    if group not in PERIODS:
+        raise ValueError("نوع الفترة غير صحيح")
+    p = (date_from, date_to)
+    rows = {}
+
+    def grouped(sql, col):
+        k = _period_key(col, group)
+        return db.query(sql.format(k=k, where=_RANGE.format(col=col)), p)
+
+    def row(key):
+        return rows.setdefault(key, {"period": key, "count": 0, "net_sales": 0.0, "tax": 0.0, "cogs": 0.0,
+                                     "expenses": 0.0, "stock_loss": 0.0, "other": 0.0, "cash": 0.0, "card": 0.0,
+                                     "wallet": 0.0, "credit": 0.0})
+
+    for r in grouped("""SELECT {k} AS k, COUNT(*) AS cnt, SUM(total) AS net, SUM(tax) AS tax, SUM(cost_total) AS cogs,
+                               SUM(cash_amount) AS cash, SUM(card_amount) AS card, SUM(wallet_amount) AS wallet,
+                               SUM(credit_amount) AS credit
+                        FROM invoices WHERE {where} GROUP BY k""", "created_at"):
+        x = row(r["k"])
+        x.update(count=r["cnt"], net_sales=r["net"] or 0, tax=r["tax"] or 0, cogs=r["cogs"] or 0, cash=r["cash"] or 0,
+                 card=r["card"] or 0, wallet=r["wallet"] or 0, credit=r["credit"] or 0)
+    for r in grouped("""SELECT {k} AS k, SUM(total) AS t, SUM(tax) AS tax, SUM(cost_total) AS c
+                        FROM returns WHERE {where} GROUP BY k""", "created_at"):
+        x = row(r["k"])
+        x["net_sales"] -= r["t"] or 0
+        x["tax"] -= r["tax"] or 0
+        x["cogs"] -= r["c"] or 0
+    for sql, col, field, sign in (
+            ("SELECT {k} AS k, SUM(amount) AS v FROM expenses WHERE {where} GROUP BY k", "expense_date", "expenses", 1),
+            ("SELECT {k} AS k, SUM(loss_value) AS v FROM stock_movements WHERE {where} GROUP BY k", "created_at",
+             "stock_loss", 1),
+            ("SELECT {k} AS k, SUM(difference) AS v FROM shifts WHERE status='closed' AND {where} GROUP BY k",
+             "closed_at", "other", 1),
+            ("SELECT {k} AS k, SUM(amount) AS v FROM customer_transactions WHERE type='adjust' AND {where} GROUP BY k",
+             "created_at", "other", 1),
+            ("SELECT {k} AS k, SUM(amount) AS v FROM supplier_transactions WHERE type='adjust' AND {where} GROUP BY k",
+             "created_at", "other", -1),
+            ("SELECT {k} AS k, SUM(total - cost_total) AS v FROM purchase_returns WHERE {where} GROUP BY k",
+             "created_at", "other", 1)):
+        for r in grouped(sql, col):
+            row(r["k"])[field] += sign * (r["v"] or 0)
+    out = []
+    for k in sorted(rows):
+        x = rows[k]
+        revenue = money(x["net_sales"] - x["tax"])
+        gross = money(revenue - x["cogs"])
+        x.update({f: money(x[f]) for f in ("net_sales", "tax", "cogs", "expenses", "stock_loss", "other", "cash",
+                                           "card", "wallet", "credit")})
+        x["gross_profit"] = gross
+        x["margin"] = round(gross / revenue * 100, 1) if revenue else 0.0
+        x["net_profit"] = money(gross - x["expenses"] - x["stock_loss"] + x["other"])
+        out.append(x)
+    return out
 
 
 def daily_sales(date_from, date_to):
@@ -183,7 +254,8 @@ def daily_summary_text(day=None):
     drawers = money(sum(shifts.summary(s["id"])["expected_cash"] for s in shifts.open_shifts()))
     lines = [f"📊 ملخص يوم {day} — {settings.get('shop_name')}", "",
              f"🧾 المبيعات: {p['net_sales']:,.2f} {cur} ({p['invoice_count']} فاتورة)",
-             f"   نقدي {p['cash_sales']:,.2f} • بطاقة {p['card_sales']:,.2f} • آجل {p['credit_sales']:,.2f}",
+             f"   نقدي {p['cash_sales']:,.2f} • بطاقة {p['card_sales']:,.2f} • إلكتروني {p['wallet_sales']:,.2f}"
+             f" • آجل {p['credit_sales']:,.2f}",
              f"📈 مجمل الربح: {p['gross_profit']:,.2f} (هامش {p['gross_margin']}%)",
              f"💸 المصاريف: {p['expenses']:,.2f}",
              f"💰 صافي الربح: {p['net_profit']:,.2f}",

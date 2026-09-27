@@ -155,6 +155,9 @@ class InvoicesScreen(QWidget):
         for k, lbl in (("cash_amount", "نقدي"), ("card_amount", "بطاقة"), ("credit_amount", "آجل")):
             if full[k]:
                 pay.append(f"{lbl} {m(full[k])}")
+        if full["wallet_amount"]:
+            pay.append(f"{full['wallet_name'] or 'إلكتروني'} {m(full['wallet_amount'])}"
+                       + (f" (#{full['wallet_ref']})" if full["wallet_ref"] else ""))
         self.det_title.setText(f"{full['invoice_number']} — {full['created_at']} — {' + '.join(pay)}")
         items = sales.get_invoice_items(inv["id"])
         self.items.set_rows([[i["product_name"], qty_cell(i["quantity"]), float(i["unit_price"]), float(i["total"]),

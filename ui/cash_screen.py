@@ -78,6 +78,7 @@ class CashScreen(QWidget):
                     ("− مرتجعات نقدية", d["cash_refunds"]), ("− مصاريف من الصندوق", d["expenses_cash"]),
                     ("− دفعات موردين من الصندوق", d["supplier_payments_cash"]), ("− سحب نقدي", d["cash_out"]),
                     ("= النقد المتوقع", d["expected_cash"]), ("", None), ("مبيعات بطاقة", d["card_sales"]),
+                    ("مبيعات دفع إلكتروني (محافظ وتطبيقات)", d["wallet_sales"]),
                     ("مبيعات آجلة", d["credit_sales"]), ("الخصومات الممنوحة", d["discounts"]),
                     ("تسديدات عملاء (غير نقدية)", d["customer_payments_other"])]
             self.details.set_rows([[a, float(b) if b is not None else ""] for a, b in rows])

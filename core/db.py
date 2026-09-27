@@ -12,7 +12,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def app_dir():
@@ -466,6 +466,10 @@ ADDED_COLUMNS = {
         ("returned_total", "REAL NOT NULL DEFAULT 0"),
         ("offline_ref", "TEXT"),                  # معرّف فاتورة بيعت أثناء انقطاع الشبكة (لمنع التكرار)
         ("card_ref", "TEXT"),                     # مرجع عملية البطاقة من جهاز الدفع (رقم الموافقة، RRN، آخر 4 أرقام)
+        ("wallet_amount", "REAL NOT NULL DEFAULT 0"),  # المدفوع بمحفظة إلكترونية أو تطبيق بنكي
+        ("wallet_name", "TEXT"),                  # اسم طريقة الدفع (PalPay، CliQ...)
+        ("wallet_ref", "TEXT"),                   # رقم العملية من إشعار الزبون
+        ("wallet_bank", "INTEGER NOT NULL DEFAULT 0"),  # 1 = المال يصل للبنك مباشرة، 0 = رصيد المحفظة
         ("status", "TEXT NOT NULL DEFAULT 'completed'"),
         ("note", "TEXT"),
         ("user_id", "INTEGER"),

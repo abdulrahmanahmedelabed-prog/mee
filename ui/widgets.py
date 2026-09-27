@@ -238,7 +238,8 @@ class MoneySpin(QDoubleSpinBox):
 class DateRange(QWidget):
     changed = Signal()
 
-    PRESETS = ["اليوم", "أمس", "آخر 7 أيام", "هذا الشهر", "الشهر الماضي", "هذه السنة", "مخصص"]
+    PRESETS = ["اليوم", "أمس", "آخر 7 أيام", "هذا الشهر", "الشهر الماضي", "هذه السنة", "السنة الماضية",
+               "آخر 3 سنوات", "مخصص"]
 
     def __init__(self, default="اليوم"):
         super().__init__()
@@ -272,6 +273,8 @@ class DateRange(QWidget):
             "هذا الشهر": (t.replace(day=1), t),
             "الشهر الماضي": ((t.replace(day=1) - timedelta(days=1)).replace(day=1), t.replace(day=1) - timedelta(days=1)),
             "هذه السنة": (t.replace(month=1, day=1), t),
+            "السنة الماضية": (date(t.year - 1, 1, 1), date(t.year - 1, 12, 31)),
+            "آخر 3 سنوات": (date(t.year - 2, 1, 1), t),
         }
         if name in ranges:
             a, b = ranges[name]

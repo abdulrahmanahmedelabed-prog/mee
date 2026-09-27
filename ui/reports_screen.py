@@ -59,6 +59,29 @@ class ReportsScreen(QWidget):
         dl.addWidget(self.daily_table, 1)
         self._add_tab(daily, "المبيعات اليومية", self.daily_table)
 
+        # 2ب) ملخص الفترات: يومي / أسبوعي / شهري / سنوي
+        per = QWidget()
+        pl2 = QVBoxLayout(per)
+        pl2.setContentsMargins(0, 10, 0, 0)
+        prow = QHBoxLayout()
+        prow.addWidget(QLabel("التجميع:"))
+        self.period_group = QComboBox()
+        for k, label in reports.PERIODS.items():
+            self.period_group.addItem(label, k)
+        self.period_group.setCurrentIndex(2)
+        self.period_group.currentIndexChanged.connect(self.load)
+        prow.addWidget(self.period_group)
+        prow.addStretch()
+        pl2.addLayout(prow)
+        c3, cl3 = card()
+        self.period_chart = BarChart("#16A34A")
+        cl3.addWidget(self.period_chart)
+        pl2.addWidget(c3)
+        self.period_table = Table(["الفترة", "الفواتير", "صافي المبيعات", "مجمل الربح", "الهامش", "المصاريف",
+                                   "صافي الربح", "نقدي", "بطاقة", "إلكتروني", "آجل"], stretch=0)
+        pl2.addWidget(self.period_table, 1)
+        self._add_tab(per, "ملخص الفترات", self.period_table)
+
         # 3) فئات
         self.cat_table = Table(["الفئة", "الكمية", "المبيعات", "الربح", "هامش الربح"])
         self._add_tab(self.cat_table, "حسب الفئة", self.cat_table)
@@ -105,6 +128,18 @@ class ReportsScreen(QWidget):
         self.terminal_table = Table(["نقطة البيع (الجهاز)", "عدد الفواتير", "المبيعات"])
         self._add_tab(self.terminal_table, "حسب الجهاز", self.terminal_table)
 
+        # 7ج) الدفع الإلكتروني: مطابقة كل محفظة/تطبيق بنكي مع كشفه
+        wal = QWidget()
+        wl = QVBoxLayout(wal)
+        wl.setContentsMargins(0, 10, 0, 0)
+        self.wallet_table = Table(["طريقة الدفع", "يصل المال إلى", "عدد العمليات", "مبيعات", "تسديد ديون", "الإجمالي"])
+        self.wallet_table.itemSelectionChanged.connect(self.load_wallet_ops)
+        wl.addWidget(self.wallet_table, 1)
+        wl.addWidget(QLabel("عمليات الطريقة المحددة (للمطابقة سطراً بسطر مع كشف المحفظة أو البنك):"))
+        self.wallet_ops = Table(["الفاتورة", "الوقت", "المبلغ", "رقم العملية"])
+        wl.addWidget(self.wallet_ops, 1)
+        self._add_tab(wal, "الدفع الإلكتروني", self.wallet_table)
+
         # 8) الديون
         self.debts_table = Table(["النوع", "الاسم", "الهاتف", "الرصيد"], stretch=1)
         self._add_tab(self.debts_table, "الديون والمستحقات", self.debts_table)
@@ -148,7 +183,8 @@ class ReportsScreen(QWidget):
                 ("− خسائر المخزون (تالف، منتهي، عجز جرد)", p["stock_loss"]),
                 ("± عجز/زيادة الصندوق والتسويات", p["other_adjustments"]), ("= صافي الربح", p["net_profit"]),
                 ("", None),
-                ("مبيعات نقدية", p["cash_sales"]), ("مبيعات بطاقة", p["card_sales"]), ("مبيعات آجلة (ديون جديدة)", p["credit_sales"]),
+                ("مبيعات نقدية", p["cash_sales"]), ("مبيعات بطاقة", p["card_sales"]),
+                ("مبيعات دفع إلكتروني (محافظ وتطبيقات)", p["wallet_sales"]), ("مبيعات آجلة (ديون جديدة)", p["credit_sales"]),
                 ("ديون محصّلة من العملاء", p["debt_collected"]), ("مشتريات بضاعة في الفترة", p["purchases"]),
             ]
             self.pl_table.set_rows([[k, float(v) if v is not None else ""] for k, v in rows],
@@ -157,6 +193,20 @@ class ReportsScreen(QWidget):
             d = reports.daily_sales(a, b)
             self.daily_chart.set_data([x["date"][5:] for x in d], [x["total"] for x in d])
             self.daily_table.set_rows([[x["date"], x["count"], float(x["total"]), float(x["profit"])] for x in reversed(d)])
+        elif name == "ملخص الفترات":
+            d = reports.period_summary(a, b, self.period_group.currentData())
+            self.period_chart.set_data([x["period"][-5:] if len(x["period"]) == 10 else x["period"] for x in d[-24:]],
+                                       [x["net_profit"] for x in d[-24:]])
+            self.period_table.set_rows([[x["period"], x["count"], float(x["net_sales"]), float(x["gross_profit"]),
+                                         (f"{x['margin']}%", x["margin"]), float(x["expenses"]),
+                                         float(x["net_profit"]), float(x["cash"]), float(x["card"]),
+                                         float(x["wallet"]), float(x["credit"])] for x in reversed(d)])
+        elif name == "الدفع الإلكتروني":
+            from core import wallets
+            rows = wallets.summary(a, b)
+            self.wallet_table.set_rows([[r["name"], r["dest"], r["count"], float(r["sales"]), float(r["debts"]),
+                                         float(r["total"])] for r in rows], rows)
+            self.wallet_ops.set_rows([])
         elif name == "حسب الفئة":
             rows = reports.sales_by_category(a, b)
             self.cat_table.set_rows([[r["category"], qty_cell(r["qty"]), float(r["total"] or 0), float(r["profit"] or 0),
@@ -212,6 +262,15 @@ class ReportsScreen(QWidget):
 
     def current_table(self):
         return self.tables.get(self.tabs.currentIndex(), (None, ""))
+
+    def load_wallet_ops(self):
+        from core import wallets
+        r = self.wallet_table.selected_data()
+        if not r:
+            return
+        a, b = self.range.range()
+        self.wallet_ops.set_rows([[x["invoice_number"], x["created_at"][:16], float(x["wallet_amount"]),
+                                   x["wallet_ref"] or ""] for x in wallets.invoices(r["name"], a, b)])
 
     def export_current(self):
         t, name = self.current_table()

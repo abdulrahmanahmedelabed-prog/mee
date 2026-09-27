@@ -69,7 +69,8 @@ class PaymentInDialog(QDialog):
         self.amount = MoneySpin(big=True)
         self.amount.setValue(max(balance, 0))
         self.method = QComboBox()
-        self.method.addItems(customers.PAYMENT_METHODS)
+        from core import wallets
+        self.method.addItems(customers.PAYMENT_METHODS + wallets.names())
         self.note = QLineEdit()
         lay.addRow("المبلغ:", self.amount)
         lay.addRow("طريقة الدفع:", self.method)

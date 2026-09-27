@@ -46,8 +46,9 @@ def compute_totals(cart, discount=0.0):
     return {"subtotal": subtotal, "discount": discount, "tax": tax, "total": total}
 
 
-def payment_label(cash, card, credit):
-    used = [m for m, v in ((METHOD_CASH, cash), (METHOD_CARD, card), (METHOD_CREDIT, credit)) if v > 0.004]
+def payment_label(cash, card, credit, wallet=0.0, wallet_name=""):
+    used = [m for m, v in ((METHOD_CASH, cash), (METHOD_CARD, card), (METHOD_CREDIT, credit),
+                           (wallet_name or "محفظة إلكترونية", wallet)) if v > 0.004]
     if len(used) == 1:
         return used[0]
     if not used:
@@ -71,7 +72,7 @@ def cart_discounts(cart, manual_discount=0.0, points=0.0):
 
 def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
                 cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0,
-                offline=None, card_ref=""):
+                offline=None, card_ref="", wallet_amount=0.0, wallet_name="", wallet_ref=""):
     """
     cart: قائمة dict: product_id, product_name, quantity, unit_price
           (اختياري) factor, unit_name للبيع بوحدة أكبر مثل الكرتونة
@@ -112,12 +113,25 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
     total = t["total"]
     card_amount = money(card_amount or 0)
     credit_amount = money(credit_amount or 0)
+    wallet_amount = money(wallet_amount or 0)
+    wallet_name = (wallet_name or "").strip()
+    wallet_bank = 0
+    if wallet_amount:
+        if not wallet_name:
+            raise SaleError("اختر طريقة الدفع الإلكتروني")
+        from core import wallets
+        w = wallets.get(wallet_name)
+        wallet_bank = 1 if w and w["dest"] == wallets.DEST_BANK else 0
+        if settings.get_bool("wallet_ref_required") and not (wallet_ref or "").strip() and not offline:
+            raise SaleError("اكتب رقم العملية من إشعار الدفع الإلكتروني")
+    else:
+        wallet_name, wallet_ref = "", ""
     if cash_amount is None:
-        cash_amount = money(total - card_amount - credit_amount)
+        cash_amount = money(total - card_amount - credit_amount - wallet_amount)
     cash_amount = money(cash_amount)
-    if min(cash_amount, card_amount, credit_amount) < 0:
+    if min(cash_amount, card_amount, credit_amount, wallet_amount) < 0:
         raise SaleError("مبالغ الدفع لا يمكن أن تكون سالبة")
-    if abs(money(cash_amount + card_amount + credit_amount) - total) > 0.009:
+    if abs(money(cash_amount + card_amount + credit_amount + wallet_amount) - total) > 0.009:
         raise SaleError("مجموع المدفوع لا يساوي إجمالي الفاتورة")
     if credit_amount > 0 and not customer_id:
         raise SaleError("البيع الآجل يتطلب اختيار عميل")
@@ -190,12 +204,15 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
             INSERT INTO invoices (invoice_number, customer_id, subtotal, discount, tax, total, cost_total, paid,
                                   payment_method, cash_amount, card_amount, credit_amount, cash_received, change_given,
                                   status, note, user_id, shift_id, terminal, promo_discount, points_redeemed,
-                                  points_value, points_earned, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                  points_value, points_earned, created_at, wallet_amount, wallet_name, wallet_ref,
+                                  wallet_bank)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (number, customer_id, t["subtotal"], t["discount"], t["tax"], total, cost_total,
-              money(cash_amount + card_amount), payment_label(cash_amount, card_amount, credit_amount),
+              money(cash_amount + card_amount + wallet_amount),
+              payment_label(cash_amount, card_amount, credit_amount, wallet_amount, wallet_name),
               cash_amount, card_amount, credit_amount, money(cash_received), change, note, user_id, shift_id,
-              context.terminal(), disc["promo"], points_redeemed, disc["points_value"], points_earned, created))
+              context.terminal(), disc["promo"], points_redeemed, disc["points_value"], points_earned, created,
+              wallet_amount, wallet_name or None, (wallet_ref or "").strip() or None, wallet_bank))
         invoice_id = cur.lastrowid
         if offline:
             conn.execute("UPDATE invoices SET offline_ref=? WHERE id=?", (offline["ref"], invoice_id))
@@ -229,13 +246,16 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
 
     return {"invoice_id": invoice_id, "invoice_number": number, "change": change, **t,
             "cash_amount": cash_amount, "card_amount": card_amount, "credit_amount": credit_amount,
+            "wallet_amount": wallet_amount, "wallet_name": wallet_name,
             "promo_discount": disc["promo"], "points_value": disc["points_value"], "points_earned": points_earned}
 
 
 def import_offline_sale(payload):
-    """ترحيل فاتورة بيعت أثناء انقطاع الشبكة (نقدي/بطاقة فقط). آمن للتكرار: نفس الفاتورة لا تُسجل مرتين"""
+    """ترحيل فاتورة بيعت أثناء انقطاع الشبكة (نقدي/بطاقة/محفظة). آمن للتكرار: نفس الفاتورة لا تُسجل مرتين"""
     return create_sale(payload["cart"], discount=payload.get("discount", 0), cash_amount=payload["cash_amount"],
                        card_amount=payload.get("card_amount", 0), cash_received=payload.get("cash_received"),
+                       wallet_amount=payload.get("wallet_amount", 0), wallet_name=payload.get("wallet_name", ""),
+                       wallet_ref=payload.get("wallet_ref", ""), card_ref=payload.get("card_ref", ""),
                        shift_id=payload.get("shift_id"),
                        offline={"ref": payload["ref"], "created_at": payload["created_at"],
                                 "promo_discount": payload.get("promo_discount", 0)})

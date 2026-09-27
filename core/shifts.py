@@ -59,6 +59,7 @@ def summary(shift_id):
     one = lambda sql: money(db.scalar(sql, (shift_id,)))
     inv = db.query_one("""SELECT COUNT(*) AS cnt, COALESCE(SUM(total),0) AS total, COALESCE(SUM(cash_amount),0) AS cash,
                                  COALESCE(SUM(card_amount),0) AS card, COALESCE(SUM(credit_amount),0) AS credit,
+                                 COALESCE(SUM(wallet_amount),0) AS wallet,
                                  COALESCE(SUM(discount),0) AS discount
                           FROM invoices WHERE shift_id=?""", (shift_id,))
     d = {
@@ -67,6 +68,7 @@ def summary(shift_id):
         "sales_total": money(inv["total"]),
         "cash_sales": money(inv["cash"]),
         "card_sales": money(inv["card"]),
+        "wallet_sales": money(inv["wallet"]),
         "credit_sales": money(inv["credit"]),
         "discounts": money(inv["discount"]),
         "cash_refunds": one("SELECT SUM(total) FROM returns WHERE shift_id=? AND refund_method='نقدي'"),

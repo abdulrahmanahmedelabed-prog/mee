@@ -143,18 +143,21 @@ def pending_count():
     return len([q for q in queue() if not q.get("error")])
 
 
-def queue_sale(cart, discount, promo_discount, cash_amount, card_amount, cash_received, shift_id):
+def queue_sale(cart, discount, promo_discount, cash_amount, card_amount, cash_received, shift_id,
+               wallet_amount=0.0, wallet_name="", wallet_ref="", card_ref=""):
     from core import sales
     if not cart:
         raise sales.SaleError("السلة فارغة")
     t = sales.compute_totals(cart, money(discount + promo_discount))
-    if abs(money(cash_amount + card_amount) - t["total"]) > 0.009:
+    if abs(money(cash_amount + card_amount + (wallet_amount or 0)) - t["total"]) > 0.009:
         raise sales.SaleError("مجموع المدفوع لا يساوي إجمالي الفاتورة")
     clean_cart = [{k: it[k] for k in ("product_id", "product_name", "quantity", "unit_price", "factor", "unit_name",
                                        "list_price") if k in it} for it in cart]
     payload = {"ref": f"{context.terminal()}-{uuid.uuid4().hex}", "created_at": db.now(), "cart": clean_cart,
                "discount": money(discount), "promo_discount": money(promo_discount), "cash_amount": money(cash_amount),
-               "card_amount": money(card_amount), "cash_received": money(cash_received or cash_amount),
+               "card_amount": money(card_amount), "wallet_amount": money(wallet_amount or 0),
+               "wallet_name": wallet_name or "", "wallet_ref": wallet_ref or "", "card_ref": card_ref or "",
+               "cash_received": money(cash_received or cash_amount),
                "shift_id": shift_id, "user": (auth.current_user() or {}).get("username"), "total": t["total"],
                "subtotal": t["subtotal"], "tax": t["tax"], "change": money((cash_received or cash_amount) - cash_amount)}
     with _lock:
