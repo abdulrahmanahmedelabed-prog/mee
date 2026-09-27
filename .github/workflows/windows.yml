@@ -1,0 +1,59 @@
+name: Windows build (EXE + Setup)
+
+on:
+  push:
+    paths-ignore:
+      - "android/**"
+      - "**.md"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -r requirements.txt pyinstaller pytest
+      - name: License public key
+        shell: bash
+        env:
+          PUBKEY: ${{ secrets.SHOP_LICENSE_PUBKEY }}
+        run: |
+          if [ -f core/license_pubkey.py ]; then echo "Using core/license_pubkey.py from the repository"
+          elif [ -n "$PUBKEY" ]; then printf '%s\n' "$PUBKEY" > core/license_pubkey.py; echo "Using SHOP_LICENSE_PUBKEY secret"
+          else echo "::warning::No license public key: this build runs the 30-day trial but cannot be activated. Add core/license_pubkey.py (public key, safe to commit) or the SHOP_LICENSE_PUBKEY secret."
+          fi
+      - name: Tests (on Windows)
+        run: python -m pytest tests -q
+      - name: Build EXE
+        run: python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --add-data "i18n;i18n" --add-data "docs;docs" main.py
+      - name: Smoke test (the EXE starts)
+        shell: pwsh
+        run: |
+          $env:SHOP_DATA_DIR = "$env:RUNNER_TEMP\smoke"
+          $p = Start-Process dist\ShopAccounting\ShopAccounting.exe -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) { Get-Content "$env:SHOP_DATA_DIR\errors.log" -ErrorAction SilentlyContinue; throw "EXE exited early (code $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc installer\ShopAccounting.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ShopAccounting-Windows-folder
+          path: dist/ShopAccounting
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ShopAccounting-Setup
+          path: dist/installer/*.exe
