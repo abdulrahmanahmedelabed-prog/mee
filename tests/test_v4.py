@@ -328,3 +328,27 @@ def test_input_vat_on_purchases_and_vat_report():
     assert tb["totals"]["balanced"] and bal[ledger.VAT_INPUT] == 8 and bal[ledger.VAT] == -8
     assert bal[ledger.INVENTORY] == pytest.approx(products.inventory_value()["cost_value"], abs=0.01)
     assert ledger.income_statement(t, t)["net_income"] == reports.profit_and_loss(t, t)["net_profit"] == 25
+
+
+def test_online_orders_core():
+    from core import orders
+    pid = products.add_product("أرز", "o1", "مواد", 5, 12, 50, 0)
+    order = {"name": "سامي", "phone": "0599111222", "fulfilment": "pickup",
+             "items": [{"product_id": pid, "quantity": 2, "unit_price": 0.01}]}   # السعر من المتصفح يُتجاهل
+    with pytest.raises(orders.OrderError):
+        orders.create_order(order, "1.1.1.1")                                     # المتجر غير مفعّل
+    settings.set_many({"online_store_enabled": "1", "online_store_delivery_fee": "5"})
+    r = orders.create_order(order, "1.1.1.1")
+    assert r["total"] == 24 and r["order_number"].startswith("WEB-")
+    with pytest.raises(orders.OrderError):
+        orders.create_order(dict(order, fulfilment="delivery"), "1.1.1.1")        # التوصيل بدون عنوان
+    assert orders.create_order(dict(order, fulfilment="delivery", address="شارع 1"), "1.1.1.1")["total"] == 29
+    for _ in range(10):
+        orders.create_order(order, "2.2.2.2")
+    with pytest.raises(orders.OrderError):
+        orders.create_order(order, "2.2.2.2")                                     # حد 10 طلبات بالساعة
+    assert orders.new_count() == 12
+    o = orders.list_orders("open")[-1]
+    orders.set_status(o["id"], "ready")
+    assert "جاهز" in orders.status_message(orders.get_order(o["id"]))
+    assert "أرز" in orders.store_page()

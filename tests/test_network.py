@@ -106,9 +106,24 @@ def test_owner_page_and_server_side_permissions(server):
     page = opener.open(base + "/owner/login", data=body).read().decode("utf-8")
     assert "مبيعات اليوم" in page
 
+    # المتجر الإلكتروني العام
+    assert "المتجر الإلكتروني غير مفعّل" in urllib.request.urlopen(base + "/shop").read().decode("utf-8")
+    req = urllib.request.Request(base + "/shop/order", data=json.dumps({"name": "x"}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    assert "error" in json.loads(urllib.request.urlopen(req).read())
+
     local_user = auth.current_user()
     client = remote.install_client("127.0.0.1", server, "ABC123", "كاشير 2")
     assert auth.login("admin", "admin")
+    settings.set_many({"online_store_enabled": "1"})
+    pid = products.add_product("تمر", "t77", "", 5, 9, 10, 0)
+    req = urllib.request.Request(base + "/shop/order", data=json.dumps(
+        {"name": "Sam", "phone": "+15551234567", "items": [{"product_id": pid, "quantity": 2}]}).encode(),
+        headers={"Content-Type": "application/json"})
+    res = json.loads(urllib.request.urlopen(req).read())
+    assert res["total"] == 18 and "تمر" in urllib.request.urlopen(base + "/shop").read().decode("utf-8")
+    from core import orders
+    assert orders.new_count() == 1
     auth.create_user("kashier", "كاشير", "1234", "cashier")
     assert auth.login("kashier", "1234")["role"] == "cashier"
     with pytest.raises(remote.RemoteError):

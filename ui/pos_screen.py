@@ -783,6 +783,7 @@ class POSScreen(QWidget):
             self.show_flash(f"تم حذف {name}", "info")
 
     def clear_cart(self):
+        self.pending_order_id = None
         self.cart = []
         self.discount = 0.0
         self.points = 0.0
@@ -994,6 +995,13 @@ class POSScreen(QWidget):
             return
 
         self.last_invoice_id = res["invoice_id"]
+        if getattr(self, "pending_order_id", None):
+            from core import orders
+            try:
+                orders.set_status(self.pending_order_id, "done", res["invoice_id"])
+            except Exception:
+                pass
+            self.pending_order_id = None
         if res["cash_amount"] > 0 and settings.get_bool("drawer_on_cash_sale"):
             self.open_drawer(silent=True)
         if res["credit_amount"]:
@@ -1017,6 +1025,29 @@ class POSScreen(QWidget):
             except Exception as e:
                 warn(self, f"تم حفظ الفاتورة لكن تعذرت الطباعة:\n{e}")
         self.sale_completed.emit()
+        self.focus_search()
+
+    def load_order(self, order):
+        """تحميل طلب أونلاين إلى السلة مع العميل (يُنشأ إن لم يكن مسجلاً)"""
+        self.clear_cart()
+        missing = []
+        for it in order["items"]:
+            p = self._get_product(it["product_id"])
+            if not p:
+                missing.append(it["name"])
+                continue
+            line = {"product_id": p["id"], "base_name": p["name"], "product_name": p["name"],
+                    "quantity": round_qty(it["quantity"]), "unit_price": it["unit_price"], "list_price": it["unit_price"],
+                    "factor": 1.0, "unit_name": p["unit"], "stock": p["quantity"], "unit": p["unit"]}
+            self.cart.append(line)
+        cust = next((c for c in customers.list_customers(order["phone"]) if (c["phone"] or "") == order["phone"]), None)
+        if not cust:
+            cid = customers.add_customer(order["customer_name"], order["phone"], order.get("address") or "")
+            cust = customers.get_customer(cid)
+        self.set_customer(cust)
+        self.pending_order_id = order["id"]
+        self.render_cart()
+        self.show_flash(f"🛵 {order['order_number']}" + (f" — غير متوفر: {'، '.join(missing)}" if missing else ""), "info")
         self.focus_search()
 
     def finish_offline_sale(self, pay, print_it=False):

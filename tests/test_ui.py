@@ -234,3 +234,18 @@ def test_pos_keeps_selling_when_network_drops(pos, monkeypatch):
     inv = sales.get_invoices(limit=1)[0]
     assert inv["total"] == 10 and inv["promo_discount"] == 2
     assert products.get_product(pid)["quantity"] == 7
+
+
+def test_online_order_to_pos_sale(pos):
+    from core import orders
+    settings.set("online_store_enabled", "1")
+    pid = products.add_product("زيت", "z1", "", 10, 15, 20, 0)
+    r = orders.create_order({"name": "ليلى", "phone": "0599333444", "items": [{"product_id": pid, "quantity": 3}]}, "ip")
+    pos.load_order(orders.get_order(r["id"]))
+    assert len(pos.cart) == 1 and pos.cart[0]["quantity"] == 3 and pos.customer["phone"] == "0599333444"
+    pos.finish_sale({"cash_amount": 45, "card_amount": 0, "credit_amount": 0, "cash_received": 50, "change": 5})
+    o = orders.get_order(r["id"])
+    assert o["status"] == "done" and o["invoice_id"] == pos.last_invoice_id
+    from ui.orders_screen import OrdersScreen
+    s = OrdersScreen()
+    s.refresh()

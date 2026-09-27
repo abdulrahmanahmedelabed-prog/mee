@@ -102,6 +102,8 @@ class SettingsScreen(QWidget):
         self._num(f, "vat_rate", "نسبة الضريبة %:", 0, 100)
         self._check(f, "prices_include_vat", "أسعار البيع شاملة للضريبة (الأشيع في المحلات)")
         f.addRow("", hint("عند التفعيل تظهر الضريبة في الفاتورة وتُطرح من الإيراد في تقرير الأرباح."))
+        self._check(f, "einvoice_qr", "طباعة رمز QR للفاتورة الإلكترونية (صيغة الفوترة المبسطة المعتمدة في السعودية)")
+        self._line(f, "extra_currencies", "عملات إضافية للدفع النقدي (مثل USD=3.65,JOD=5.15):")
 
         # --- الطباعة
         f = self._form_tab("الطباعة ودرج النقود")
@@ -175,6 +177,18 @@ class SettingsScreen(QWidget):
         self.owner_url = hint("")
         self.owner_url.setTextInteractionFlags(Qt.TextSelectableByMouse)
         f.addRow("", self.owner_url)
+
+        # --- المتجر الإلكتروني
+        f = self._form_tab("المتجر الإلكتروني")
+        f.addRow(hint("صفحة يطلب منها الزبائن من جوالاتهم (استلام أو توصيل، والدفع عند الاستلام). "
+                      "الطلبات تظهر في شاشة «الطلبات الأونلاين». الرابط: http://عنوان-الجهاز:8765/shop — "
+                      "يلزم تشغيل خدمة الويب (جهاز رئيسي أو «تشغيل لوحة المالك»). للوصول من الإنترنت استخدم "
+                      "Cloudflare Tunnel أو Tailscale Funnel."))
+        self._check(f, "online_store_enabled", "تفعيل المتجر الإلكتروني واستقبال الطلبات")
+        self._check(f, "online_store_delivery", "إتاحة التوصيل")
+        self._num(f, "online_store_delivery_fee", "رسوم التوصيل:", 0, 1000)
+        self._num(f, "online_store_min_order", "أقل قيمة للطلب:", 0, 100000)
+        self._line(f, "online_store_message", "رسالة أعلى صفحة المتجر:")
 
         # --- الترخيص والتفعيل
         lic = QWidget()

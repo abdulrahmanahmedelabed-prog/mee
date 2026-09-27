@@ -42,7 +42,17 @@ DEFAULTS = {
     "loyalty_min_redeem": "100",      # أقل عدد نقاط يمكن استبداله
     # العروض
     "promotions_enabled": "1",
-    "target_margin_percent": "15",     # هامش الربح المستهدف (للمستشار الذكي وتحديث الأسعار)
+    "target_margin_percent": "15",
+    # المتجر الإلكتروني والطلبات (النسخة 6)
+    "online_store_enabled": "0",
+    "online_store_delivery": "1",
+    "online_store_delivery_fee": "0",
+    "online_store_min_order": "0",
+    "online_store_message": "اطلب من محلنا واستلم أو نوصلك 🛵",
+    # الفاتورة الإلكترونية (رمز QR بصيغة الفوترة السعودية المبسطة)
+    "einvoice_qr": "0",
+    # عملات إضافية للدفع النقدي: رمز=سعر الصرف، مثل USD=3.65,JOD=5.15
+    "extra_currencies": "",     # هامش الربح المستهدف (للمستشار الذكي وتحديث الأسعار)
     "expense_categories": "إيجار,كهرباء,ماء,رواتب,إنترنت واتصالات,مواصلات,صيانة,تنظيف,ضيافة,أخرى",
 }
 
@@ -107,6 +117,7 @@ def save_shared(values: dict):
             if isinstance(v, bool):
                 v = "1" if v else "0"
             conn.execute("INSERT OR REPLACE INTO settings(key, value) VALUES (?, ?)", (k, str(v)))
+    reload()   # مهم على الجهاز الرئيسي عندما يأتي التغيير من جهاز فرعي
 
 
 def set(key, value):

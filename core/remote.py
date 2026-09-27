@@ -20,14 +20,15 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
-                  backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights)
+                  backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders)
 
 PROTOCOL_VERSION = 2
 
 MODULES = {"products": products, "sales": sales, "customers": customers, "suppliers": suppliers,
            "expenses": expenses, "shifts": shifts, "reports": reports, "audit": audit, "backup": backup,
            "settings": settings, "auth": auth, "ledger": ledger, "cheques": cheques, "promotions": promotions,
-           "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights}
+           "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights,
+           "orders": orders}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -170,6 +171,8 @@ class Handler(BaseHTTPRequestHandler):
                     self._html(200, owner_web.dashboard_page())
             else:
                 self._html(200, owner_web.login_page())
+        elif path == "/shop":
+            self._html(200, orders.store_page())
         elif path == "/owner/logout":
             owner_web.logout(self.headers.get("Cookie"))
             self._redirect("/owner", f"{owner_web.COOKIE}=; Max-Age=0; Path=/owner; HttpOnly; SameSite=Strict")
@@ -177,6 +180,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"error": {"type": "NotFound", "message": "not found"}})
 
     def do_POST(self):
+        if self.path.split("?", 1)[0] == "/shop/order":
+            from core import i18n
+            try:
+                length = min(int(self.headers.get("Content-Length", 0) or 0), 50000)
+                data = json.loads(self.rfile.read(length) or b"{}")
+                res = orders.create_order(data, self.client_address[0])
+                self._send(200, res)
+            except (orders.OrderError, ValueError) as e:
+                self._send(200, {"error": i18n.tr(str(e))})
+            return
         if self.path.split("?", 1)[0] == "/owner/login":
             from core import owner_web
             length = min(int(self.headers.get("Content-Length", 0) or 0), 10000)

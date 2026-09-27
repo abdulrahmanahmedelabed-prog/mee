@@ -12,7 +12,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 
 def app_dir():
@@ -411,6 +411,24 @@ CREATE TABLE IF NOT EXISTS purchase_return_items (
     total REAL NOT NULL
 );
 
+-- ===== النسخة 6 =====
+CREATE TABLE IF NOT EXISTS online_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_number TEXT UNIQUE,
+    customer_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    address TEXT,
+    fulfilment TEXT NOT NULL DEFAULT 'pickup',   -- pickup = استلام من المحل / delivery = توصيل
+    note TEXT,
+    items TEXT NOT NULL,                          -- JSON: [{product_id, name, quantity, unit_price}]
+    total REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'new',           -- new / preparing / ready / done / cancelled
+    invoice_id INTEGER,
+    source_ip TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -510,6 +528,7 @@ CREATE INDEX IF NOT EXISTS ix_cheques_due ON cheques(status, due_date);
 CREATE INDEX IF NOT EXISTS ix_loyalty_customer ON loyalty_transactions(customer_id);
 CREATE INDEX IF NOT EXISTS ix_shifts_terminal ON shifts(terminal, id);
 CREATE INDEX IF NOT EXISTS ix_invoices_offline ON invoices(offline_ref);
+CREATE INDEX IF NOT EXISTS ix_orders_status ON online_orders(status, id);
 """
 
 

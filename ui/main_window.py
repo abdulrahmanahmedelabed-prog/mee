@@ -27,6 +27,7 @@ from ui.cheques_screen import ChequesScreen
 from ui.promotions_screen import PromotionsScreen
 from ui.reorder_screen import ReorderScreen
 from ui.insights_screen import InsightsScreen
+from ui.orders_screen import OrdersScreen
 
 VERSION = vendor.VERSION
 
@@ -34,6 +35,7 @@ PAGES = [
     ("dashboard", "🏠   لوحة التحكم", ("dashboard",), DashboardScreen),
     ("insights", "🤖   المستشار الذكي", ("reports",), InsightsScreen),
     ("pos", "🧾   نقطة البيع", ("pos",), POSScreen),
+    ("orders", "🛵   الطلبات الأونلاين", ("pos",), OrdersScreen),
     ("invoices", "📄   الفواتير والمرتجعات", ("invoices",), InvoicesScreen),
     ("inventory", "📦   المخزون", ("inventory",), InventoryScreen),
     ("expiry", "⏳   الصلاحية", ("inventory",), ExpiryScreen),
@@ -165,6 +167,8 @@ class MainWindow(QMainWindow):
         self.pages["cash"].shift_changed.connect(self.update_header)
         self.pages["dashboard"].navigate.connect(self.go)
         self.pages["insights"].navigate.connect(self.go)
+        self.pages["orders"].load_into_pos.connect(self.order_to_pos)
+        self.pages["orders"].new_orders.connect(self.on_new_orders)
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.tick)
@@ -214,6 +218,22 @@ class MainWindow(QMainWindow):
         self.shift_chip.style().polish(self.shift_chip)
         self.update_license()
         self.tick()
+
+    def order_to_pos(self, order):
+        pos = self.pages["pos"]
+        if pos.cart and not ask(self, "توجد سلة غير مكتملة في نقطة البيع. استبدالها بالطلب؟"):
+            return
+        self.go("pos")
+        pos.load_order(order)
+
+    def on_new_orders(self, n):
+        from core.i18n import tr
+        base = self.nav_buttons["orders"].property("_i18n_setText") or self.nav_buttons["orders"].text()
+        label = base.split(" (")[0]
+        self.nav_buttons["orders"].setText(f"{label} ({n})" if n else label)
+        if n:
+            from PySide6.QtWidgets import QApplication
+            QApplication.beep()
 
     def update_license(self):
         try:
