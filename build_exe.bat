@@ -1,15 +1,17 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+set PYTHONIOENCODING=utf-8
 REM Build the Windows version for customers (no Python needed on the shop PC)
 REM 1) Edit core\vendor.py with your name and WhatsApp number
-REM 2) Run once: python tools\license_tool.py init   (keeps your private key in %USERPROFILE%\.shop_license)
+REM 2) License keys are prepared automatically (private key stays in %USERPROFILE%\.shop_license - back it up)
 REM Easier alternative: GitHub -> Actions -> "Windows build (EXE + Setup)" builds it in the cloud.
 if not exist core\license_pubkey.py (
-  echo [!] License keys not generated yet. Run: python tools\license_tool.py init
-  pause
-  exit /b 1
+  echo [i] Preparing license keys ^(first time may take a minute^)...
+  echo     If you already have a private key in %USERPROFILE%\.shop_license it is reused - old keys keep working.
+  python tools\license_tool.py init || goto :fail
 )
+if not exist core\license_pubkey.py goto :fail
 python -m pip install -r requirements.txt pyinstaller || goto :fail
 
 REM PyInstaller needs its launcher files (run.exe / runw.exe). Antivirus often deletes them.
