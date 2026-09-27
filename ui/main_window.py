@@ -170,6 +170,11 @@ class MainWindow(QMainWindow):
         self.pages["orders"].load_into_pos.connect(self.order_to_pos)
         self.pages["orders"].new_orders.connect(self.on_new_orders)
 
+        self._update_info = None
+        import threading
+        from core import updates
+        threading.Thread(target=lambda: setattr(self, "_update_info", updates.check()), daemon=True).start()
+        QTimer.singleShot(8000, self.show_update)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.tick)
         self._timer.start(15000)
@@ -218,6 +223,16 @@ class MainWindow(QMainWindow):
         self.shift_chip.style().polish(self.shift_chip)
         self.update_license()
         self.tick()
+
+    def show_update(self):
+        info = self._update_info
+        if info:
+            from PySide6.QtCore import QUrl
+            from PySide6.QtGui import QDesktopServices
+            b = button(f"⬆ نسخة جديدة {info.get('version')}", "successBtn",
+                       lambda: QDesktopServices.openUrl(QUrl(info.get("url", ""))), info.get("notes", ""))
+            self.license_bar.layout().insertWidget(1, b)
+            self.license_bar.show()
 
     def order_to_pos(self, order):
         pos = self.pages["pos"]

@@ -24,6 +24,20 @@ from ui.widgets import (MoneySpin, Table, button, hint, warn, error, ask, requir
                         qty_cell)
 
 
+def parse_currencies(text):
+    """USD=3.65,JOD=5.15 ← [("USD", 3.65), ("JOD", 5.15)]"""
+    out = []
+    for part in (text or "").split(","):
+        code, _, rate = part.partition("=")
+        try:
+            r = float(rate)
+        except ValueError:
+            continue
+        if code.strip() and r > 0:
+            out.append((code.strip().upper()[:6], r))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # نافذة الدفع
 # ---------------------------------------------------------------------------
@@ -61,6 +75,15 @@ class PaymentDialog(QDialog):
             b.clicked.connect(lambda _=False, v=val: self.cash.setValue(self.total - self.card.value() if v is None else v))
             bills.addWidget(b)
         form.addRow("", bills)
+        self.fx_note = ""
+        fx = QHBoxLayout()
+        for code, rate in parse_currencies(settings.get("extra_currencies") or ""):
+            b = button(f"💱 {code}", "billBtn")
+            b.setFocusPolicy(Qt.NoFocus)
+            b.clicked.connect(lambda _=False, c=code, r=rate: self.pay_foreign(c, r))
+            fx.addWidget(b)
+        if fx.count():
+            form.addRow("عملة أخرى:", fx)
         form.addRow("بطاقة / تحويل:", self.card)
         self.credit_chk = QCheckBox("الباقي دين على العميل (آجل)")
         self.credit_chk.setEnabled(bool(customer))
@@ -97,6 +120,15 @@ class PaymentDialog(QDialog):
         self.recalc()
         self.cash.setFocus()
 
+    def pay_foreign(self, code, rate):
+        """الزبون يدفع بعملة أخرى: يُحوَّل المبلغ لعملة المحل بسعر الصرف ويُسجَّل في ملاحظة الفاتورة"""
+        due = money(self.total - self.card.value())
+        val, ok = QInputDialog.getDouble(self, code, f"المبلغ المستلم بـ {code} (سعر الصرف {rate:g}):",
+                                         round(due / rate, 2), 0, 10_000_000, 2)
+        if ok and val:
+            self.cash.setValue(money(val * rate))
+            self.fx_note = f"دفع {val:g} {code} بسعر {rate:g}"
+
     def all_credit(self):
         self.card.setValue(0)
         self.cash.setValue(0)
@@ -114,11 +146,11 @@ class PaymentDialog(QDialog):
         received = money(self.cash.value())
         if received >= due:
             return {"cash_amount": due, "card_amount": card, "credit_amount": 0.0, "cash_received": received,
-                    "change": money(received - due)}, None
+                    "change": money(received - due), "note": self.fx_note}, None
         short = money(due - received)
         if self.credit_chk.isChecked() and self.customer:
             return {"cash_amount": received, "card_amount": card, "credit_amount": short, "cash_received": received,
-                    "change": 0.0}, None
+                    "change": 0.0, "note": self.fx_note}, None
         return None, f"ناقص: {m(short)}"
 
     def recalc(self):
@@ -974,7 +1006,8 @@ class POSScreen(QWidget):
         cid = self.customer["id"] if self.customer else None
         kwargs = dict(discount=self.discount, customer_id=cid, cash_amount=pay["cash_amount"],
                       card_amount=pay["card_amount"], credit_amount=pay["credit_amount"],
-                      cash_received=pay["cash_received"], shift_id=shift_id, points_redeemed=self.points)
+                      cash_received=pay["cash_received"], shift_id=shift_id, points_redeemed=self.points,
+                      note=pay.get("note") or "")
         try:
             try:
                 res = sales.create_sale(self.cart, **kwargs)

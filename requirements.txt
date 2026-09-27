@@ -1,2 +1,3 @@
 PySide6>=6.6.0
+qrcode>=7.4
 pywin32; sys_platform == "win32"   # لفتح درج النقود عبر طابعة ويندوز

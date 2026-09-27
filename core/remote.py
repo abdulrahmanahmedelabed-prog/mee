@@ -159,6 +159,52 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
+    def _mobile_get(self, path):
+        from core import mobile_web
+        from urllib.parse import urlparse, parse_qs
+        user = mobile_web.user_from_cookie(self.headers.get("Cookie"))
+        if path == "/m/manifest.json":
+            body = mobile_web.manifest().encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/manifest+json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif path == "/m/logout":
+            self._redirect("/m", f"{mobile_web.COOKIE}=; Max-Age=0; Path=/m; HttpOnly; SameSite=Strict")
+        elif path == "/m/api/find":
+            if not user:
+                self._send(401, {"error": "login"})
+                return
+            q = parse_qs(urlparse(self.path).query).get("q", [""])[0]
+            with context.request(user, "جوال"):
+                self._send(200, to_json(mobile_web.find(q)))
+        elif user:
+            self._html(200, mobile_web.app_page(user))
+        else:
+            self._html(200, mobile_web.login_page())
+
+    def _mobile_post(self, path):
+        from core import mobile_web, i18n
+        length = min(int(self.headers.get("Content-Length", 0) or 0), 10000)
+        body = self.rfile.read(length)
+        if path == "/m/login":
+            token, err = mobile_web.login(body)
+            if err:
+                self._html(200, mobile_web.login_page(i18n.tr(err)))
+            else:
+                self._redirect("/m", f"{mobile_web.COOKIE}={token}; Path=/m; HttpOnly; SameSite=Strict")
+            return
+        user = mobile_web.user_from_cookie(self.headers.get("Cookie"))
+        if not user:
+            self._send(401, {"error": "login"})
+            return
+        try:
+            data = json.loads(body or b"{}")
+            self._send(200, mobile_web.count(user, data["product_id"], data["counted"]))
+        except (PermissionError, ValueError, KeyError, TypeError) as e:
+            self._send(200, {"error": i18n.tr(str(e))})
+
     def do_GET(self):
         from core import owner_web
         path = self.path.split("?", 1)[0].rstrip("/")
@@ -173,6 +219,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._html(200, owner_web.login_page())
         elif path == "/shop":
             self._html(200, orders.store_page())
+        elif path.startswith("/m"):
+            self._mobile_get(path)
         elif path == "/owner/logout":
             owner_web.logout(self.headers.get("Cookie"))
             self._redirect("/owner", f"{owner_web.COOKIE}=; Max-Age=0; Path=/owner; HttpOnly; SameSite=Strict")
@@ -189,6 +237,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, res)
             except (orders.OrderError, ValueError) as e:
                 self._send(200, {"error": i18n.tr(str(e))})
+            return
+        if self.path.split("?", 1)[0] in ("/m/login", "/m/api/count"):
+            self._mobile_post(self.path.split("?", 1)[0])
             return
         if self.path.split("?", 1)[0] == "/owner/login":
             from core import owner_web

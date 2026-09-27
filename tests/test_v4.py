@@ -352,3 +352,18 @@ def test_online_orders_core():
     orders.set_status(o["id"], "ready")
     assert "جاهز" in orders.status_message(orders.get_order(o["id"]))
     assert "أرز" in orders.store_page()
+
+
+def test_einvoice_qr_and_updates():
+    from core import einvoice, updates, receipts
+    b64 = einvoice.tlv_base64("سوبرماركت", "300000000000003", "2026-09-27T10:00:00", 115, 15)
+    assert einvoice.decode_tlv(b64) == {1: "سوبرماركت", 2: "300000000000003", 3: "2026-09-27T10:00:00",
+                                        4: "115.00", 5: "15.00"}
+    assert einvoice.qr_data_uri(b64).startswith("data:image/png;base64,")
+    settings.set_many({"einvoice_qr": "1", "vat_enabled": "1", "tax_number": "300000000000003"})
+    pid = products.add_product("شاي", "q1", "", 5, 11.5, 10, 0)
+    r = sales.create_sale([item(pid, 1, 11.5)])
+    html = receipts.invoice_html(r["invoice_id"])
+    assert "data:image/png;base64," in html and "فاتورة ضريبية مبسطة" in html
+    assert updates.is_newer("6.1", "6.0") and not updates.is_newer("6.0", "6.0") and updates.is_newer("10.0", "9.9")
+    assert updates.check(url="") is None and updates.check(url="http://127.0.0.1:9/none.json") is None

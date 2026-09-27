@@ -124,6 +124,18 @@ def test_owner_page_and_server_side_permissions(server):
     assert res["total"] == 18 and "تمر" in urllib.request.urlopen(base + "/shop").read().decode("utf-8")
     from core import orders
     assert orders.new_count() == 1
+    # تطبيق الجوال للموظفين: دخول، بحث، جرد (الكاشير لا يستطيع الجرد)
+    m = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
+    assert "manifest" in m.open(base + "/m").read().decode("utf-8")
+    m.open(base + "/m/login", data=urllib.parse.urlencode({"username": "admin", "password": "admin"}).encode())
+    found = json.loads(m.open(base + "/m/api/find?q=t77").read())
+    assert found[0]["name"] == "تمر" and found[0]["qty"] == 10
+    res = json.loads(m.open(urllib.request.Request(base + "/m/api/count", data=json.dumps(
+        {"product_id": pid, "counted": 7}).encode(), headers={"Content-Type": "application/json"})).read())
+    assert res == {"diff": -3, "qty": 7}
+    import urllib.error
+    with pytest.raises(urllib.error.HTTPError):          # بدون تسجيل دخول
+        urllib.request.urlopen(base + "/m/api/find?q=t77")
     auth.create_user("kashier", "كاشير", "1234", "cashier")
     assert auth.login("kashier", "1234")["role"] == "cashier"
     with pytest.raises(remote.RemoteError):

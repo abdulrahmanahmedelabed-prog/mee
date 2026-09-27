@@ -80,7 +80,8 @@ def test_payment_dialog_logic(app):
     d2.card.setValue(10)
     d2.credit_chk.setChecked(True)
     data, err = d2.compute()
-    assert data == {"cash_amount": 20, "card_amount": 10, "credit_amount": 27.5, "cash_received": 20, "change": 0.0}
+    assert data == {"cash_amount": 20, "card_amount": 10, "credit_amount": 27.5, "cash_received": 20, "change": 0.0,
+                    "note": ""}
 
 
 def test_all_screens_open(app):
@@ -249,3 +250,19 @@ def test_online_order_to_pos_sale(pos):
     from ui.orders_screen import OrdersScreen
     s = OrdersScreen()
     s.refresh()
+
+
+def test_foreign_currency_cash_payment(app):
+    from ui.pos_screen import PaymentDialog, parse_currencies
+    assert parse_currencies("USD=3.65, jod=5.15,bad,X=0") == [("USD", 3.65), ("JOD", 5.15)]
+    settings.set("extra_currencies", "USD=3.5")
+    d = PaymentDialog(None, 70, None)
+    from PySide6.QtWidgets import QInputDialog
+    orig = QInputDialog.getDouble
+    QInputDialog.getDouble = staticmethod(lambda *a, **k: (25.0, True))
+    try:
+        d.pay_foreign("USD", 3.5)
+    finally:
+        QInputDialog.getDouble = orig
+    data, err = d.compute()
+    assert err is None and data["change"] == 17.5 and data["note"] == "دفع 25 USD بسعر 3.5"

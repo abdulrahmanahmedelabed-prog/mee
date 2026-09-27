@@ -77,6 +77,8 @@ def invoice_html(invoice_id, copy=False):
     body = _header() + "<hr>"
     if copy:
         body += "<div class='c'><b>*** نسخة ***</b></div>"
+    if settings.get_bool("einvoice_qr") and inv["tax"]:
+        body += "<div class='c'><b>فاتورة ضريبية مبسطة</b></div>"
     body += (f"<div>فاتورة: <b>{inv['invoice_number']}</b></div><div>التاريخ: {inv['created_at']}</div>"
              f"<div>الكاشير: {escape(inv['cashier_name'] or inv['cashier'] or '-')}</div>")
     if inv["customer_name"]:
@@ -87,6 +89,11 @@ def invoice_html(invoice_id, copy=False):
         body += f"<div class='c'>{escape(inv['note'].split('عروض:', 1)[1].strip())}</div><hr>"
     body += f"<div class='c'>{escape(settings.get('receipt_footer') or '')}</div>"
     body += f"<div class='c'>عدد الأصناف: {len(items)}</div>"
+    if settings.get_bool("einvoice_qr"):
+        from core import einvoice
+        uri = einvoice.invoice_qr(inv)
+        if uri:
+            body += f"<div class='c'><img src='{uri}' width='130' height='130'></div>"
     return _wrap(body)
 
 

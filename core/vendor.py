@@ -5,9 +5,10 @@
 """
 
 PRODUCT_NAME = "برنامج المحاسبة ونقاط البيع"
-VERSION = "5.0"
+VERSION = "6.0"
 VENDOR_NAME = "اسم شركتك أو اسمك"
 VENDOR_PHONE = ""          # رقم واتساب الدعم بالصيغة الدولية، مثل 970599123456
 VENDOR_EMAIL = ""
 VENDOR_WEBSITE = ""
 SUPPORT_HOURS = "يومياً 9 صباحاً - 9 مساءً"
+UPDATE_URL = ""            # رابط ملف JSON لآخر نسخة، مثل https://example.com/shop-pos/latest.json
