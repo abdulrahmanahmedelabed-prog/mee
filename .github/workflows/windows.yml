@@ -32,7 +32,7 @@ jobs:
       - name: Tests (on Windows)
         run: python -m pytest tests -q
       - name: Build EXE
-        run: python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --add-data "i18n;i18n" --add-data "docs;docs" main.py
+        run: python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --hidden-import tools.demo_data --add-data "i18n;i18n" --add-data "docs;docs" main.py
       - name: Smoke test (the EXE starts)
         shell: pwsh
         run: |
@@ -41,6 +41,16 @@ jobs:
           Start-Sleep -Seconds 15
           if ($p.HasExited) { Get-Content "$env:SHOP_DATA_DIR\errors.log" -ErrorAction SilentlyContinue; throw "EXE exited early (code $($p.ExitCode))" }
           Stop-Process -Id $p.Id -Force
+      - name: Smoke test (training copy fills demo data)
+        shell: pwsh
+        run: |
+          $env:SHOP_DEMO_DIR = "$env:RUNNER_TEMP\demo"
+          $p = Start-Process dist\ShopAccounting\ShopAccounting.exe -ArgumentList "--demo" -PassThru
+          Start-Sleep -Seconds 25
+          $db = "$env:SHOP_DEMO_DIR\accounting.db"
+          if ($p.HasExited) { Get-Content "$env:SHOP_DEMO_DIR\errors.log" -ErrorAction SilentlyContinue; throw "EXE --demo exited early" }
+          Stop-Process -Id $p.Id -Force
+          if (-not (Test-Path $db) -or (Get-Item $db).Length -lt 200000) { throw "demo data was not created" }
       - name: Build installer (Inno Setup)
         shell: pwsh
         run: |

@@ -1232,7 +1232,6 @@
 "➕ منتج جديد": "➕ New product",
 "⬆ سحب نقدي": "⬆ Cash out",
 "⬇ إدخال نقدي": "⬇ Cash in",
-"⭐ ما الجديد وتقييم البرنامج": "⭐ What's new & evaluation",
 "🎁   العروض والولاء": "🎁   Offers & loyalty",
 "🎁 استبدال نقاط": "🎁 Redeem points",
 "🎁 نقاط الولاء": "🎁 Loyalty points",
@@ -1341,7 +1340,9 @@
 "🧾 فاتورة مشتريات جديدة": "🧾 New purchase invoice",
 "🧾 فاتورة من هذا المورد": "🧾 Invoice from this supplier",
 "امسحه بتطبيق نقطة البيع على الجوال لربطه بهذا المحل": "Scan it with the POS phone app to pair it with this shop",
-"ربط تطبيق الجوال:": "Pair the phone app:"
+"ربط تطبيق الجوال:": "Pair the phone app:",
+"⭐ مزايا البرنامج": "⭐ Product features",
+"🎓 نسخة التدريب (بيانات تجريبية) — ": "🎓 Training copy (demo data) — "
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",

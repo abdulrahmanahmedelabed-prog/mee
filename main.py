@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-برنامج المحاسبة ونقاط البيع للمحلات الصغيرة والسوبرماركت - النسخة 4.0
+برنامج المحاسبة ونقاط البيع للمحلات الصغيرة والسوبرماركت.
 يعمل محلياً بدون إنترنت، على جهاز واحد أو عدة أجهزة كاشير عبر شبكة المحل.
+التشغيل بـ --demo يفتح «نسخة التدريب»: بيانات سوبرماركت تجريبية في مجلد منفصل لا يمس بيانات المحل.
 """
 
 import os
@@ -9,6 +10,11 @@ import sys
 import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+DEMO = "--demo" in sys.argv
+if DEMO:
+    _base = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+    os.environ["SHOP_DATA_DIR"] = os.environ.get("SHOP_DEMO_DIR") or os.path.join(_base, "demo_data")
 
 from PySide6.QtCore import Qt, QLocale
 from PySide6.QtGui import QFont
@@ -63,6 +69,15 @@ def connect_as_client(app):
             sys.exit(0)
 
 
+def prepare_demo():
+    """نسخة التدريب: تُملأ بالبيانات التجريبية أول مرة، والدخول admin/admin أو cashier/1234 بدون تغيير كلمة المرور"""
+    if not db.scalar("SELECT COUNT(*) FROM invoices"):
+        from tools import demo_data
+        demo_data.main()
+    with db.tx() as conn:
+        conn.execute("UPDATE users SET must_change_password=0")
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Shop Accounting")
@@ -84,6 +99,8 @@ def main():
         connect_as_client(app)
     else:
         db.init_db()
+        if DEMO:
+            prepare_demo()
         if mode == config.MODE_SERVER or str(config.get("owner_web")) == "1":
             try:
                 remote.start_server()
@@ -108,6 +125,8 @@ def main():
 
     from ui.main_window import MainWindow
     window = MainWindow()
+    if DEMO:
+        window.setWindowTitle("🎓 نسخة التدريب (بيانات تجريبية) — " + window.windowTitle())
     window.showMaximized()
     code = app.exec()
     remote.stop_server()

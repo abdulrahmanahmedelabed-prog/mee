@@ -1,4 +1,4 @@
-# Shop Accounting & POS — Product Sheet (v6.0)
+# Shop Accounting & POS — Product Sheet
 
 **Point of sale + real accounting for grocery stores, mini-markets and small supermarkets.**
 Works fully offline on your own computer, in **English and Arabic**. Buy once — or subscribe monthly.
@@ -14,10 +14,13 @@ Works fully offline on your own computer, in **English and Arabic**. Buy once �
 - **Inventory done right** — batches & expiry dates (first-expiry-first-out), stock counts, loss tracking, returns to suppliers, ABC analysis, smart reorder suggestions sent to suppliers on WhatsApp.
 - **Grow sales** — automatic offers (buy X get Y, bundle price, % off a category), loyalty points, wholesale price levels, bulk price updates by target margin.
 - **Control** — cashier shifts with cash counting, manager approval for sensitive actions, full activity log, server-side permission checks.
-- **Owner on the go** — read-only dashboard on the owner's phone and a daily WhatsApp summary.
+- **Owner on the go** — dashboard on the owner's phone and a daily WhatsApp summary.
 - **VAT ready** — output and input VAT with a VAT return report, and an e-invoice QR code on receipts (Saudi simplified tax invoice format).
 - **Online ordering** — a mobile store page for pickup or delivery orders; orders become POS invoices in one click. No commissions to delivery apps.
-- **Staff mobile app** — price, stock and expiry lookup and shelf stock counts from any phone.
+- **Android app** — pairs with the shop by scanning a QR code: price, stock and expiry lookup, shelf counts with the phone camera, and the owner dashboard.
+- **Card terminal ready** — sends the amount to the bank card terminal and prints the approval code on the receipt (bank-specific connection required).
+- **Simple mode & touch screens** — a lighter layout for small corner shops, big buttons and an on-screen keypad for touch tills.
+- **Easy switch** — import your old credit book (customers, suppliers and balances) from Excel in a minute.
 - **Multi-currency cash** — accept cash in other currencies at your exchange rate.
 - **Your data stays yours** — stored on your computer with daily backups and an optional cloud copy (Google Drive / OneDrive).
 

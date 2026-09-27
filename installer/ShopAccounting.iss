@@ -36,10 +36,13 @@ Source: "..\dist\ShopAccounting\*"; DestDir: "{app}"; Flags: ignoreversion recur
 
 [Dirs]
 Name: "{app}\data"; Permissions: users-modify; Flags: uninsneveruninstall
+Name: "{app}\demo_data"; Permissions: users-modify
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+; نسخة التدريب: بيانات سوبرماركت تجريبية في مجلد منفصل، لتعليم الموظفين دون المساس ببيانات المحل
+Name: "{group}\{#AppName} (Training)"; Filename: "{app}\{#AppExe}"; Parameters: "--demo"
 
 [Run]
 ; allow the local network service (multi-till, owner dashboard, online store, staff mobile app)

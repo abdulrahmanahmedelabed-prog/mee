@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-if len(sys.argv) > 1:
+if __name__ == "__main__" and len(sys.argv) > 1:
     os.environ["SHOP_DATA_DIR"] = sys.argv[1]
 
 from core import (db, auth, products, customers, suppliers, sales, expenses, shifts, settings, context,  # noqa: E402
