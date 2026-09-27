@@ -50,12 +50,17 @@ class LoginDialog(QDialog):
         lang.setCurrentIndex(max(0, lang.findData(config.get("language") or "ar")))
         lang.currentIndexChanged.connect(lambda _: self.change_language(lang.currentData()))
         lay.addWidget(lang, alignment=Qt.AlignCenter)
+        forgot = button("نسيت كلمة المرور؟", "ghostBtn", self.forgot)
+        lay.addWidget(forgot, alignment=Qt.AlignCenter)
         if remote.is_client():
             lay.addWidget(hint(f"نقطة بيع فرعية «{config.get('terminal_name')}» متصلة بالجهاز الرئيسي "
                                f"{config.get('server_host')}"))
         elif auth.authenticate("admin", "admin"):
             lay.addWidget(hint("أول تشغيل: المستخدم admin وكلمة المرور admin (سيُطلب تغييرها)"))
         self.user.setFocus()
+
+    def forgot(self):
+        ResetPasswordDialog(self).exec()
 
     def change_language(self, code):
         from core import config
@@ -595,4 +600,51 @@ class NetworkDialog(QDialog):
         config.save({"mode": mode, "terminal_name": self.terminal.text().strip(), "server_host": self.host.text().strip(),
                      "server_port": self.port.value(), "link_code": self.code.text().strip().upper()})
         info(self, "تم الحفظ. أعد تشغيل البرنامج لتطبيق التغيير.")
+        super().accept()
+
+
+class ResetPasswordDialog(QDialog):
+    """استعادة دخول المدير برمز من مزوّد البرنامج (لا تُحذف أي بيانات)"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        from core import license, vendor
+        self.setWindowTitle("استعادة كلمة مرور المدير")
+        self.setMinimumWidth(460)
+        lay = QFormLayout(self)
+        try:
+            mid = license.machine_id()
+        except Exception as e:
+            mid = str(e)
+        self.mid = mid
+        lay.addRow(hint("أرسل رمز الجهاز لمزوّد البرنامج، ويرسل لك رمز استعادة صالحاً 3 أيام."))
+        m = QLabel(mid)
+        m.setStyleSheet("font-size:18px; font-weight:900; color:#1D4ED8;")
+        m.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lay.addRow("رمز الجهاز:", m)
+        if vendor.VENDOR_PHONE:
+            lay.addRow("", button("📱 طلب رمز عبر واتساب", "successBtn", self.request))
+        self.code = QTextEdit()
+        self.code.setMaximumHeight(80)
+        self.code.setPlaceholderText("الصق رمز الاستعادة هنا (يبدأ بـ SR1.)")
+        self.pw = QLineEdit()
+        self.pw.setEchoMode(QLineEdit.Password)
+        lay.addRow("رمز الاستعادة:", self.code)
+        lay.addRow("كلمة المرور الجديدة:", self.pw)
+        ok_cancel(self, lay, "استعادة")
+
+    def request(self):
+        from core import vendor, whatsapp, settings
+        from ui.widgets import open_whatsapp
+        msg = f"طلب رمز استعادة كلمة مرور المدير\nالمحل: {settings.get('shop_name')}\nرمز الجهاز: {self.mid}"
+        open_whatsapp(self, whatsapp.link("+" + vendor.VENDOR_PHONE, msg), msg)
+
+    def accept(self):
+        from core import license
+        try:
+            user = license.reset_admin_password(self.code.toPlainText(), self.pw.text())
+        except (license.LicenseError, ValueError) as e:
+            warn(self, str(e))
+            return
+        info(self, f"تمت الاستعادة. ادخل باسم المستخدم «{user}» وكلمة المرور الجديدة.")
         super().accept()

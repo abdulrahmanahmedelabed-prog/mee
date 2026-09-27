@@ -367,3 +367,62 @@ def test_einvoice_qr_and_updates():
     assert "data:image/png;base64," in html and "فاتورة ضريبية مبسطة" in html
     assert updates.is_newer("6.1", "6.0") and not updates.is_newer("6.0", "6.0") and updates.is_newer("10.0", "9.9")
     assert updates.check(url="") is None and updates.check(url="http://127.0.0.1:9/none.json") is None
+
+
+def test_fast_balances_equal_detailed_entries():
+    _busy_shop()
+    t = db.today()
+    y = (date.today() - timedelta(days=1)).isoformat()
+    for a, b in ((t, t), (y, t), (None, t)):
+        fast = ledger._balances(a, b)
+        slow = {}
+        for e in ledger.entries(None, b):
+            for acc, d, c in e["lines"]:
+                row = slow.setdefault(acc, [0.0, 0.0, 0.0])
+                if a and e["date"][:10] < a:
+                    row[0] += d - c
+                else:
+                    row[1] += d
+                    row[2] += c
+        keys = set(fast) | set(slow)
+        for k in keys:
+            f, s = fast.get(k, [0, 0, 0]), slow.get(k, [0, 0, 0])
+            assert [round(x, 2) for x in f] == [round(x, 2) for x in s], (k, f, s)
+
+
+def test_import_old_debt_book(tmp_path):
+    from core import importer
+    p = tmp_path / "c.csv"
+    p.write_text("الاسم,الهاتف,العنوان,الدين الحالي,حد الدين\nأبو سامي,0599000111,الحارة,150,500\n"
+                 "أم علي,,,,\n,0599,,,\nأبو سامي,0599000111,,99,\n", encoding="utf-8-sig")
+    added, skipped, errors = importer.import_customers(str(p))
+    assert (added, skipped, len(errors)) == (2, 1, 1)
+    c = [x for x in customers.list_customers() if x["name"] == "أبو سامي"][0]
+    assert customers.balance(c["id"]) == 150 and c["credit_limit"] == 500
+    s = tmp_path / "s.csv"
+    s.write_text("الاسم;الهاتف;العنوان;المستحق له\nشركة;022;;1200\n", encoding="utf-8-sig")   # فاصلة منقوطة
+    assert importer.import_suppliers(str(s))[0] == 1
+    assert suppliers.total_dues() == 1200
+    assert ledger.trial_balance(db.today(), db.today())["totals"]["balanced"]
+
+
+def test_admin_password_recovery(keys):
+    tool, private = keys
+    import json as _json
+    import secrets as _secrets
+
+    def code(machine, day, cid="A1"):
+        payload = _json.dumps({"type": "reset", "machine": machine, "date": day, "id": cid},
+                              separators=(",", ":"), sort_keys=True).encode()
+        return f"SR1.{license._b64e(payload)}.{license._b64e(license.sign(payload, private))}"
+    with pytest.raises(license.LicenseError):
+        license.reset_admin_password(code("AAAA-BBBB-CCCC-DDDD", db.today()), "newpass")      # جهاز آخر
+    with pytest.raises(license.LicenseError):
+        license.reset_admin_password(code(license.machine_id(), d(-5)), "newpass")            # منتهٍ
+    with pytest.raises(license.LicenseError):
+        license.reset_admin_password(tool.issue(private, license.machine_id(), "x")[0], "newpass")  # مفتاح تفعيل ليس رمز استعادة
+    good = code(license.machine_id(), db.today(), _secrets.token_hex(3))
+    assert license.reset_admin_password(good, "newpass") == "admin"
+    assert auth.authenticate("admin", "newpass")
+    with pytest.raises(license.LicenseError):
+        license.reset_admin_password(good, "again")                                           # مرة واحدة فقط

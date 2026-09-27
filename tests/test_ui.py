@@ -87,9 +87,11 @@ def test_payment_dialog_logic(app):
 def test_all_screens_open(app):
     from ui.main_window import MainWindow, PAGES
     w = MainWindow()
+    w.show()
     for key, *_ in PAGES:
         w.go(key)
         app.processEvents()
+        assert w.stack.currentWidget() is w.pages[key]
     rep = w.pages["reports"]
     for i in range(rep.tabs.count()):
         rep.tabs.setCurrentIndex(i)
@@ -266,3 +268,33 @@ def test_foreign_currency_cash_payment(app):
         QInputDialog.getDouble = orig
     data, err = d.compute()
     assert err is None and data["change"] == 17.5 and data["note"] == "دفع 25 USD بسعر 3.5"
+
+
+def test_simple_mode_logo_and_touch_keypad(app):
+    from core import config, receipts
+    from ui.main_window import MainWindow, ADVANCED_PAGES
+    settings.set("simple_mode", "1")
+    w = MainWindow()
+    assert all(w.nav_buttons[k].isHidden() for k in ADVANCED_PAGES)
+    assert not w.nav_buttons["pos"].isHidden() and not w.nav_buttons["help"].isHidden()
+    settings.set("simple_mode", "0")
+    w.refresh_nav()
+    assert not w.nav_buttons["accounting"].isHidden()
+    w.show()
+    w.go("help")
+    assert w.pages["help"].view.toPlainText()                       # الدليل يُعرض داخل البرنامج
+    w.close()
+    settings.set("shop_logo", "iVBORw0KGgo=")
+    pid = products.add_product("لوغو", "lg1", "", 1, 2, 5, 0)
+    r = sales.create_sale([{"product_id": pid, "product_name": "لوغو", "quantity": 1, "unit_price": 2}])
+    assert "data:image/png;base64,iVBORw0KGgo=" in receipts.invoice_html(r["invoice_id"])
+    config.save({"touch_mode": "1"})
+    from ui.pos_screen import PaymentDialog
+    d = PaymentDialog(None, 12.5, None)
+    for k in "20.5":
+        d.key(k)
+    assert d.cash.value() == 20.5 and d.compute()[0]["change"] == 8
+    d.key("⌫")
+    d.key("C")
+    assert d.cash.value() == 0
+    config.save({"touch_mode": "0"})

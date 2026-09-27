@@ -75,6 +75,12 @@ class SetupWizard(QDialog):
         lay.addRow("", self.loyalty)
         lay.addRow("واتساب المالك (لملخص اليوم):", self.owner)
         lay.addRow("", self.require_shift)
+        self.shop_type = QComboBox()
+        self.shop_type.addItem("دكان أو محل صغير (وضع مبسّط — يمكن تغييره لاحقاً)", "simple")
+        self.shop_type.addItem("سوبرماركت أو محل كبير (كل الميزات)", "full")
+        lay.addRow("نوع المحل:", self.shop_type)
+        self.touch = QCheckBox("الجهاز بشاشة لمس (أزرار أكبر ولوحة أرقام)")
+        lay.addRow("", self.touch)
         bb = ok_cancel(self, lay, "ابدأ ✓")
         bb.button(QDialogButtonBox.Cancel).setText("لاحقاً")
 
@@ -91,7 +97,8 @@ class SetupWizard(QDialog):
                            "owner_whatsapp": self.owner.text().strip(), "require_shift": self.require_shift.isChecked()})
         from core import config
         lang = self.lang.currentData()
-        config.save({"language": lang})
+        config.save({"language": lang, "touch_mode": "1" if self.touch.isChecked() else "0"})
+        settings.set("simple_mode", "1" if self.shop_type.currentData() == "simple" else "0")
         if lang != "ar":
             settings.set_many(EN_DEFAULTS)
         db.set_meta("setup_done", "1")

@@ -34,8 +34,22 @@ def direction():
     return Qt.RightToLeft if i18n.is_rtl() else Qt.LeftToRight
 
 
+TOUCH_STYLE = """
+* { font-size: 16px; }
+QPushButton { padding: 14px 18px; min-height: 30px; }
+QPushButton#posBtn { min-height: 52px; font-size: 16px; }
+QPushButton#favBtn { min-height: 70px; font-size: 16px; }
+QTableWidget::item { padding: 10px 6px; }
+QLineEdit#bigSearch { font-size: 22px; padding: 16px; }
+QScrollBar:vertical { width: 22px; }
+"""
+
+
 def adapt_style(sheet):
-    """قلب محاذاة التصميم للغات من اليسار لليمين"""
+    """قلب محاذاة التصميم للغات من اليسار لليمين، وتكبير العناصر لشاشات اللمس"""
+    from core import config
+    if str(config.get("touch_mode") or "0") == "1":
+        sheet = sheet + TOUCH_STYLE
     if i18n.is_rtl():
         return sheet
     return sheet.replace("text-align: right", "text-align: left").replace("subcontrol-position: top right",

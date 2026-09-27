@@ -28,8 +28,11 @@ from ui.promotions_screen import PromotionsScreen
 from ui.reorder_screen import ReorderScreen
 from ui.insights_screen import InsightsScreen
 from ui.orders_screen import OrdersScreen
+from ui.help_screen import HelpScreen
 
 VERSION = vendor.VERSION
+# تُخفى في الوضع المبسّط (تظهر عند إلغائه من الإعدادات)
+ADVANCED_PAGES = {"insights", "orders", "reorder", "promotions", "cheques", "accounting"}
 
 PAGES = [
     ("dashboard", "🏠   لوحة التحكم", ("dashboard",), DashboardScreen),
@@ -49,6 +52,7 @@ PAGES = [
     ("reports", "📊   التقارير", ("reports",), ReportsScreen),
     ("accounting", "📚   المحاسبة والميزانية", ("accounting",), AccountingScreen),
     ("settings", "⚙   الإعدادات", ("settings", "backup"), SettingsScreen),
+    ("help", "❓   المساعدة", ("pos", "dashboard"), HelpScreen),
 ]
 
 
@@ -183,17 +187,23 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     def apply_user(self):
         u = auth.current_user()
-        first = None
-        for key, label, perms, _ in PAGES:
-            allowed = any(auth.has_permission(p) for p in perms)
-            self.nav_buttons[key].setVisible(allowed)
-            if allowed and first is None:
-                first = key
+        first = self.refresh_nav()
         from core.i18n import tr
         self.user_lbl.setText(f"👤 {u['full_name'] or u['username']} — {tr(auth.ROLES.get(u['role'], u['role']))}")
         self.update_header()
         # الكاشير يبدأ مباشرة بنقطة البيع
         self.go("pos" if u["role"] == "cashier" else (first or "pos"))
+
+    def refresh_nav(self):
+        """إظهار الشاشات حسب الصلاحيات، وإخفاء المتقدمة في الوضع المبسّط"""
+        simple = settings.get_bool("simple_mode")
+        first = None
+        for key, label, perms, _ in PAGES:
+            allowed = any(auth.has_permission(p) for p in perms) and not (simple and key in ADVANCED_PAGES)
+            self.nav_buttons[key].setVisible(allowed)
+            if allowed and first is None:
+                first = key
+        return first
 
     def update_header(self):
         try:

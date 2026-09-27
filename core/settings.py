@@ -45,6 +45,8 @@ DEFAULTS = {
     "target_margin_percent": "15",
     # المتجر الإلكتروني والطلبات (النسخة 6)
     "online_store_enabled": "0",
+    "simple_mode": "0",               # الوضع المبسّط للدكاكين الصغيرة: يخفي الشاشات المتقدمة
+    "shop_logo": "",                  # شعار المحل على الفاتورة (PNG/JPG بترميز base64)
     "online_store_delivery": "1",
     "online_store_delivery_fee": "0",
     "online_store_min_order": "0",

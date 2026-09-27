@@ -13,7 +13,10 @@ def _m(v):
 
 def _header():
     s = settings.get
-    parts = [f"<div class='c big'><b>{escape(s('shop_name'))}</b></div>"]
+    parts = []
+    if s("shop_logo"):
+        parts.append(f"<div class='c'><img src='data:image/png;base64,{s('shop_logo')}' width='140'></div>")
+    parts.append(f"<div class='c big'><b>{escape(s('shop_name'))}</b></div>")
     if s("shop_address"):
         parts.append(f"<div class='c'>{escape(s('shop_address'))}</div>")
     if s("shop_phone"):

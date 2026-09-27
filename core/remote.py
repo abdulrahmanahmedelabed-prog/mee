@@ -72,7 +72,7 @@ def check_permission(key, user, args, kwargs):
     if perm and not auth.has_permission(perm, user):
         raise PermissionError(f"ليست لديك صلاحية: {auth.PERMISSIONS.get(perm, perm)}")
 # دوال مسموحة قبل تسجيل الدخول
-PUBLIC = {("settings", "all_values")}
+PUBLIC = {("settings", "all_values"), ("license", "reset_admin_password"), ("license", "machine_id")}
 
 SENSITIVE_KEYS = {"password_hash"}
 

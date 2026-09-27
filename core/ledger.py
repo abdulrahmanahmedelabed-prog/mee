@@ -228,9 +228,10 @@ def _range(col, date_from, date_to):
     return (" AND " + " AND ".join(cond)) if cond else "", params
 
 
-def entries(date_from=None, date_to=None):
+def entries(date_from=None, date_to=None, skip_bulk=False):
     """كل القيود (المولّدة واليدوية) في الفترة، مرتبة زمنياً.
-    كل قيد: dict(date, ref, description, source, lines=[(account, debit, credit)])"""
+    كل قيد: dict(date, ref, description, source, lines=[(account, debit, credit)])
+    skip_bulk: تخطي فواتير البيع والمرتجعات (تُجمع بـ SQL مباشرة في الأرصدة لسرعة الحساب مع البيانات الكبيرة)"""
     out = []
     conn = db.get_connection()
     try:
@@ -244,7 +245,7 @@ def entries(date_from=None, date_to=None):
                 out.append({"date": date, "ref": ref, "description": desc, "source": source, "lines": lines})
 
         # 1) فواتير البيع
-        for r in q("""SELECT * FROM invoices WHERE 1=1 {cond}""", "created_at"):
+        for r in ([] if skip_bulk else q("""SELECT * FROM invoices WHERE 1=1 {cond}""", "created_at")):
             add(r["created_at"], r["invoice_number"], "فاتورة بيع", "sale", [
                 (CASH, money(r["cash_amount"]), 0.0), (BANK, money(r["card_amount"]), 0.0),
                 (RECEIVABLES, money(r["credit_amount"]), 0.0),
@@ -252,8 +253,8 @@ def entries(date_from=None, date_to=None):
                 (COGS, money(r["cost_total"]), 0.0), (INVENTORY, 0.0, money(r["cost_total"]))])
 
         # 2) مرتجعات البيع
-        for r in q("""SELECT r.*, i.invoice_number FROM returns r JOIN invoices i ON i.id=r.invoice_id
-                      WHERE 1=1 {cond}""", "r.created_at"):
+        for r in ([] if skip_bulk else q("""SELECT r.*, i.invoice_number FROM returns r JOIN invoices i ON i.id=r.invoice_id
+                      WHERE 1=1 {cond}""", "r.created_at")):
             refund_acc = CASH if r["refund_method"] == "نقدي" else RECEIVABLES
             add(r["created_at"], r["return_number"], f"مرتجع من الفاتورة {r['invoice_number']}", "return", [
                 (SALES_RETURNS, money(r["total"] - r["tax"]), 0.0), (VAT, money(r["tax"]), 0.0),
@@ -392,10 +393,44 @@ def journal(date_from, date_to):
     return out
 
 
+def _bulk_lines(conn, date_from, date_to):
+    """مجاميع فواتير البيع والمرتجعات في الفترة كأسطر قيد (مكافئة تماماً لقيودها التفصيلية)"""
+    cond, params = _range("created_at", date_from, date_to)
+    i = conn.execute(f"""SELECT COALESCE(SUM(cash_amount),0), COALESCE(SUM(card_amount),0), COALESCE(SUM(credit_amount),0),
+                                COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0)
+                         FROM invoices WHERE 1=1 {cond}""", params).fetchone()
+    r = conn.execute(f"""SELECT COALESCE(SUM(CASE WHEN refund_method='نقدي' THEN total END),0),
+                                COALESCE(SUM(CASE WHEN refund_method!='نقدي' THEN total END),0),
+                                COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0)
+                         FROM returns WHERE 1=1 {cond}""", params).fetchone()
+    return [(CASH, i[0], 0.0), (BANK, i[1], 0.0), (RECEIVABLES, i[2], 0.0), (SALES, 0.0, i[3]), (VAT, 0.0, i[4]),
+            (COGS, i[5], 0.0), (INVENTORY, 0.0, i[5]),
+            (SALES_RETURNS, r[2], 0.0), (VAT, r[3], 0.0), (CASH, 0.0, r[0]), (RECEIVABLES, 0.0, r[1]),
+            (INVENTORY, r[4], 0.0), (COGS, 0.0, r[4])]
+
+
 def _balances(date_from, date_to):
     """{حساب: [رصيد ما قبل الفترة (مدين-دائن)، مدين الفترة، دائن الفترة]}"""
+    from datetime import date as _d, timedelta as _td
     acc = {}
-    for e in entries(None, date_to):
+    conn = db.get_connection()
+    try:
+        before_to = (_d.fromisoformat(date_from) - _td(days=1)).isoformat() if date_from else None
+        chunks = ([(True, _bulk_lines(conn, None, before_to))] if date_from else []) + \
+            [(False, _bulk_lines(conn, date_from, date_to))]
+    finally:
+        conn.close()
+    for before, lines in chunks:
+        for a, d, c in lines:
+            if not d and not c:
+                continue
+            row = acc.setdefault(a, [0.0, 0.0, 0.0])
+            if before:
+                row[0] += d - c
+            else:
+                row[1] += d
+                row[2] += c
+    for e in entries(None, date_to, skip_bulk=True):
         before = bool(date_from) and e["date"][:10] < date_from
         for a, d, c in e["lines"]:
             row = acc.setdefault(a, [0.0, 0.0, 0.0])
@@ -424,15 +459,14 @@ def trial_balance(date_from, date_to):
 
 def account_statement(code, date_from, date_to):
     """كشف حساب (دفتر الأستاذ) لحساب واحد مع الرصيد التراكمي"""
+    match = lambda a: a == code or (code == EXPENSES and str(a).startswith(EXPENSES + ":"))
     opening = 0.0
+    if date_from:   # الرصيد الافتتاحي من الأرصدة المجمّعة (سريع حتى مع سنوات من البيانات)
+        opening = sum(v[0] for a, v in _balances(date_from, date_to).items() if match(a))
     rows = []
-    for e in entries(None, date_to):
+    for e in entries(date_from, date_to):
         for a, d, c in e["lines"]:
-            if a != code and not (code == EXPENSES and str(a).startswith(EXPENSES + ":")):
-                continue
-            if date_from and e["date"][:10] < date_from:
-                opening += d - c
-            else:
+            if match(a):
                 rows.append({"date": e["date"], "ref": e["ref"], "description": e["description"], "debit": d, "credit": c})
     sign = 1 if is_debit_normal(code) else -1
     running = opening

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QRadioButton, QButtonGroup
 )
 
-from core import products, sales, settings, auth, receipts, customers, drawer, audit, loyalty, remote, offline
+from core import products, sales, settings, auth, receipts, customers, drawer, audit, loyalty, remote, offline, config
 from core.sales import SaleError
 from core.utils import money, fmt_qty, qty as round_qty
 from ui import printing
@@ -105,6 +105,8 @@ class PaymentDialog(QDialog):
         self.status.setStyleSheet("font-size:24px; font-weight:800;")
         lay.addWidget(self.status)
 
+        if str(config.get("touch_mode") or "0") == "1":
+            lay.addWidget(self._keypad())
         self.print_chk = QCheckBox("طباعة الفاتورة")
         self.print_chk.setChecked(settings.get_bool("auto_print_receipt"))
         lay.addWidget(self.print_chk)
@@ -119,6 +121,36 @@ class PaymentDialog(QDialog):
         self.card.lineEdit().returnPressed.connect(self.confirm)
         self.recalc()
         self.cash.setFocus()
+
+    def _keypad(self):
+        """لوحة أرقام لشاشات اللمس: تكتب في خانة النقد"""
+        box = QWidget()
+        g = QGridLayout(box)
+        g.setSpacing(6)
+        keys = ["7", "8", "9", "4", "5", "6", "1", "2", "3", ".", "0", "⌫"]
+        for i, k in enumerate(keys):
+            b = button(k, "billBtn", lambda _=False, k=k: self.key(k))
+            b.setFocusPolicy(Qt.NoFocus)
+            b.setMinimumHeight(52)
+            g.addWidget(b, i // 3, i % 3)
+        clear = button("C", "billBtn", lambda: self.key("C"))
+        clear.setFocusPolicy(Qt.NoFocus)
+        g.addWidget(clear, 4, 0, 1, 3)
+        self._typed = ""
+        return box
+
+    def key(self, k):
+        t = getattr(self, "_typed", "")
+        if k == "C":
+            t = ""
+        elif k == "⌫":
+            t = t[:-1]
+        elif k == ".":
+            t = t if "." in t else (t or "0") + "."
+        else:
+            t += k
+        self._typed = t
+        self.cash.setValue(float(t) if t and t != "." else 0.0)
 
     def pay_foreign(self, code, rate):
         """الزبون يدفع بعملة أخرى: يُحوَّل المبلغ لعملة المحل بسعر الصرف ويُسجَّل في ملاحظة الفاتورة"""

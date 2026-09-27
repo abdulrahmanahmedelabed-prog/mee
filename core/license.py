@@ -121,14 +121,14 @@ def make_key(data: dict, private_key: dict) -> str:
     return f"{PREFIX}.{_b64e(payload)}.{_b64e(sign(payload, private_key))}"
 
 
-def parse_key(key: str, public_key=None) -> dict:
+def parse_key(key: str, public_key=None, prefix=PREFIX) -> dict:
     """يتحقق من المفتاح ويرجع بياناته، أو يرفع LicenseError"""
     public_key = public_key or PUBLIC_KEY
     if not public_key:
         raise LicenseError("لم يُجهَّز البرنامج بمفتاح الترخيص بعد.\n(للمطوّر: شغّل python tools/license_tool.py init)")
     key = "".join((key or "").split())
     parts = key.split(".")
-    if len(parts) != 3 or parts[0] != PREFIX:
+    if len(parts) != 3 or parts[0] != prefix:
         raise LicenseError("صيغة مفتاح التفعيل غير صحيحة. انسخ المفتاح كاملاً كما وصلك.")
     try:
         payload, signature = _b64d(parts[1]), _b64d(parts[2])
@@ -228,6 +228,40 @@ def activate(key):
     from core import audit
     audit.log("تفعيل البرنامج", f"{data.get('plan')} - {data.get('shop')} - حتى {data.get('expires') or 'دائم'}")
     return status()
+
+
+RESET_PREFIX = "SR1"
+
+
+def reset_admin_password(code, new_password):
+    """
+    استعادة الدخول عند نسيان كلمة مرور المدير: رمز يصدره المطوّر لهذا الجهاز (صالح 3 أيام، ولمرة واحدة).
+    لا تُحذف أي بيانات؛ تُعيَّن كلمة مرور جديدة لأول مدير نظام ويُعاد تفعيله.
+    """
+    data = parse_key(code, prefix=RESET_PREFIX)
+    if data.get("type") != "reset" or normalize_machine(data.get("machine")) != machine_id():
+        raise LicenseError("رمز الاستعادة لجهاز آخر")
+    try:
+        age = (date.today() - date.fromisoformat(data["date"])).days
+    except (KeyError, ValueError):
+        raise LicenseError("رمز الاستعادة غير صالح")
+    if not (0 <= age <= 3):
+        raise LicenseError("انتهت صلاحية رمز الاستعادة؛ اطلب رمزاً جديداً")
+    used = set((db.get_meta("used_reset_codes") or "").split(","))
+    if data.get("id") in used:
+        raise LicenseError("هذا الرمز استُخدم من قبل")
+    if len(new_password or "") < 4:
+        raise LicenseError("كلمة المرور يجب أن تكون 4 أحرف على الأقل")
+    from core import auth, audit
+    row = db.query_one("SELECT id, username FROM users WHERE role='admin' ORDER BY id LIMIT 1")
+    if not row:
+        raise LicenseError("لا يوجد مدير نظام")
+    with db.tx() as conn:
+        conn.execute("UPDATE users SET password_hash=?, is_active=1, must_change_password=0 WHERE id=?",
+                     (auth.hash_password(new_password), row["id"]))
+    db.set_meta("used_reset_codes", ",".join(x for x in sorted(used | {data.get("id", "")}) if x))
+    audit.log("استعادة كلمة مرور المدير", f"{row['username']} برمز من المزوّد")
+    return row["username"]
 
 
 def max_terminals():

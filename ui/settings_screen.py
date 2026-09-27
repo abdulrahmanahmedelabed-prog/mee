@@ -86,6 +86,13 @@ class SettingsScreen(QWidget):
         self._line(f, "shop_address", "العنوان:")
         self._line(f, "shop_phone", "الهاتف:")
         self._line(f, "tax_number", "الرقم الضريبي / المشتغل المرخص:")
+        logo_row = QHBoxLayout()
+        self.logo_lbl = QLabel("")
+        logo_row.addWidget(self.logo_lbl)
+        logo_row.addWidget(button("🖼 اختيار شعار...", "secondaryBtn", self.choose_logo))
+        logo_row.addWidget(button("إزالة", "secondaryBtn", self.clear_logo))
+        logo_row.addStretch()
+        f.addRow("شعار المحل على الفاتورة:", logo_row)
         lang = QComboBox()
         from core import i18n as _i18n
         for code, name in _i18n.LANGUAGES.items():
@@ -136,6 +143,8 @@ class SettingsScreen(QWidget):
 
         # --- البيع والمخزون
         f = self._form_tab("البيع والمخزون")
+        self._check(f, "simple_mode", "الوضع المبسّط للدكان الصغير (إخفاء المحاسبة والشيكات والعروض والطلبات والمستشار)")
+        self._check(f, "touch_mode", "شاشة لمس: أزرار أكبر ولوحة أرقام في نافذة الدفع (بعد إعادة التشغيل)")
         self._check(f, "require_shift", "إلزام فتح وردية قبل البيع (لضبط الصندوق)")
         self._check(f, "allow_negative_stock", "السماح بالبيع عند نفاد الكمية (مخزون سالب)")
         self._num(f, "cashier_max_discount_percent", "أقصى خصم للكاشير بدون إذن مدير %:", 0, 100)
@@ -350,6 +359,7 @@ class SettingsScreen(QWidget):
         self.load_backups()
         self.load_network()
         self.load_license()
+        self.load_logo()
         port = config.get("server_port") or 8765
         running = remote.SERVER.httpd is not None
         self.owner_url.setText(
@@ -382,6 +392,9 @@ class SettingsScreen(QWidget):
             warn(self, "اسم المحل مطلوب")
             return
         settings.set_many(values)
+        w = self.window()
+        if hasattr(w, "refresh_nav"):
+            w.refresh_nav()
         info(self, "تم حفظ الإعدادات")
         w = self.window()
         if hasattr(w, "update_header"):
@@ -553,3 +566,40 @@ class SettingsScreen(QWidget):
         w = self.window()
         if hasattr(w, "update_license"):
             w.update_license()
+
+    # ---------------------------------------------------------------- الشعار
+    def load_logo(self):
+        from PySide6.QtGui import QPixmap
+        import base64
+        data = settings.get("shop_logo") or ""
+        if data:
+            pm = QPixmap()
+            pm.loadFromData(base64.b64decode(data))
+            self.logo_lbl.setPixmap(pm.scaledToHeight(48))
+        else:
+            self.logo_lbl.setText("—")
+
+    def choose_logo(self):
+        from PySide6.QtGui import QImage
+        from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+        import base64
+        path, _ = QFileDialog.getOpenFileName(self, "اختر صورة الشعار", "", "Images (*.png *.jpg *.jpeg *.bmp)")
+        if not path:
+            return
+        img = QImage(path)
+        if img.isNull():
+            warn(self, "تعذر قراءة الصورة")
+            return
+        if img.width() > 400:
+            img = img.scaledToWidth(400)
+        img = img.convertToFormat(QImage.Format_Grayscale8)   # الطابعات الحرارية أبيض وأسود
+        buf = QByteArray()
+        io = QBuffer(buf)
+        io.open(QIODevice.WriteOnly)
+        img.save(io, "PNG")
+        settings.set("shop_logo", base64.b64encode(bytes(buf)).decode("ascii"))
+        self.load_logo()
+
+    def clear_logo(self):
+        settings.set("shop_logo", "")
+        self.load_logo()

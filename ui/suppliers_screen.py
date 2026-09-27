@@ -386,6 +386,7 @@ class SuppliersScreen(QWidget):
         self.dues_lbl = QLabel("")
         self.dues_lbl.setObjectName("chipWarn")
         head.addWidget(self.dues_lbl)
+        head.addWidget(button("📥 استيراد الموردين من Excel", "secondaryBtn", self.import_book))
         head.addWidget(button("🧾 فاتورة مشتريات جديدة", "successBtn", self.new_purchase))
         lay.addLayout(head)
 
@@ -546,3 +547,37 @@ class SuppliersScreen(QWidget):
         if require_permission(self, "cheques") and ChequeDialog(self, "out", s["id"]).exec() == QDialog.Accepted:
             self.load()
             self.load_statement()
+
+    def import_book(self):
+        """نقل الدفتر القديم من ملف Excel (CSV) مع الأرصدة"""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from core import importer
+        from ui.widgets import info as _info
+        box = QMessageBox(QMessageBox.Question, "استيراد من Excel",
+                          "اختر ملف CSV (من Excel: حفظ باسم ← CSV UTF-8).\n"
+                          "أو احفظ نموذجاً فارغاً بالأعمدة المطلوبة واملأه أولاً.", parent=self)
+        pick = box.addButton("اختيار ملف...", QMessageBox.AcceptRole)
+        tpl = box.addButton("حفظ نموذج فارغ", QMessageBox.ActionRole)
+        box.addButton("إلغاء", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is tpl:
+            path, _ = QFileDialog.getSaveFileName(self, "حفظ النموذج", "suppliers.csv", "CSV (*.csv)")
+            if path:
+                importer.write_template(path, "suppliers")
+                _info(self, "تم حفظ النموذج. افتحه في Excel واملأه ثم استورده.")
+            return
+        if box.clickedButton() is not pick:
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "اختيار ملف", "", "CSV (*.csv)")
+        if not path:
+            return
+        try:
+            added, skipped, errors = importer.import_suppliers(path)
+        except (OSError, UnicodeDecodeError) as e:
+            warn(self, f"تعذر قراءة الملف:\n{e}")
+            return
+        msg = f"تمت إضافة {added}، وتجاهل {skipped} موجودين مسبقاً."
+        if errors:
+            msg += "\n\nأخطاء:\n" + "\n".join(errors[:15])
+        _info(self, msg)
+        self.load()

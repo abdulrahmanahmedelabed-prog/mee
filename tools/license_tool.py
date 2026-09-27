@@ -144,6 +144,16 @@ def cmd_issue(args):
     print(f"\n(سُجّل في {log})")
 
 
+def cmd_reset(args):
+    private = load_private(args.key)
+    data = {"type": "reset", "machine": lic.normalize_machine(args.machine), "date": date.today().isoformat(),
+            "id": secrets.token_hex(4).upper()}
+    payload = json.dumps(data, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    code = f"{lic.RESET_PREFIX}.{lic._b64e(payload)}.{lic._b64e(lic.sign(payload, private))}"
+    print("\nرمز استعادة كلمة مرور المدير (صالح 3 أيام ولمرة واحدة):\n")
+    print(code)
+
+
 def cmd_verify(args):
     pub = None
     if not lic.PUBLIC_KEY:
@@ -171,6 +181,10 @@ def main():
     b.add_argument("--expires", help="YYYY-MM-DD للاشتراكات؛ اتركه فارغاً للترخيص الدائم")
     b.add_argument("--key", help="مسار المفتاح الخاص")
     b.set_defaults(fn=cmd_issue)
+    r = sub.add_parser("reset", help="رمز استعادة كلمة مرور المدير لجهاز زبون")
+    r.add_argument("--machine", required=True)
+    r.add_argument("--key")
+    r.set_defaults(fn=cmd_reset)
     c = sub.add_parser("verify", help="فحص مفتاح")
     c.add_argument("license")
     c.add_argument("--key")

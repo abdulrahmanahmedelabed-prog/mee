@@ -90,6 +90,7 @@ class CustomersScreen(QWidget):
         self.total_lbl = QLabel("")
         self.total_lbl.setObjectName("chipWarn")
         head.addWidget(self.total_lbl)
+        head.addWidget(button("📥 استيراد الدفتر من Excel", "secondaryBtn", self.import_book))
         head.addWidget(button("📣 تذكير جماعي للمدينين", "secondaryBtn", self.bulk_reminders))
         head.addWidget(button("+ عميل جديد", "successBtn", self.add))
         lay.addLayout(head)
@@ -244,3 +245,37 @@ class CustomersScreen(QWidget):
         if require_permission(self, "cheques") and ChequeDialog(self, "in", c["id"]).exec() == QDialog.Accepted:
             self.load()
             self.reselect(c["id"])
+
+    def import_book(self):
+        """نقل الدفتر القديم من ملف Excel (CSV) مع الأرصدة"""
+        from PySide6.QtWidgets import QFileDialog, QMessageBox
+        from core import importer
+        from ui.widgets import info as _info
+        box = QMessageBox(QMessageBox.Question, "استيراد من Excel",
+                          "اختر ملف CSV (من Excel: حفظ باسم ← CSV UTF-8).\n"
+                          "أو احفظ نموذجاً فارغاً بالأعمدة المطلوبة واملأه أولاً.", parent=self)
+        pick = box.addButton("اختيار ملف...", QMessageBox.AcceptRole)
+        tpl = box.addButton("حفظ نموذج فارغ", QMessageBox.ActionRole)
+        box.addButton("إلغاء", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is tpl:
+            path, _ = QFileDialog.getSaveFileName(self, "حفظ النموذج", "customers.csv", "CSV (*.csv)")
+            if path:
+                importer.write_template(path, "customers")
+                _info(self, "تم حفظ النموذج. افتحه في Excel واملأه ثم استورده.")
+            return
+        if box.clickedButton() is not pick:
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "اختيار ملف", "", "CSV (*.csv)")
+        if not path:
+            return
+        try:
+            added, skipped, errors = importer.import_customers(path)
+        except (OSError, UnicodeDecodeError) as e:
+            warn(self, f"تعذر قراءة الملف:\n{e}")
+            return
+        msg = f"تمت إضافة {added}، وتجاهل {skipped} موجودين مسبقاً."
+        if errors:
+            msg += "\n\nأخطاء:\n" + "\n".join(errors[:15])
+        _info(self, msg)
+        self.load()
