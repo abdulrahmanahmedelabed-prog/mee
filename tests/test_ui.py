@@ -81,7 +81,7 @@ def test_payment_dialog_logic(app):
     d2.credit_chk.setChecked(True)
     data, err = d2.compute()
     assert data == {"cash_amount": 20, "card_amount": 10, "credit_amount": 27.5, "cash_received": 20, "change": 0.0,
-                    "note": ""}
+                    "note": "", "card_ref": ""}
 
 
 def test_all_screens_open(app):
@@ -298,3 +298,45 @@ def test_simple_mode_logo_and_touch_keypad(app):
     d.key("C")
     assert d.cash.value() == 0
     config.save({"touch_mode": "0"})
+
+
+def test_card_terminal_simulator_and_bridge(app):
+    import threading, socket, importlib.util, os
+    from core import config, payments, receipts
+    with pytest.raises(payments.TerminalError):
+        payments.charge(10)                                          # يدوي: لا ربط
+    config.save({"card_terminal": "simulator"})
+    assert payments.charge(10)["approved"] and not payments.charge(10.13)["approved"]
+    # الجسر المرجعي عبر HTTP حقيقي
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "terminal_bridge.py")
+    spec = importlib.util.spec_from_file_location("terminal_bridge", path)
+    bridge = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bridge)
+    s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+    httpd = bridge.serve(port)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        config.save({"card_terminal": "bridge", "card_terminal_url": f"http://127.0.0.1:{port}"})
+        assert payments.status()["ok"]
+        r = payments.charge(25.5, "INV-TEST")
+        assert r["approved"] and r["card"].startswith("****") and "AUTH" in r["reference"]
+        from ui.pos_screen import PaymentDialog, TerminalDialog
+        d = PaymentDialog(None, 40, None)
+        t = TerminalDialog(None, 40)
+        t.wait()
+        assert t.result() == 1 and t.result_data["approved"]
+        d.card.setValue(40); d.cash.setValue(0); d.card_ref = t.result_data["reference"]
+        data, err = d.compute()
+        pid = products.add_product("بطاقة", "cd1", "", 10, 40, 5, 0)
+        res = sales.create_sale([{"product_id": pid, "product_name": "x", "quantity": 1, "unit_price": 40}],
+                                cash_amount=0, card_amount=40, card_ref=data["card_ref"])
+        assert data["card_ref"] in receipts.invoice_html(res["invoice_id"])
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        config.save({"card_terminal": "manual"})
+    with pytest.raises(payments.TerminalError):
+        config.save({"card_terminal": "bridge", "card_terminal_url": f"http://127.0.0.1:{port}",
+                     "card_terminal_timeout": 3})
+        payments.charge(5)                                           # الجسر متوقف: رسالة واضحة
+    config.save({"card_terminal": "manual"})

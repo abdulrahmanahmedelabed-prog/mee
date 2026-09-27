@@ -24,6 +24,9 @@ DEFAULTS = {
     "customer_display": "0",       # شاشة الزبون على الشاشة الثانية
     "language": "ar",              # لغة الواجهة: ar / en
     "touch_mode": "0",             # شاشة لمس: أزرار أكبر ولوحة أرقام في الدفع
+    "card_terminal": "manual",     # جهاز الدفع بالبطاقة: manual / simulator / bridge
+    "card_terminal_url": "http://127.0.0.1:9900",
+    "card_terminal_timeout": 120,
     # الطباعة
     "printer_name": "",
     "receipt_width_mm": "80",
@@ -40,7 +43,8 @@ DEFAULTS = {
 # مفاتيح تُقرأ من إعدادات الجهاز بدل إعدادات المحل العامة
 LOCAL_KEYS = {"printer_name", "receipt_width_mm", "auto_print_receipt", "drawer_mode", "drawer_printer",
               "drawer_host", "drawer_port", "drawer_serial", "drawer_on_cash_sale", "owner_web",
-              "customer_display", "language", "touch_mode"}
+              "customer_display", "language", "touch_mode", "card_terminal", "card_terminal_url",
+              "card_terminal_timeout"}
 
 _cache = None
 

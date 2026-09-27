@@ -139,6 +139,14 @@ class SettingsScreen(QWidget):
         self._line(f, "drawer_serial", "منفذ COM:")
         self._check(f, "drawer_on_cash_sale", "فتح الدرج تلقائياً عند كل بيع نقدي")
         self._check(f, "customer_display", "شاشة الزبون: عرض الأصناف والإجمالي والباقي على الشاشة الثانية")
+        from core import payments as _pay
+        term = QComboBox()
+        for k, v in _pay.MODES.items():
+            term.addItem(v, k)
+        self.fields["card_terminal"] = term
+        f.addRow("جهاز الدفع بالبطاقة:", term)
+        self._line(f, "card_terminal_url", "عنوان جسر الجهاز البنكي:")
+        f.addRow("", button("💳 فحص الاتصال بجهاز الدفع", "secondaryBtn", self.test_terminal))
         f.addRow("", button("💰 تجربة فتح الدرج", "secondaryBtn", self.test_drawer))
 
         # --- البيع والمخزون
@@ -603,3 +611,13 @@ class SettingsScreen(QWidget):
     def clear_logo(self):
         settings.set("shop_logo", "")
         self.load_logo()
+
+    def test_terminal(self):
+        from core import payments
+        self.save()
+        try:
+            st = payments.status()
+        except payments.TerminalError as e:
+            warn(self, str(e))
+            return
+        (info if st.get("ok") else warn)(self, f"{'✓ متصل' if st.get('ok') else '✗'} {st.get('terminal') or st.get('message', '')}")

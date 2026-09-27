@@ -85,6 +85,12 @@ class PaymentDialog(QDialog):
         if fx.count():
             form.addRow("عملة أخرى:", fx)
         form.addRow("بطاقة / تحويل:", self.card)
+        self.card_ref = ""
+        from core import payments
+        if payments.is_connected():
+            tb = button("💳 دفع بالبطاقة عبر الجهاز", "secondaryBtn", self.pay_terminal)
+            tb.setFocusPolicy(Qt.NoFocus)
+            form.addRow("", tb)
         self.credit_chk = QCheckBox("الباقي دين على العميل (آجل)")
         self.credit_chk.setEnabled(bool(customer))
         if not customer:
@@ -152,6 +158,16 @@ class PaymentDialog(QDialog):
         self._typed = t
         self.cash.setValue(float(t) if t and t != "." else 0.0)
 
+    def pay_terminal(self):
+        """يرسل المبلغ المتبقي لجهاز الدفع وينتظر الموافقة دون تجميد الشاشة"""
+        amount = money(self.total - money(self.cash.value()) if self.cash.value() < self.total else self.total)
+        dlg = TerminalDialog(self, amount)
+        if dlg.exec() == QDialog.Accepted and dlg.result_data and dlg.result_data["approved"]:
+            self.card.setValue(amount)
+            self.cash.setValue(money(self.total - amount))
+            self.card_ref = dlg.result_data["reference"]
+            self.recalc()
+
     def pay_foreign(self, code, rate):
         """الزبون يدفع بعملة أخرى: يُحوَّل المبلغ لعملة المحل بسعر الصرف ويُسجَّل في ملاحظة الفاتورة"""
         due = money(self.total - self.card.value())
@@ -178,11 +194,11 @@ class PaymentDialog(QDialog):
         received = money(self.cash.value())
         if received >= due:
             return {"cash_amount": due, "card_amount": card, "credit_amount": 0.0, "cash_received": received,
-                    "change": money(received - due), "note": self.fx_note}, None
+                    "change": money(received - due), "note": self.fx_note, "card_ref": self.card_ref}, None
         short = money(due - received)
         if self.credit_chk.isChecked() and self.customer:
             return {"cash_amount": received, "card_amount": card, "credit_amount": short, "cash_received": received,
-                    "change": 0.0, "note": self.fx_note}, None
+                    "change": 0.0, "note": self.fx_note, "card_ref": self.card_ref}, None
         return None, f"ناقص: {m(short)}"
 
     def recalc(self):
@@ -208,6 +224,59 @@ class PaymentDialog(QDialog):
             return
         self.result_data = data
         self.accept()
+
+
+class TerminalDialog(QDialog):
+    """انتظار رد جهاز الدفع في خيط منفصل (لا تتجمد الشاشة)"""
+
+    def __init__(self, parent, amount):
+        super().__init__(parent)
+        import threading
+        from core import payments
+        self.setWindowTitle("جهاز الدفع")
+        self.setMinimumWidth(380)
+        self.result_data = None
+        self._error = None
+        lay = QVBoxLayout(self)
+        t = QLabel(f"💳 {m(amount)} {settings.get('currency_symbol')}")
+        t.setAlignment(Qt.AlignCenter)
+        t.setStyleSheet("font-size:30px; font-weight:900;")
+        lay.addWidget(t)
+        self.msg = QLabel("اطلب من الزبون تمرير أو إدخال البطاقة في الجهاز...")
+        self.msg.setAlignment(Qt.AlignCenter)
+        self.msg.setWordWrap(True)
+        lay.addWidget(self.msg)
+        self.close_btn = button("إغلاق", "secondaryBtn", self.reject)
+        lay.addWidget(self.close_btn)
+
+        def work():
+            try:
+                self.result_data = payments.charge(amount)
+            except payments.TerminalError as e:
+                self._error = str(e)
+        self._thread = threading.Thread(target=work, daemon=True)
+        self._thread.start()
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self.poll)
+        self._timer.start(150)
+
+    def poll(self):
+        if self._thread.is_alive():
+            return
+        self._timer.stop()
+        if self._error:
+            self.msg.setText(f"⚠ {self._error}")
+            self.msg.setStyleSheet("color:#DC2626; font-weight:800;")
+        elif self.result_data and self.result_data["approved"]:
+            self.accept()
+        else:
+            self.msg.setText(f"✗ {(self.result_data or {}).get('message') or 'مرفوضة'}")
+            self.msg.setStyleSheet("color:#DC2626; font-weight:800;")
+
+    def wait(self, timeout=10):
+        """للاختبارات: انتظار انتهاء الطلب"""
+        self._thread.join(timeout)
+        self.poll()
 
 
 class DiscountDialog(QDialog):
@@ -1039,7 +1108,7 @@ class POSScreen(QWidget):
         kwargs = dict(discount=self.discount, customer_id=cid, cash_amount=pay["cash_amount"],
                       card_amount=pay["card_amount"], credit_amount=pay["credit_amount"],
                       cash_received=pay["cash_received"], shift_id=shift_id, points_redeemed=self.points,
-                      note=pay.get("note") or "")
+                      note=pay.get("note") or "", card_ref=pay.get("card_ref") or "")
         try:
             try:
                 res = sales.create_sale(self.cart, **kwargs)

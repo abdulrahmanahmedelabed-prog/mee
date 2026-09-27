@@ -71,7 +71,7 @@ def cart_discounts(cart, manual_discount=0.0, points=0.0):
 
 def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
                 cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0,
-                offline=None):
+                offline=None, card_ref=""):
     """
     cart: قائمة dict: product_id, product_name, quantity, unit_price
           (اختياري) factor, unit_name للبيع بوحدة أكبر مثل الكرتونة
@@ -199,6 +199,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
         invoice_id = cur.lastrowid
         if offline:
             conn.execute("UPDATE invoices SET offline_ref=? WHERE id=?", (offline["ref"], invoice_id))
+        if card_ref:
+            conn.execute("UPDATE invoices SET card_ref=? WHERE id=?", (str(card_ref)[:120], invoice_id))
         if points_redeemed:
             loyalty._record(conn, customer_id, -points_redeemed, invoice_id, f"استبدال في الفاتورة {number}", user_id)
         if points_earned:

@@ -465,6 +465,7 @@ ADDED_COLUMNS = {
         ("change_given", "REAL NOT NULL DEFAULT 0"),
         ("returned_total", "REAL NOT NULL DEFAULT 0"),
         ("offline_ref", "TEXT"),                  # معرّف فاتورة بيعت أثناء انقطاع الشبكة (لمنع التكرار)
+        ("card_ref", "TEXT"),                     # مرجع عملية البطاقة من جهاز الدفع (رقم الموافقة، RRN، آخر 4 أرقام)
         ("status", "TEXT NOT NULL DEFAULT 'completed'"),
         ("note", "TEXT"),
         ("user_id", "INTEGER"),

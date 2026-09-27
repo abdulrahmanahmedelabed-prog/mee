@@ -66,6 +66,8 @@ def invoice_html(invoice_id, copy=False):
             lines.append(f"<tr><td>الباقي للزبون</td><td class='l'>{_m(inv['change_given'])}</td></tr>")
     if inv["card_amount"]:
         lines.append(f"<tr><td>بطاقة</td><td class='l'>{_m(inv['card_amount'])}</td></tr>")
+        if inv["card_ref"]:
+            lines.append(f"<tr><td colspan='2'>{escape(inv['card_ref'])}</td></tr>")
     if inv["credit_amount"]:
         lines.append(f"<tr><td>آجل (دين)</td><td class='l'>{_m(inv['credit_amount'])}</td></tr>")
     if inv["customer_id"]:
