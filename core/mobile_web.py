@@ -117,7 +117,9 @@ async function find(v){{if(!v)return;const r=await fetch('/m/api/find?q='+encode
    const k=await r.json();c.querySelector('.res').textContent=k.error?('⚠ '+k.error):('✓ '+L.saved+' — '+L.diff+': '+k.diff);}}}}
   out.appendChild(c);}});}}
 q.addEventListener('keydown',e=>{{if(e.key==='Enter'){{find(q.value.trim());q.select()}}}});
-if('BarcodeDetector' in window && navigator.mediaDevices){{const b=document.getElementById('scan');b.style.display='';
+window.onNativeScan=v=>{{if(v){{q.value=v;find(v)}}}};
+if(window.AndroidBridge){{const b=document.getElementById('scan');b.style.display='';b.onclick=()=>AndroidBridge.scan();}}
+else if('BarcodeDetector' in window && navigator.mediaDevices){{const b=document.getElementById('scan');b.style.display='';
  b.onclick=async()=>{{const v=document.getElementById('v');v.style.display='';
   const s=await navigator.mediaDevices.getUserMedia({{video:{{facingMode:'environment'}}}});v.srcObject=s;await v.play();
   const d=new BarcodeDetector();const tick=async()=>{{const c=await d.detect(v).catch(()=>[]);

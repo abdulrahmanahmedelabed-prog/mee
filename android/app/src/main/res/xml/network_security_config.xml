@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- البرنامج يعمل على شبكة المحل المحلية (http) بدون إنترنت، لذلك نسمح بالاتصال غير المشفّر -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

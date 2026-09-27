@@ -4,7 +4,7 @@
 ; 3) Optional: sign Setup.exe with your code-signing certificate (signtool) to avoid SmartScreen warnings.
 
 #define AppName "Shop Accounting & POS"
-#define AppVersion "6.0"
+#define AppVersion "7.0"
 #define AppPublisher "Your Company"
 #define AppExe "ShopAccounting.exe"
 

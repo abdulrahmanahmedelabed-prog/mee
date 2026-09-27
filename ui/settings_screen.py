@@ -194,6 +194,9 @@ class SettingsScreen(QWidget):
         self.owner_url = hint("")
         self.owner_url.setTextInteractionFlags(Qt.TextSelectableByMouse)
         f.addRow("", self.owner_url)
+        self.pair_qr = QLabel()
+        self.pair_qr.setToolTip("امسحه بتطبيق نقطة البيع على الجوال لربطه بهذا المحل")
+        f.addRow("ربط تطبيق الجوال:", self.pair_qr)
 
         # --- المتجر الإلكتروني
         f = self._form_tab("المتجر الإلكتروني")
@@ -374,6 +377,7 @@ class SettingsScreen(QWidget):
             f"افتح من جوال المالك (على نفس شبكة المحل): http://{config.local_ip()}:{port}/owner "
             f"{'— تعمل الآن ✓' if running else '— تعمل بعد إعادة تشغيل البرنامج'}\n"
             "للمتابعة من خارج المحل ثبّت تطبيق VPN مجاني مثل Tailscale على الجهاز والجوال.")
+        self.show_pair_qr(f"http://{config.local_ip()}:{port}")
         client = remote.is_client()
         for b in (self.restore_btn, self.restore_file_btn):
             b.setEnabled(not client)
@@ -576,6 +580,18 @@ class SettingsScreen(QWidget):
             w.update_license()
 
     # ---------------------------------------------------------------- الشعار
+    def show_pair_qr(self, address):
+        from PySide6.QtGui import QPixmap
+        import base64
+        from core.einvoice import qr_data_uri
+        uri = qr_data_uri(address)
+        pm = QPixmap()
+        if uri:
+            pm.loadFromData(base64.b64decode(uri.split(",", 1)[1]))
+            self.pair_qr.setPixmap(pm.scaled(160, 160, Qt.KeepAspectRatio, Qt.FastTransformation))
+        else:
+            self.pair_qr.setText(address)
+
     def load_logo(self):
         from PySide6.QtGui import QPixmap
         import base64
