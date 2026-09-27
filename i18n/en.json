@@ -1339,7 +1339,9 @@
 "🧾 تحويل لفاتورة في نقطة البيع": "🧾 Convert to POS invoice",
 "🧾 تحويلها لفاتورة مشتريات": "🧾 Convert to purchase invoice",
 "🧾 فاتورة مشتريات جديدة": "🧾 New purchase invoice",
-"🧾 فاتورة من هذا المورد": "🧾 Invoice from this supplier"
+"🧾 فاتورة من هذا المورد": "🧾 Invoice from this supplier",
+"امسحه بتطبيق نقطة البيع على الجوال لربطه بهذا المحل": "Scan it with the POS phone app to pair it with this shop",
+"ربط تطبيق الجوال:": "Pair the phone app:"
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",
