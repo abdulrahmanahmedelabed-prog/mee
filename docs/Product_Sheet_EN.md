@@ -21,6 +21,9 @@ Works fully offline on your own computer, in **English and Arabic**. Buy once �
 - **Card terminal ready** — sends the amount to the bank card terminal and prints the approval code on the receipt (bank-specific connection required).
 - **Simple mode & touch screens** — a lighter layout for small corner shops, big buttons and an on-screen keypad for touch tills.
 - **Easy switch** — import your old credit book (customers, suppliers and balances) from Excel in a minute.
+- **E-wallets & banking apps** — one tap per method (e.g. instant bank transfer, mobile wallets): shows your account and QR code to the customer, records the transaction number, keeps a separate e-wallet account in the books, and a reconciliation report per method.
+- **Daily, weekly, monthly and yearly summaries** — sales, profit, expenses and payment mix per period, adding up exactly to the profit report.
+- **Training copy with 3 years of data** — a complete supermarket history to train staff and explore reports without touching real data.
 - **Multi-currency cash** — accept cash in other currencies at your exchange rate.
 - **Your data stays yours** — stored on your computer with daily backups and an optional cloud copy (Google Drive / OneDrive).
 
