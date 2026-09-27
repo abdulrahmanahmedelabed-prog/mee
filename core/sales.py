@@ -72,7 +72,7 @@ def cart_discounts(cart, manual_discount=0.0, points=0.0):
 
 def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
                 cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0,
-                offline=None, card_ref="", wallet_amount=0.0, wallet_name="", wallet_ref=""):
+                offline=None, card_ref="", wallet_amount=0.0, wallet_name="", wallet_ref="", sale_ref=None):
     """
     cart: قائمة dict: product_id, product_name, quantity, unit_price
           (اختياري) factor, unit_name للبيع بوحدة أكبر مثل الكرتونة
@@ -84,8 +84,11 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
         raise SaleError("السلة فارغة")
     # offline: فاتورة بيعت فعلاً على جهاز فرعي أثناء انقطاع الشبكة وتُرحَّل الآن
     # {"ref": معرّف فريد، "created_at": وقت البيع، "promo_discount": خصم العروض كما حُسب وقتها}
-    if offline:
-        existing = db.query_one("SELECT * FROM invoices WHERE offline_ref=?", (offline["ref"],))
+    # sale_ref: معرّف فريد يولّده جهاز الكاشير لكل فاتورة. إن حُفظت الفاتورة وانقطع الاتصال قبل وصول الرد،
+    # ثم أُعيد إرسالها (أو رُحّلت من طابور عدم الاتصال بنفس المعرّف) فلا تُسجَّل مرتين.
+    ref = (offline or {}).get("ref") or sale_ref
+    if ref:
+        existing = db.query_one("SELECT * FROM invoices WHERE offline_ref=?", (ref,))
         if existing:   # رُحّلت سابقاً (انقطع الاتصال قبل وصول الرد): لا نكررها
             return {"invoice_id": existing["id"], "invoice_number": existing["invoice_number"],
                     "total": existing["total"], "duplicate": True}
@@ -143,8 +146,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
     allow_negative = settings.get_bool("allow_negative_stock") or bool(offline)
 
     with db.tx() as conn:
-        if offline:
-            dup = conn.execute("SELECT id, invoice_number, total FROM invoices WHERE offline_ref=?", (offline["ref"],)).fetchone()
+        if ref:
+            dup = conn.execute("SELECT id, invoice_number, total FROM invoices WHERE offline_ref=?", (ref,)).fetchone()
             if dup:
                 return {"invoice_id": dup["id"], "invoice_number": dup["invoice_number"], "total": dup["total"],
                         "duplicate": True}
@@ -214,8 +217,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
               context.terminal(), disc["promo"], points_redeemed, disc["points_value"], points_earned, created,
               wallet_amount, wallet_name or None, (wallet_ref or "").strip() or None, wallet_bank))
         invoice_id = cur.lastrowid
-        if offline:
-            conn.execute("UPDATE invoices SET offline_ref=? WHERE id=?", (offline["ref"], invoice_id))
+        if ref:
+            conn.execute("UPDATE invoices SET offline_ref=? WHERE id=?", (ref, invoice_id))
         if card_ref:
             conn.execute("UPDATE invoices SET card_ref=? WHERE id=?", (str(card_ref)[:120], invoice_id))
         if points_redeemed:

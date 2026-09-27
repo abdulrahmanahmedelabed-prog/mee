@@ -163,3 +163,17 @@ def test_daily_sales_entries_equal_per_invoice_entries():
     assert len(daily) == 1 and "5 فاتورة" in daily[0]["description"]
     st = ledger.account_statement(ledger.WALLETS, t, t, daily_sales=True)
     assert st["closing"] == 15 and len(st["rows"]) == 1
+
+
+def test_sale_not_duplicated_when_reply_lost():
+    """الفاتورة حُفظت على الجهاز الرئيسي وانقطع الاتصال قبل وصول الرد: إعادة الإرسال أو ترحيلها من طابور
+    عدم الاتصال بنفس المعرّف لا يسجلها مرتين ولا يخصم المخزون مرتين"""
+    a = products.add_product("عصير", "600", "مواد", 3, 5, 10, 1)
+    cart = [item(a, 2, 5)]
+    first = sales.create_sale(cart, sale_ref="POS1-abc")
+    again = sales.create_sale(cart, sale_ref="POS1-abc")
+    queued = sales.import_offline_sale({"ref": "POS1-abc", "cart": cart, "cash_amount": 10, "created_at": db.now()})
+    assert again["duplicate"] and queued["duplicate"]
+    assert again["invoice_id"] == queued["invoice_id"] == first["invoice_id"]
+    assert db.scalar("SELECT COUNT(*) FROM invoices") == 1
+    assert products.get_product(a)["quantity"] == 8

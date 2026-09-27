@@ -1218,7 +1218,10 @@ class POSScreen(QWidget):
             return
         self.last_shift_id = shift_id
         cid = self.customer["id"] if self.customer else None
-        kwargs = dict(discount=self.discount, customer_id=cid, cash_amount=pay["cash_amount"],
+        import uuid
+        from core import context
+        sale_ref = f"{context.terminal() or 'main'}-{uuid.uuid4().hex}"   # يمنع تكرار الفاتورة عند انقطاع الاتصال
+        kwargs = dict(sale_ref=sale_ref, discount=self.discount, customer_id=cid, cash_amount=pay["cash_amount"],
                       card_amount=pay["card_amount"], credit_amount=pay["credit_amount"],
                       cash_received=pay["cash_received"], shift_id=shift_id, points_redeemed=self.points,
                       note=pay.get("note") or "", card_ref=pay.get("card_ref") or "",
@@ -1238,7 +1241,7 @@ class POSScreen(QWidget):
             return
         except remote.ConnectionFailed:
             self.go_offline()
-            return self.finish_offline_sale(pay, print_it)
+            return self.finish_offline_sale(pay, print_it, ref=sale_ref)
         except Exception as e:
             error(self, f"تعذر حفظ الفاتورة:\n{e}")
             return
@@ -1299,7 +1302,7 @@ class POSScreen(QWidget):
         self.show_flash(f"🛵 {order['order_number']}" + (f" — غير متوفر: {'، '.join(missing)}" if missing else ""), "info")
         self.focus_search()
 
-    def finish_offline_sale(self, pay, print_it=False):
+    def finish_offline_sale(self, pay, print_it=False, ref=None):
         """حفظ الفاتورة محلياً أثناء انقطاع الشبكة، وتُرحَّل تلقائياً لاحقاً"""
         if pay["credit_amount"] or self.points or self.customer:
             warn(self, "أثناء انقطاع الشبكة: البيع نقدي أو بطاقة أو دفع إلكتروني فقط، بدون عميل أو نقاط ولاء.")
@@ -1309,7 +1312,7 @@ class POSScreen(QWidget):
             p = offline.queue_sale(self.cart, self.discount, disc["promo"], pay["cash_amount"], pay["card_amount"],
                                    pay["cash_received"], self.last_shift_id, wallet_amount=pay.get("wallet_amount", 0.0),
                                    wallet_name=pay.get("wallet_name") or "", wallet_ref=pay.get("wallet_ref") or "",
-                                   card_ref=pay.get("card_ref") or "")
+                                   card_ref=pay.get("card_ref") or "", ref=ref)
         except SaleError as e:
             warn(self, str(e))
             return

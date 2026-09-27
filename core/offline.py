@@ -144,7 +144,7 @@ def pending_count():
 
 
 def queue_sale(cart, discount, promo_discount, cash_amount, card_amount, cash_received, shift_id,
-               wallet_amount=0.0, wallet_name="", wallet_ref="", card_ref=""):
+               wallet_amount=0.0, wallet_name="", wallet_ref="", card_ref="", ref=None):
     from core import sales
     if not cart:
         raise sales.SaleError("السلة فارغة")
@@ -153,7 +153,7 @@ def queue_sale(cart, discount, promo_discount, cash_amount, card_amount, cash_re
         raise sales.SaleError("مجموع المدفوع لا يساوي إجمالي الفاتورة")
     clean_cart = [{k: it[k] for k in ("product_id", "product_name", "quantity", "unit_price", "factor", "unit_name",
                                        "list_price") if k in it} for it in cart]
-    payload = {"ref": f"{context.terminal()}-{uuid.uuid4().hex}", "created_at": db.now(), "cart": clean_cart,
+    payload = {"ref": ref or f"{context.terminal()}-{uuid.uuid4().hex}", "created_at": db.now(), "cart": clean_cart,
                "discount": money(discount), "promo_discount": money(promo_discount), "cash_amount": money(cash_amount),
                "card_amount": money(card_amount), "wallet_amount": money(wallet_amount or 0),
                "wallet_name": wallet_name or "", "wallet_ref": wallet_ref or "", "card_ref": card_ref or "",
