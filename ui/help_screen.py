@@ -64,7 +64,7 @@ class HelpScreen(QWidget):
             text = open(path, encoding="utf-8").read()
         except OSError:
             text = i18n.tr("الدليل غير موجود في مجلد البرنامج")
-        self.view.document().setSearchPaths([docs_dir()])
+        self.view.setSearchPaths([docs_dir()])   # صور الأدلة (docs/*.png)
         self.view.setMarkdown(text)
 
     def contact(self):
