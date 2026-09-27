@@ -1,4 +1,4 @@
-# Shop Accounting & POS — Product Sheet (v5.0)
+# Shop Accounting & POS — Product Sheet (v6.0)
 
 **Point of sale + real accounting for grocery stores, mini-markets and small supermarkets.**
 Works fully offline on your own computer, in **English and Arabic**. Buy once — or subscribe monthly.
@@ -15,7 +15,10 @@ Works fully offline on your own computer, in **English and Arabic**. Buy once �
 - **Grow sales** — automatic offers (buy X get Y, bundle price, % off a category), loyalty points, wholesale price levels, bulk price updates by target margin.
 - **Control** — cashier shifts with cash counting, manager approval for sensitive actions, full activity log, server-side permission checks.
 - **Owner on the go** — read-only dashboard on the owner's phone and a daily WhatsApp summary.
-- **VAT ready** — output and input VAT with a VAT return report.
+- **VAT ready** — output and input VAT with a VAT return report, and an e-invoice QR code on receipts (Saudi simplified tax invoice format).
+- **Online ordering** — a mobile store page for pickup or delivery orders; orders become POS invoices in one click. No commissions to delivery apps.
+- **Staff mobile app** — price, stock and expiry lookup and shelf stock counts from any phone.
+- **Multi-currency cash** — accept cash in other currencies at your exchange rate.
 - **Your data stays yours** — stored on your computer with daily backups and an optional cloud copy (Google Drive / OneDrive).
 
 | | |
