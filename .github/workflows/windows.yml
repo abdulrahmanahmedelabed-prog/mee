@@ -5,6 +5,8 @@ on:
     paths-ignore:
       - "android/**"
       - "**.md"
+      - "zk_attendance/**"
+      - ".github/workflows/attendance.yml"
   workflow_dispatch:
 
 jobs:

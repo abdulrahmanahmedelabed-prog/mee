@@ -1,0 +1,28 @@
+name: ZK Attendance Pro tests
+
+on:
+  push:
+    paths:
+      - "zk_attendance/**"
+      - ".github/workflows/attendance.yml"
+  pull_request:
+    paths:
+      - "zk_attendance/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: zk_attendance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pytest -q tests
