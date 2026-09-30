@@ -70,7 +70,7 @@ class Table(QTableWidget):
         super().__init__(0, len(headers), parent)
         self.setHorizontalHeaderLabels(headers)
         self.verticalHeader().setVisible(False)
-        self.verticalHeader().setDefaultSectionSize(36)
+        self.verticalHeader().setDefaultSectionSize(44)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -140,12 +140,15 @@ def qty_cell(v):
 # بطاقات وعناوين
 # ---------------------------------------------------------------------------
 
-def card(layout_cls=QVBoxLayout, margins=14, spacing=8):
+def card(layout_cls=QVBoxLayout, margins=18, spacing=10, shadow=True):
     f = QFrame()
     f.setObjectName("card")
     lay = layout_cls(f)
     lay.setContentsMargins(margins, margins, margins, margins)
     lay.setSpacing(spacing)
+    if shadow:
+        from ui.style import elevate
+        elevate(f)
     return f, lay
 
 
@@ -177,20 +180,35 @@ def button(text, obj=None, slot=None, tooltip=None, shortcut=None):
 
 
 class KpiCard(QFrame):
+    """بطاقة رقم بأيقونة داخل مربع ملوّن (مثل تطبيقات البنوك والمحافظ)"""
+
     def __init__(self, label, color="#2563EB", icon=""):
         super().__init__()
         self.setObjectName("card")
+        from ui.style import elevate
+        elevate(self)
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(16, 14, 16, 14)
-        lay.setSpacing(4)
-        self.title = QLabel(f"{icon}  {label}" if icon else label)
+        lay.setContentsMargins(18, 16, 18, 16)
+        lay.setSpacing(6)
+        head = QHBoxLayout()
+        head.setSpacing(10)
+        if icon:
+            ic = QLabel(icon)
+            ic.setObjectName("kpiIcon")
+            ic.setFixedSize(40, 40)
+            c = QColor(color)
+            ic.setStyleSheet(f"background: rgba({c.red()},{c.green()},{c.blue()},0.12); color: {color};")
+            head.addWidget(ic)
+        self.title = QLabel(label)
         self.title.setObjectName("kpiTitle")
+        self.title.setWordWrap(True)
+        head.addWidget(self.title, 1)
+        lay.addLayout(head)
         self.value = QLabel("0")
         self.value.setObjectName("kpiValue")
         self.value.setStyleSheet(f"color: {color};")
         self.sub = QLabel("")
         self.sub.setObjectName("hint")
-        lay.addWidget(self.title)
         lay.addWidget(self.value)
         lay.addWidget(self.sub)
 
@@ -203,8 +221,8 @@ def page():
     w = QWidget()
     w.setObjectName("page")
     lay = QVBoxLayout(w)
-    lay.setContentsMargins(20, 18, 20, 18)
-    lay.setSpacing(12)
+    lay.setContentsMargins(24, 8, 24, 20)
+    lay.setSpacing(14)
     return w, lay
 
 

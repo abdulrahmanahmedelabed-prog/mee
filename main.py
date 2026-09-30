@@ -100,9 +100,12 @@ def main():
     i18n_qt.apply_language(os.environ.get("SHOP_LANG") or config.load().get("language") or "ar", app)
     app.setLayoutDirection(i18n_qt.direction())
     QLocale.setDefault(QLocale(QLocale.English, QLocale.UnitedStates))  # أرقام لاتينية وفاصلة عشرية نقطة
+    from ui.style import load_fonts
+    family = load_fonts()              # الخط العربي الحديث المضمَّن مع البرنامج
     font = QFont()
-    font.setFamilies(["Segoe UI", "Tahoma", "Noto Sans Arabic", "Noto Naskh Arabic"])
+    font.setFamilies([f for f in (family, "Segoe UI", "Tahoma", "Noto Sans Arabic") if f])
     font.setPointSize(10)
+    font.setHintingPreference(QFont.PreferNoHinting)
     app.setFont(font)
     from ui.style import STYLE_SHEET
     from ui.i18n_qt import adapt_style

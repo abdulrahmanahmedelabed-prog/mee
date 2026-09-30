@@ -28,7 +28,7 @@ if errorlevel 1 (
 
 if exist build rmdir /s /q build
 if exist dist\ShopAccounting rmdir /s /q dist\ShopAccounting
-python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --hidden-import tools.demo_data --add-data "i18n;i18n" --add-data "docs;docs" main.py || goto :fail
+python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --hidden-import tools.demo_data --add-data "i18n;i18n" --add-data "docs;docs" --add-data "ui/fonts;ui/fonts" main.py || goto :fail
 if not exist dist\ShopAccounting\ShopAccounting.exe goto :fail
 
 echo.

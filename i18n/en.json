@@ -1403,7 +1403,18 @@
 "يصل المال إلى": "Money goes to",
 "يومي": "Daily",
 "✓ تم استلام المبلغ": "✓ Payment received",
-"✨ اقتراحات لبلدي": "✨ Suggestions for my country"
+"✨ اقتراحات لبلدي": "✨ Suggestions for my country",
+"أي نقص بلا فاتورة يُسجَّل خسارة في تقرير الأرباح، وأي زيادة مكسباً. استثناء: «استلام بضاعة» (بضاعة بلا فاتورة شراء) ولتصحيح استلام خاطئ اختر نفس السبب بالسالب. الأفضل دائماً تسجيل البضاعة بفاتورة مشتريات.": "Any shortage without an invoice is recorded as a loss in the profit report, and any surplus as a gain. Exception: “Goods received” (goods without a purchase invoice); to correct a wrong receipt choose the same reason with a negative quantity. It is always better to record goods with a purchase invoice.",
+"إهلاك الأصول الثابتة (الأثاث والمعدات)": "Depreciation of fixed assets (furniture and equipment)",
+"العملية نقدية من الدرج ولا توجد وردية مفتوحة على هذا الجهاز. افتح وردية أولاً (الصندوق والورديات)، أو اختر طريقة دفع غير نقدية.": "This is a cash-drawer operation and no shift is open on this device. Open a shift first (Cash & Shifts), or choose a non-cash payment method.",
+"تسجيل خروج": "Log out",
+"حذف صنف: شطب الكمية المتبقية": "Product deleted: remaining quantity written off",
+"خدمات": "Services",
+"خدمة": "Service",
+"دفع ضريبة القيمة المضافة المستحقة من البنك": "Pay VAT due from the bank",
+"عمولات ومصاريف بنكية خصمها البنك": "Bank charges deducted by the bank",
+"مقاصة ضريبة المدخلات مع الضريبة المستحقة (عند تقديم الإقرار)": "Offset input VAT against VAT due (when filing the return)",
+"هذا المصروف دُفع من درج وردية مغلقة وعُدّ نقدها، وحذفه يغيّر نتيجة الوردية بأثر رجعي.\nإن كان خطأً: سجّل «إدخال نقدي» في الوردية الحالية بنفس المبلغ مع السبب.": "This expense was paid from the drawer of a closed shift whose cash was already counted; deleting it would change that shift's result retroactively.\nIf it was a mistake: record a “Cash in” of the same amount in the current shift with the reason."
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",
@@ -1703,6 +1714,11 @@
 "تجهيز نسخة التدريب (مرة واحدة فقط)...\nالمبيعات حتى {0}": "Preparing the training copy (one time only)...\nSales up to {0}",
 "رقم العملية: {0}": "Transaction no.: {0}",
 "مبيعات اليوم ({0} فاتورة)": "Day's sales ({0} invoices)",
-"مرتجعات اليوم ({0})": "Day's returns ({0})"
+"مرتجعات اليوم ({0})": "Day's returns ({0})",
+"\n\nالكمية الموجودة ({0}) ستُسجَّل خسارة في تقرير الأرباح.": "\n\nThe quantity in stock ({0}) will be recorded as a loss in the profit report.",
+"إعادة تقييم التكلفة {0} ← {1}": "Cost revaluation {0} → {1}",
+"المحاسبة ونقاط البيع • v{0}": "Accounting & POS • v{0}",
+"حذف المنتج '{0}'؟\n(يبقى ظاهراً في الفواتير القديمة){1}": "Delete product '{0}'?\n(It stays visible on old invoices){1}",
+"هذه الفاتورة بيعت آجلاً وما زال على العميل دين، فلا يُرد له نقداً أكثر مما دفعه ({0}). اختر «{1}».": "This invoice was sold on credit and the customer still owes money, so no more cash than was paid ({0}) can be refunded. Choose “{1}”."
 }
 }
