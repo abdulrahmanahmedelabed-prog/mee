@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
                   backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders,
-                  wallets)
+                  wallets, financial_audit)
 
 PROTOCOL_VERSION = 2
 
@@ -29,7 +29,7 @@ MODULES = {"products": products, "sales": sales, "customers": customers, "suppli
            "expenses": expenses, "shifts": shifts, "reports": reports, "audit": audit, "backup": backup,
            "settings": settings, "auth": auth, "ledger": ledger, "cheques": cheques, "promotions": promotions,
            "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights,
-           "orders": orders, "wallets": wallets}
+           "orders": orders, "wallets": wallets, "financial_audit": financial_audit}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -44,6 +44,7 @@ LOCAL_ONLY = {
     "loyalty": {"enabled", "points_for", "value_of"},
     "license": {"normalize_machine", "sign", "verify_signature", "make_key", "parse_key"},
     "wallets": {"all_wallets", "get", "names", "to_json", "presets", "qr_text"},
+    "financial_audit": {"report_html", "benford"},
 }
 
 # صلاحيات يتحقق منها الخادم نفسه (لا نعتمد على الواجهة وحدها: جهاز فرعي معدّل قد يرسل أي طلب)
@@ -59,6 +60,7 @@ REQUIRED_PERMISSION = {
     ("promotions", "delete_promotion"): "promotions",
     ("loyalty", "adjust"): "promotions",
     ("insights", "apply_price_update"): "inventory",
+    ("financial_audit", "run"): "accounting", ("financial_audit", "aging"): "accounting",
 }
 
 

@@ -350,6 +350,23 @@ class Shop:
             if bal > 500:
                 cheques.issue_cheque(big, money(bal * 0.8), (d + timedelta(days=30)).isoformat(),
                                      f"{r.randint(100000, 999999)}", "البنك العربي")
+        if d.day == 15 and d.month % 2 == 1:     # إقرار ضريبة القيمة المضافة كل شهرين: مقاصة المدخلات ثم الدفع
+            self.at(d, 11, 0)
+            bal = ledger._balances(None, (d - timedelta(days=1)).isoformat())
+            get = lambda code: money(sum(bal.get(code, [0, 0, 0])[i] * (1 if i < 2 else -1) for i in range(3)))
+            out, inp = -get(ledger.VAT), get(ledger.VAT_INPUT)
+            if inp > 0:
+                ledger.add_manual_entry(d.isoformat(), "مقاصة ضريبة المدخلات مع الضريبة المستحقة (إقرار ضريبي)",
+                                        [{"account": ledger.VAT, "debit": inp}, {"account": ledger.VAT_INPUT, "credit": inp}])
+            due = money(out - inp)
+            if due > 0:
+                short = money(due - get(ledger.BANK) + 1000)
+                if short > 0:
+                    ledger.add_manual_entry(d.isoformat(), "إيداع مال من المالك في البنك (من جاري المالك)",
+                                            [{"account": ledger.BANK, "debit": short},
+                                             {"account": ledger.OWNER, "credit": short}])
+                ledger.add_manual_entry(d.isoformat(), "دفع ضريبة القيمة المضافة المستحقة من البنك",
+                                        [{"account": ledger.VAT, "debit": due}, {"account": ledger.BANK, "credit": due}])
         if d.day == 28:
             self.at(d, 16)
             season = 1.5 if d.month in (7, 8, 12, 1, 2) else 1.0
@@ -484,8 +501,10 @@ def finishing_touches(pids, cids):
     for cid, due, no, bank in ((cids[3], 5, "100245", "بنك فلسطين"), (cids[0], 20, "558812", "بنك القدس")):
         owed = customers.balance(cid)
         if owed < 60:          # زبون بلا دين كافٍ: فاتورة آجلة أولاً حتى يكون الشيك عن دين حقيقي
-            sales.create_sale([{"product_id": pids[9], "product_name": "زيت زيتون", "quantity": 5, "unit_price": 40}],
-                              customer_id=cid, cash_amount=0, credit_amount=200)
+            p = products.get_product(max(pids, key=lambda i: products.get_product(i)["quantity"]))
+            cart = [{"product_id": p["id"], "product_name": p["name"], "quantity": 5, "unit_price": p["sale_price"]}]
+            total = sales.compute_totals(cart, sales.cart_discounts(cart)["total"])["total"]
+            sales.create_sale(cart, customer_id=cid, cash_amount=0, credit_amount=total)
             owed = customers.balance(cid)
         cheques.receive_cheque(cid, money(min(400, owed * 0.8)), exp(due), no, bank)
     cheques.issue_cheque(s3, 600, exp(3), "000731", "البنك العربي")
