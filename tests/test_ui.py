@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from core import products, sales, customers, settings, barcode, shifts, suppliers
+from core import products, sales, customers, settings, barcode, shifts, suppliers, db
 
 
 @pytest.fixture(scope="module")
@@ -252,6 +252,26 @@ def test_online_order_to_pos_sale(pos):
     from ui.orders_screen import OrdersScreen
     s = OrdersScreen()
     s.refresh()
+
+
+def test_online_delivery_fee_becomes_revenue_on_invoice(pos):
+    from core import orders, reports
+    settings.set_many({"online_store_enabled": "1", "online_store_delivery": "1", "online_store_delivery_fee": "7"})
+    pid = products.add_product("أرز", "r1", "", 10, 20, 20, 0)
+    r = orders.create_order({"name": "سامي", "phone": "0599111222", "fulfilment": "delivery", "address": "الحارة",
+                             "items": [{"product_id": pid, "quantity": 2}]}, "ip2")
+    assert r["total"] == 47
+    pos.load_order(orders.get_order(r["id"]))
+    assert len(pos.cart) == 2 and pos.cart[1]["service"] and pos.cart[1]["unit_price"] == 7
+    pos.finish_sale({"cash_amount": 47, "card_amount": 0, "credit_amount": 0, "cash_received": 50, "change": 3})
+    inv = sales.get_invoice(pos.last_invoice_id)
+    assert inv["total"] == 47                                   # الفاتورة = ما دفعه الزبون بالضبط
+    assert products.get_product(pid)["quantity"] == 18          # رسوم الخدمة لا تمس المخزون
+    svc = products.get_product(products.service_product("رسوم التوصيل"))
+    assert svc["quantity"] == 0 and svc["is_service"] == 1
+    assert svc["id"] not in [p["id"] for p in products.get_low_stock_products()]
+    t = db.today()
+    assert reports.profit_and_loss(t, t)["net_sales"] == 47
 
 
 def test_foreign_currency_cash_payment(app):

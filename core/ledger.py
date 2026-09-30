@@ -74,6 +74,9 @@ SYSTEM_ACCOUNTS = [
 # طرق الدفع ← الحساب المقابل
 CUSTOMER_METHOD_ACCOUNT = {"نقدي": CASH, "بطاقة": BANK, "تحويل": BANK, "شيك": CHEQUES_IN}
 PAYMENT_FEES = EXPENSES + ":عمولات الدفع الإلكتروني"
+DEPRECIATION = EXPENSES + ":إهلاك الأصول"
+BANK_FEES = EXPENSES + ":عمولات ومصاريف بنكية"
+EXTRA_EXPENSE_ACCOUNTS = (PAYMENT_FEES, DEPRECIATION, BANK_FEES)
 
 
 def customer_method_account(method):
@@ -124,7 +127,7 @@ def list_accounts(active_only=True):
     sql = "SELECT * FROM accounts" + (" WHERE is_active=1" if active_only else "") + " ORDER BY code"
     rows = [dict(r) for r in db.query(sql)]
     from core import settings
-    for cat in list(dict.fromkeys(settings.expense_categories() + [PAYMENT_FEES.split(":", 1)[1]])):
+    for cat in list(dict.fromkeys(settings.expense_categories() + [a.split(":", 1)[1] for a in EXTRA_EXPENSE_ACCOUNTS])):
         rows.append({"code": f"{EXPENSES}:{cat}", "name": f"مصاريف - {cat}", "type": "expense", "is_system": 1,
                      "is_active": 1})
     rows.sort(key=lambda r: r["code"])
@@ -220,6 +223,10 @@ TEMPLATES = [
     ("عمولة خصمها البنك على الدفع الإلكتروني أو البطاقات", PAYMENT_FEES, BANK),
     ("سحب المالك من رصيد المحفظة الإلكترونية", OWNER, WALLETS),
     ("رصيد محفظة إلكترونية افتتاحي", WALLETS, OPENING),
+    ("مقاصة ضريبة المدخلات مع الضريبة المستحقة (عند تقديم الإقرار)", VAT, VAT_INPUT),
+    ("دفع ضريبة القيمة المضافة المستحقة من البنك", VAT, BANK),
+    ("إهلاك الأصول الثابتة (الأثاث والمعدات)", DEPRECIATION, FIXED_ASSETS),
+    ("عمولات ومصاريف بنكية خصمها البنك", BANK_FEES, BANK),
 ]
 
 

@@ -104,29 +104,40 @@ def compute(cart, promos, cats):
 
     lines, used = [], set()
     for pr in promos:
-        amount = 0.0
-        if pr["type"] in ("buy_get", "bundle"):
-            pid = pr["product_id"]
-            if pid in used or pid not in single:
-                continue
-            q, price = single[pid]
-            if pr["type"] == "buy_get":
-                groups = math.floor(q / (pr["buy_qty"] + pr["get_qty"]) + 1e-9)
-                amount = groups * pr["get_qty"] * price
-            else:
-                groups = math.floor(q / pr["bundle_qty"] + 1e-9)
-                amount = groups * (pr["bundle_qty"] * price - pr["bundle_price"])
-            if amount > 0:
-                used.add(pid)
-        else:  # percent
-            for it in cart:
-                pid = it["product_id"]
-                if pid in used:
-                    continue
-                if (pr["product_id"] and pid == pr["product_id"]) or \
-                        (not pr["product_id"] and pr["category"] and cats.get(pid) == pr["category"]):
-                    amount += it["quantity"] * it["unit_price"] * pr["percent"] / 100
+        if pr["type"] not in ("buy_get", "bundle"):
+            continue
+        pid = pr["product_id"]
+        if pid in used or pid not in single:
+            continue
+        q, price = single[pid]
+        if pr["type"] == "buy_get":
+            groups = math.floor(q / (pr["buy_qty"] + pr["get_qty"]) + 1e-9)
+            amount = groups * pr["get_qty"] * price
+        else:
+            groups = math.floor(q / pr["bundle_qty"] + 1e-9)
+            amount = groups * (pr["bundle_qty"] * price - pr["bundle_price"])
         amount = money(amount)
+        if amount > 0:
+            used.add(pid)
+            lines.append({"promo_id": pr["id"], "name": pr["name"], "amount": amount})
+
+    # خصم النسبة: لكل صنف أفضل عرض واحد فقط (لا تُجمع نسبة الصنف مع نسبة فئته)
+    percent = [pr for pr in promos if pr["type"] not in ("buy_get", "bundle")]
+    by_promo = {}
+    for it in cart:
+        pid = it["product_id"]
+        if pid in used:
+            continue
+        best = None
+        for pr in percent:
+            if (pr["product_id"] and pid == pr["product_id"]) or \
+                    (not pr["product_id"] and pr["category"] and cats.get(pid) == pr["category"]):
+                if best is None or pr["percent"] > best["percent"]:
+                    best = pr
+        if best:
+            by_promo[best["id"]] = by_promo.get(best["id"], 0.0) + it["quantity"] * it["unit_price"] * best["percent"] / 100
+    for pr in percent:
+        amount = money(by_promo.get(pr["id"], 0.0))
         if amount > 0:
             lines.append({"promo_id": pr["id"], "name": pr["name"], "amount": amount})
     return {"total": money(sum(l["amount"] for l in lines)), "lines": lines}

@@ -5,7 +5,7 @@ import csv
 
 from core import db, auth, audit
 from core.barcode import internal_barcode, parse_scale_barcode
-from core.utils import money, qty
+from core.utils import money, qty, unit_cost
 
 UNITS = ["قطعة", "كغم", "غرام", "لتر", "علبة", "كرتونة", "ربطة", "كيس", "درزن", "متر"]
 
@@ -31,7 +31,7 @@ def add_product(name, barcode=None, category="", cost_price=0, sale_price=0, qua
             INSERT INTO products (name, barcode, category, cost_price, sale_price, quantity, min_quantity, unit,
                                   plu_code, is_weighted, is_favorite, created_at, updated_at, wholesale_price)
             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (name, barcode, (category or "").strip(), money(cost_price), money(sale_price), qty(min_quantity),
+        """, (name, barcode, (category or "").strip(), unit_cost(cost_price), money(sale_price), qty(min_quantity),
               unit or "قطعة", plu_code, 1 if is_weighted else 0, 1 if is_favorite else 0, db.now(), db.now(),
               money(wholesale_price or 0)))
         pid = cur.lastrowid
@@ -71,18 +71,31 @@ def update_product(product_id, name, barcode, category, cost_price, sale_price, 
             UPDATE products SET name=?, barcode=?, category=?, cost_price=?, sale_price=?, min_quantity=?, unit=?,
                    plu_code=?, is_weighted=?, is_favorite=?, updated_at=?
             WHERE id=?
-        """, (name, barcode, (category or "").strip(), money(cost_price), money(sale_price), qty(min_quantity),
+        """, (name, barcode, (category or "").strip(), unit_cost(cost_price), money(sale_price), qty(min_quantity),
               unit or "قطعة", plu_code, 1 if is_weighted else 0, 1 if is_favorite else 0, db.now(), product_id))
         if wholesale_price is not None:
             conn.execute("UPDATE products SET wholesale_price=? WHERE id=?", (money(wholesale_price), product_id))
-        if old and (money(old["sale_price"]) != money(sale_price) or money(old["cost_price"]) != money(cost_price)):
+        if old and unit_cost(old["cost_price"]) != unit_cost(cost_price) and old["quantity"] > 0:
+            # إعادة تقييم البضاعة الموجودة بالتكلفة الجديدة: الفرق خسارة (أو مكسب) حتى تبقى قيمة المخزون في الدفاتر
+            # مطابقة لقيمته الفعلية
+            diff = money((old["cost_price"] - unit_cost(cost_price)) * old["quantity"])
+            if diff:
+                conn.execute("""INSERT INTO stock_movements (product_id, change_qty, reason, user_id, balance_after,
+                                                             loss_value, unit_cost, created_at)
+                                VALUES (?, 0, ?, ?, ?, ?, ?, ?)""",
+                             (product_id, f"إعادة تقييم التكلفة {old['cost_price']:g} ← {unit_cost(cost_price):g}",
+                              auth.current_user_id(), old["quantity"], diff, unit_cost(cost_price), db.now()))
+        if old and (money(old["sale_price"]) != money(sale_price) or unit_cost(old["cost_price"]) != unit_cost(cost_price)):
             audit.log("تعديل سعر", f"{name}: البيع {old['sale_price']} ← {sale_price} | التكلفة {old['cost_price']} ← {cost_price}", conn)
 
 
 def delete_product(product_id):
     """حذف ناعم: يبقى المنتج في الفواتير القديمة، ويتحرر الباركود لاستخدامه لمنتج جديد"""
     with db.tx() as conn:
-        p = conn.execute("SELECT name, barcode FROM products WHERE id=?", (product_id,)).fetchone()
+        p = conn.execute("SELECT name, barcode, quantity, is_service FROM products WHERE id=?", (product_id,)).fetchone()
+        if p and not p["is_service"] and abs(p["quantity"] or 0) > 1e-9:
+            # الكمية الباقية تُشطب خسارة حتى لا تبقى قيمتها في الدفاتر لصنف محذوف
+            _move_stock(conn, product_id, -p["quantity"], "حذف صنف: شطب الكمية المتبقية", loss=True)
         conn.execute("DELETE FROM product_units WHERE product_id=?", (product_id,))
         conn.execute("""UPDATE products SET is_active=0, is_favorite=0, plu_code=NULL,
                         barcode = CASE WHEN barcode IS NULL THEN NULL ELSE barcode || '#حذف' || id END
@@ -144,7 +157,9 @@ def _consume_batches(conn, product_id, amount, batch_id=None):
 
 
 def adjust_stock(product_id, change_qty, reason="تعديل يدوي", expiry_date=None, batch_no=None):
-    loss = change_qty < 0 and is_loss_reason(reason)
+    # كل تعديل كمية بدون مستند يؤثر على الربح (النقص خسارة والزيادة مكسب)، إلا الرصيد الافتتاحي
+    # والبضاعة المستلمة بدون فاتورة فتُقيَّد كرأس مال/أرصدة افتتاحية
+    loss = not any(k in (reason or "") for k in ("افتتاحي", "استلام"))
     with db.tx() as conn:
         bal = _move_stock(conn, product_id, change_qty, reason, expiry_date, batch_no, loss=loss)
         audit.log("تعديل مخزون", f"منتج #{product_id}: {change_qty:+} ({reason})", conn)
@@ -183,7 +198,7 @@ def get_all_products(active_only=True, search=None, category=None, low_only=Fals
         cond.append("category = ?")
         params.append(category)
     if low_only:
-        cond.append("quantity <= min_quantity")
+        cond.append("quantity <= min_quantity AND is_service=0")
     if favorites_only:
         cond.append("is_favorite = 1")
     if cond:
@@ -316,7 +331,19 @@ def next_internal_barcode(product_id=None):
 
 
 def get_low_stock_products():
-    return db.query("SELECT * FROM products WHERE is_active=1 AND quantity <= min_quantity ORDER BY quantity ASC")
+    return db.query("SELECT * FROM products WHERE is_active=1 AND is_service=0 AND quantity <= min_quantity "
+                    "ORDER BY quantity ASC")
+
+
+def service_product(name, price=0.0):
+    """صنف خدمة بلا مخزون (مثل رسوم التوصيل): يُنشأ أول مرة ويُعاد استخدامه"""
+    row = db.query_one("SELECT id FROM products WHERE name=? AND is_service=1 AND is_active=1", (name,))
+    if row:
+        return row["id"]
+    pid = add_product(name, None, "خدمات", 0, price, 0, 0, "خدمة")
+    with db.tx() as conn:
+        conn.execute("UPDATE products SET is_service=1 WHERE id=?", (pid,))
+    return pid
 
 
 def stock_movements(product_id, limit=500):

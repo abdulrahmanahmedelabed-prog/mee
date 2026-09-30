@@ -829,7 +829,7 @@ class POSScreen(QWidget):
                    if i["product_id"] == product_id and j != exclude)
 
     def _stock_ok(self, it, extra_base):
-        if settings.get_bool("allow_negative_stock"):
+        if settings.get_bool("allow_negative_stock") or it.get("service"):
             return True
         if extra_base > it["stock"] + 1e-9:
             self.show_flash(f"⚠ المتوفر من {it['base_name']}: {fmt_qty(it['stock'])} {it['unit']} فقط", "err")
@@ -854,6 +854,7 @@ class POSScreen(QWidget):
                 "product_name": f"{product['name']} ({unit['name']})" if unit else product["name"],
                 "quantity": quantity, "unit_price": price, "list_price": price, "factor": factor,
                 "unit_name": unit["name"] if unit else product["unit"], "stock": product["quantity"],
+                "service": bool(product["is_service"]),
                 "unit": product["unit"]}
         if not self._stock_ok(line, self._base_in_cart(product["id"]) + quantity * factor):
             return
@@ -1060,7 +1061,7 @@ class POSScreen(QWidget):
     def _reprice_for_customer(self):
         """عند اختيار عميل جملة تتحول أسعار الحبة لسعر الجملة، وتعود عند إلغائه (ما لم يُعدَّل السعر يدوياً)"""
         for it in self.cart:
-            if float(it.get("factor", 1) or 1) != 1 or money(it["unit_price"]) != money(it["list_price"]):
+            if it.get("service") or float(it.get("factor", 1) or 1) != 1 or money(it["unit_price"]) != money(it["list_price"]):
                 continue
             p = self._get_product(it["product_id"])
             if p:
@@ -1168,6 +1169,7 @@ class POSScreen(QWidget):
             for it in self.cart:
                 p = products.get_product(it["product_id"])
                 it["stock"] = p["quantity"] if p else 0
+                it["service"] = bool(p and p["is_service"])
                 it.setdefault("base_name", p["name"] if p else it["product_name"])
                 it.setdefault("unit", p["unit"] if p else "")
             self.discount = dlg.chosen.get("discount", 0)
@@ -1292,6 +1294,12 @@ class POSScreen(QWidget):
                     "quantity": round_qty(it["quantity"]), "unit_price": it["unit_price"], "list_price": it["unit_price"],
                     "factor": 1.0, "unit_name": p["unit"], "stock": p["quantity"], "unit": p["unit"]}
             self.cart.append(line)
+        fee = money(order["total"] - sum(money(i["quantity"] * i["unit_price"]) for i in order["items"]))
+        if fee > 0:        # رسوم التوصيل تدخل الفاتورة كإيراد (صنف خدمة بلا مخزون)
+            sp = products.get_product(products.service_product("رسوم التوصيل"))
+            self.cart.append({"product_id": sp["id"], "base_name": sp["name"], "product_name": sp["name"],
+                              "quantity": 1.0, "unit_price": fee, "list_price": fee, "factor": 1.0,
+                              "unit_name": sp["unit"], "stock": 0, "unit": sp["unit"], "service": True})
         cust = next((c for c in customers.list_customers(order["phone"]) if (c["phone"] or "") == order["phone"]), None)
         if not cust:
             cid = customers.add_customer(order["customer_name"], order["phone"], order.get("address") or "")

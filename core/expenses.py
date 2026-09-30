@@ -11,6 +11,9 @@ def add_expense(category, amount, note="", from_drawer=True, expense_date=None, 
         raise ValueError("المبلغ يجب أن يكون أكبر من صفر")
     if not (category or "").strip():
         raise ValueError("اختر نوع المصروف")
+    if from_drawer:
+        from core import shifts
+        shift_id = shifts.cash_shift(shift_id)
     with db.tx() as conn:
         cur = conn.execute("""INSERT INTO expenses(category, amount, note, from_drawer, expense_date, user_id, shift_id, created_at)
                               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -22,6 +25,11 @@ def add_expense(category, amount, note="", from_drawer=True, expense_date=None, 
 def delete_expense(expense_id):
     with db.tx() as conn:
         e = conn.execute("SELECT * FROM expenses WHERE id=?", (expense_id,)).fetchone()
+        if e and e["from_drawer"] and e["shift_id"]:
+            s = conn.execute("SELECT status FROM shifts WHERE id=?", (e["shift_id"],)).fetchone()
+            if s and s["status"] == "closed":
+                raise ValueError("هذا المصروف دُفع من درج وردية مغلقة وعُدّ نقدها، وحذفه يغيّر نتيجة الوردية بأثر رجعي.\n"
+                                 "إن كان خطأً: سجّل «إدخال نقدي» في الوردية الحالية بنفس المبلغ مع السبب.")
         conn.execute("DELETE FROM expenses WHERE id=?", (expense_id,))
         if e:
             audit.log("حذف مصروف", f"{e['category']} {e['amount']} بتاريخ {e['expense_date']}", conn)

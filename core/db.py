@@ -12,7 +12,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 def app_dir():
@@ -502,6 +502,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 # أعمدة أُضيفت في النسخة الثانية (تُضاف تلقائياً لقواعد بيانات النسخة الأولى)
 ADDED_COLUMNS = {
     "products": [
+        ("is_service", "INTEGER NOT NULL DEFAULT 0"),  # خدمة بلا مخزون (رسوم توصيل، تغليف...)
         ("plu_code", "TEXT"),                       # رمز الميزان للمنتجات الموزونة
         ("is_weighted", "INTEGER NOT NULL DEFAULT 0"),
         ("is_favorite", "INTEGER NOT NULL DEFAULT 0"),  # يظهر كزر سريع في نقطة البيع

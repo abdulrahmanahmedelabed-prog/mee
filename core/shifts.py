@@ -27,6 +27,21 @@ def current_shift_id():
     return s["id"] if s else None
 
 
+def cash_shift(shift_id=None):
+    """أي عملية نقدية من الدرج يجب أن تُسجَّل في وردية مفتوحة، وإلا اختل عدّ الصندوق.
+    يرجع الوردية المحددة، أو الوردية المفتوحة على هذا الجهاز، أو يرفض العملية إن كانت الورديات إلزامية"""
+    if shift_id:
+        return shift_id
+    sid = current_shift_id()
+    if sid:
+        return sid
+    from core import settings
+    if settings.get_bool("require_shift"):
+        raise ValueError("العملية نقدية من الدرج ولا توجد وردية مفتوحة على هذا الجهاز. افتح وردية أولاً "
+                         "(الصندوق والورديات)، أو اختر طريقة دفع غير نقدية.")
+    return None
+
+
 def open_shift(opening_cash=0.0, note=""):
     if current_shift():
         raise ValueError("توجد وردية مفتوحة بالفعل")

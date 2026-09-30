@@ -39,7 +39,7 @@ def insights(days=30):
     out = []
     since = _since(days)
     sold = _sold_since(since)
-    prods = db.query("SELECT * FROM products WHERE is_active=1")
+    prods = db.query("SELECT * FROM products WHERE is_active=1 AND is_service=0")
     target_margin = settings.get_float("target_margin_percent", 15)
 
     # 1) أصناف تُباع بخسارة أو بهامش ضعيف

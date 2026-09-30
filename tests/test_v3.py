@@ -73,8 +73,10 @@ def test_stock_count_loss_and_gain():
     pid = products.add_product("سكر", "555", "", 3, 5, 10, 1)
     products.set_stock_count(pid, 8)   # عجز 2 × 3 = 6 خسارة
     products.set_stock_count(pid, 9)   # زيادة 1 × 3 = 3 ربح
-    products.adjust_stock(pid, -1, "تصحيح خطأ")  # ليست خسارة
-    assert reports.profit_and_loss(db.today(), db.today())["stock_loss"] == 3
+    products.adjust_stock(pid, -1, "تصحيح خطأ")  # نقص بلا مستند: خسارة 3 (البضاعة لم تعد موجودة)
+    products.adjust_stock(pid, 2, "استلام بضاعة")   # بلا فاتورة: رصيد افتتاحي وليس ربحاً
+    products.adjust_stock(pid, -2, "استلام بضاعة")  # تصحيح استلام خاطئ: يعكس نفس الحساب
+    assert reports.profit_and_loss(db.today(), db.today())["stock_loss"] == 6
 
 
 def test_shift_per_terminal():

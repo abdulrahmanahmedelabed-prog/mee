@@ -15,6 +15,7 @@ def fresh_db(tmp_path):
     context.set_terminal(None)
     settings._cache.clear()
     db.init_db()
+    settings.set_many({"require_shift": "0"})   # قاعدة الوردية الإلزامية لها اختبارها الخاص (test_accounting_rules)
     auth.login("admin", "admin")
     yield
     auth.logout()

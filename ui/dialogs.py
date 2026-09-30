@@ -315,7 +315,7 @@ class ProductDialog(QDialog):
         self.unit = QComboBox()
         self.unit.setEditable(True)
         self.unit.addItems(products.UNITS)
-        self.cost = MoneySpin()
+        self.cost = MoneySpin(decimals=4)      # تكلفة الحبة بأربع خانات (الكرتونة ÷ عدد الحبات)
         self.price = MoneySpin()
         self.wholesale = MoneySpin()
         self.wholesale.setToolTip("يُطبَّق تلقائياً عند البيع لعميل مستواه «جملة». 0 = نفس سعر البيع")

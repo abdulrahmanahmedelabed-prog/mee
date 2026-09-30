@@ -46,7 +46,9 @@ class StockDialog(QDialog):
             self.has_expiry.toggled.connect(self.expiry.setEnabled)
             lay.addRow("", self.has_expiry)
             lay.addRow("تاريخ الانتهاء:", self.expiry)
-            lay.addRow("", hint("الخصم بسبب (تالف/منتهي/سرقة/هدية) يُسجّل خسارة في تقرير الأرباح."))
+            lay.addRow("", hint("أي نقص بلا فاتورة يُسجَّل خسارة في تقرير الأرباح، وأي زيادة مكسباً. "
+                                "استثناء: «استلام بضاعة» (بضاعة بلا فاتورة شراء) ولتصحيح استلام خاطئ اختر نفس السبب بالسالب. "
+                                "الأفضل دائماً تسجيل البضاعة بفاتورة مشتريات."))
         ok_cancel(self, lay)
         self.value.setFocus()
 
@@ -276,7 +278,9 @@ class InventoryScreen(QWidget):
 
     def delete(self):
         p = self.selected()
-        if p and ask(self, f"حذف المنتج '{p['name']}'؟\n(يبقى ظاهراً في الفواتير القديمة)"):
+        extra = (f"\n\nالكمية الموجودة ({fmt_qty(p['quantity'])}) ستُسجَّل خسارة في تقرير الأرباح."
+                 if p and abs(p["quantity"] or 0) > 1e-9 else "")
+        if p and ask(self, f"حذف المنتج '{p['name']}'؟\n(يبقى ظاهراً في الفواتير القديمة){extra}"):
             products.delete_product(p["id"])
             self.refresh()
 

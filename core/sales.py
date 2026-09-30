@@ -14,7 +14,7 @@ import math
 
 from core import db, auth, audit, settings, context, loyalty, promotions, license
 from core.products import _move_stock
-from core.utils import money, qty, fmt_qty
+from core.utils import money, qty, fmt_qty, unit_cost
 
 METHOD_CASH = "نقدي"
 METHOD_CARD = "بطاقة"
@@ -143,6 +143,9 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
     change = money(cash_received - cash_amount)
 
     user_id = auth.current_user_id()
+    if cash_amount > 0 and not offline and not shift_id:
+        from core import shifts
+        shift_id = shifts.current_shift_id()      # نقطة البيع تفتح الوردية بنفسها قبل البيع
     allow_negative = settings.get_bool("allow_negative_stock") or bool(offline)
 
     with db.tx() as conn:
@@ -162,7 +165,7 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
             if not p:
                 raise SaleError("منتج غير موجود")
             products[pid] = p
-            if not allow_negative and p["quantity"] + 1e-9 < q:
+            if not allow_negative and not p["is_service"] and p["quantity"] + 1e-9 < q:
                 short.append(f"{p['name']} (المتوفر {fmt_qty(p['quantity'])})")
         if short:
             raise SaleError("الكمية غير كافية في المخزون:\n" + "\n".join(short))
@@ -235,9 +238,10 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
                                            unit_name, factor)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (invoice_id, p["id"], item.get("product_name") or p["name"], q, money(item["unit_price"]),
-                  money(p["cost_price"] * factor), money(q * item["unit_price"]),
+                  unit_cost(p["cost_price"] * factor), money(q * item["unit_price"]),
                   item.get("unit_name") or p["unit"], factor))
-            _move_stock(conn, p["id"], -qty(q * factor), f"بيع - فاتورة {number}")
+            if not p["is_service"]:
+                _move_stock(conn, p["id"], -qty(q * factor), f"بيع - فاتورة {number}")
             list_price = item.get("list_price", p["sale_price"] if factor == 1 else item["unit_price"])
             if money(item["unit_price"]) != money(list_price):
                 audit.log("تغيير سعر في البيع", f"{number}: {p['name']} {list_price} ← {item['unit_price']}", conn)
@@ -282,6 +286,12 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
     if not items:
         raise SaleError("اختر كمية للإرجاع")
     user_id = auth.current_user_id()
+    if refund_method == REFUND_CASH:
+        from core import shifts
+        try:
+            shift_id = shifts.cash_shift(shift_id)
+        except ValueError as e:
+            raise SaleError(str(e))
     with db.tx() as conn:
         inv = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
         if not inv:
@@ -306,6 +316,14 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
         total = money(sum(l[2] for l in lines))
         max_refund = money(inv["total"] - inv["returned_total"])
         total = min(total, max_refund)
+        if refund_method == REFUND_CASH and inv["credit_amount"] > 0 and inv["customer_id"]:
+            # فاتورة بيعت آجلاً: لا يُرد نقداً أكثر مما دفعه الزبون فعلاً ما دام عليه دين
+            paid = money(inv["cash_amount"] + inv["card_amount"] + inv["wallet_amount"])
+            refunded = conn.execute("""SELECT COALESCE(SUM(total),0) FROM returns WHERE invoice_id=? AND refund_method=?""",
+                                    (invoice_id, REFUND_CASH)).fetchone()[0]
+            if total > money(paid - refunded) + 0.009 and _customer_balance(conn, inv["customer_id"]) > 0.009:
+                raise SaleError("هذه الفاتورة بيعت آجلاً وما زال على العميل دين، فلا يُرد له نقداً أكثر مما دفعه "
+                                f"({money(paid - refunded)}). اختر «{REFUND_DEBT}».")
         tax = money(total * tax_ratio)
         cost_total = money(sum(l[0]["cost_price"] * l[1] for l in lines))
 
@@ -324,7 +342,9 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
                          (ret_id, row["id"], row["product_id"], row["product_name"], q, row["unit_price"],
                           row["cost_price"], line_total, factor))
             conn.execute("UPDATE invoice_items SET returned_qty = ROUND(returned_qty + ?, 3) WHERE id=?", (q, row["id"]))
-            _move_stock(conn, row["product_id"], qty(q * factor), f"مرتجع {number} من فاتورة {inv['invoice_number']}")
+            svc = conn.execute("SELECT is_service FROM products WHERE id=?", (row["product_id"],)).fetchone()
+            if not (svc and svc["is_service"]):
+                _move_stock(conn, row["product_id"], qty(q * factor), f"مرتجع {number} من فاتورة {inv['invoice_number']}")
 
         new_returned = money(inv["returned_total"] + total)
         left = conn.execute("SELECT COALESCE(SUM(quantity - returned_qty),0) FROM invoice_items WHERE invoice_id=?",

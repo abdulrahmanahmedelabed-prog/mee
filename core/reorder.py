@@ -33,7 +33,7 @@ def suggestions(days=30, cover_days=14, include_all_low=True):
         cartons[r["product_id"]] = (r["name"], r["factor"])  # أكبر وحدة (آخر واحدة بالترتيب)
 
     out = []
-    for p in db.query("SELECT * FROM products WHERE is_active=1 AND is_weighted=0"):
+    for p in db.query("SELECT * FROM products WHERE is_active=1 AND is_weighted=0 AND is_service=0"):
         q_sold = max(sold.get(p["id"], 0) or 0, 0)
         rate = q_sold / days
         stock = p["quantity"]

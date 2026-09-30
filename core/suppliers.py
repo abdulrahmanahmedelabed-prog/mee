@@ -3,7 +3,7 @@
 
 from core import db, auth, audit
 from core.products import _move_stock
-from core.utils import money, qty
+from core.utils import money, qty, unit_cost as ucost
 
 PAY_DRAWER = "نقدي من الصندوق"
 PAY_OUTSIDE = "نقدي من خارج الصندوق"
@@ -82,6 +82,9 @@ def create_purchase(supplier_id, items, paid=0.0, payment_method=PAY_DRAWER, sup
     tax = money(tax or 0)
     if tax < 0 or tax >= total:
         raise ValueError("قيمة الضريبة غير صحيحة")
+    if paid > 0 and payment_method == PAY_DRAWER:
+        from core import shifts
+        shift_id = shifts.cash_shift(shift_id)
     net_ratio = (total - tax) / total if total else 1.0
     user_id = auth.current_user_id()
     created = db.now()
@@ -100,7 +103,7 @@ def create_purchase(supplier_id, items, paid=0.0, payment_method=PAY_DRAWER, sup
             q = qty(entered_q * factor)                    # بالوحدة الأساسية
             cost = entered_cost / factor * net_ratio       # تكلفة الحبة بدون ضريبة المدخلات
             old_q = max(p["quantity"], 0)
-            new_cost = money((old_q * p["cost_price"] + q * cost) / (old_q + q)) if (old_q + q) > 0 else money(cost)
+            new_cost = ucost((old_q * p["cost_price"] + q * cost) / (old_q + q)) if (old_q + q) > 0 else ucost(cost)
             conn.execute("""INSERT INTO purchase_items(purchase_id, product_id, product_name, quantity, unit_cost, total,
                                                        unit_name, factor, expiry_date, batch_no)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -186,6 +189,9 @@ def pay_supplier(supplier_id, amount, method=PAY_DRAWER, note="", shift_id=None)
     amount = money(amount)
     if amount <= 0:
         raise ValueError("المبلغ يجب أن يكون أكبر من صفر")
+    if method == PAY_DRAWER:
+        from core import shifts
+        shift_id = shifts.cash_shift(shift_id)
     with db.tx() as conn:
         conn.execute("""INSERT INTO supplier_transactions(supplier_id, type, amount, method, note, user_id, shift_id, created_at)
                         VALUES (?, 'payment', ?, ?, ?, ?, ?, ?)""",

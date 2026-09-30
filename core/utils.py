@@ -11,6 +11,13 @@ def money(value):
     return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) + 0.0  # يمنع ظهور -0.00
 
 
+def unit_cost(value):
+    """تكلفة الحبة بأربع خانات: الكرتونة 24 حبة بـ 10 تكلفة حبتها 0.4167 (بخانتين 0.42 تضخّم التكلفة 0.8%)"""
+    if value is None:
+        return 0.0
+    return float(Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)) + 0.0
+
+
 def qty(value):
     """تقريب الكميات لثلاث خانات (للموزونات بالكيلو)"""
     if value is None:

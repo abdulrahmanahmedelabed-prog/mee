@@ -73,6 +73,9 @@ def receive_payment(customer_id, amount, method="نقدي", note="", shift_id=No
     amount = money(amount)
     if amount <= 0:
         raise ValueError("المبلغ يجب أن يكون أكبر من صفر")
+    if method == "نقدي":
+        from core import shifts
+        shift_id = shifts.cash_shift(shift_id)
     with db.tx() as conn:
         cur = conn.execute("""INSERT INTO customer_transactions(customer_id, type, amount, method, note, user_id, shift_id, created_at)
                               VALUES (?, 'payment', ?, ?, ?, ?, ?, ?)""",
