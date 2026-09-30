@@ -5,7 +5,7 @@
 """
 
 PRODUCT_NAME = "برنامج المحاسبة ونقاط البيع"
-VERSION = "8.0"
+VERSION = "8.1"
 VENDOR_NAME = "اسم شركتك أو اسمك"
 VENDOR_PHONE = ""          # رقم واتساب الدعم بالصيغة الدولية، مثل 970599123456
 VENDOR_EMAIL = ""

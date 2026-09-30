@@ -23,6 +23,19 @@ METHOD_MIXED = "مختلط"
 
 REFUND_CASH = "نقدي"
 REFUND_DEBT = "خصم من الدين"
+REFUND_CARD = "بطاقة"          # إرجاع المبلغ إلى بطاقة الزبون (من البنك)
+
+
+def refund_methods(invoice):
+    """طرق الإرجاع المتاحة لفاتورة: نقدي دائماً، وخصم من الدين إن كان لها عميل، وبطاقة أو نفس المحفظة إن دُفعت بها"""
+    out = [REFUND_CASH]
+    if invoice["customer_id"]:
+        out.append(REFUND_DEBT)
+    if (invoice["card_amount"] or 0) > 0:
+        out.append(REFUND_CARD)
+    if (invoice["wallet_amount"] or 0) > 0 and invoice["wallet_name"]:
+        out.append(invoice["wallet_name"])
+    return out
 
 
 class SaleError(ValueError):
@@ -225,7 +238,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
         if card_ref:
             conn.execute("UPDATE invoices SET card_ref=? WHERE id=?", (str(card_ref)[:120], invoice_id))
         if points_redeemed:
-            loyalty._record(conn, customer_id, -points_redeemed, invoice_id, f"استبدال في الفاتورة {number}", user_id)
+            loyalty._record(conn, customer_id, -points_redeemed, invoice_id, f"استبدال في الفاتورة {number}", user_id,
+                            value=-disc["points_value"])
         if points_earned:
             loyalty._record(conn, customer_id, points_earned, invoice_id, f"نقاط الفاتورة {number}", user_id)
 
@@ -286,18 +300,31 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
     if not items:
         raise SaleError("اختر كمية للإرجاع")
     user_id = auth.current_user_id()
+    from core import shifts
     if refund_method == REFUND_CASH:
-        from core import shifts
         try:
             shift_id = shifts.cash_shift(shift_id)
         except ValueError as e:
             raise SaleError(str(e))
+    else:
+        shift_id = shift_id or shifts.current_shift_id()
     with db.tx() as conn:
         inv = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
         if not inv:
             raise SaleError("الفاتورة غير موجودة")
         if refund_method == REFUND_DEBT and not inv["customer_id"]:
             raise SaleError("لا يمكن الخصم من الدين لفاتورة بدون عميل")
+        from core import ledger
+        if refund_method == REFUND_CASH:
+            refund_account, paid_by = ledger.CASH, None
+        elif refund_method == REFUND_DEBT:
+            refund_account, paid_by = ledger.RECEIVABLES, None
+        elif refund_method == REFUND_CARD and inv["card_amount"] > 0:
+            refund_account, paid_by = ledger.BANK, inv["card_amount"]
+        elif refund_method == inv["wallet_name"] and inv["wallet_amount"] > 0:
+            refund_account, paid_by = (ledger.BANK if inv["wallet_bank"] else ledger.WALLETS), inv["wallet_amount"]
+        else:
+            raise SaleError("طريقة الإرجاع غير متاحة لهذه الفاتورة: يُرد المبلغ نقداً أو بنفس طريقة الدفع")
         ratio = (inv["total"] / inv["subtotal"]) if inv["subtotal"] else 0
         tax_ratio = (inv["tax"] / inv["total"]) if inv["total"] else 0
 
@@ -316,11 +343,18 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
         total = money(sum(l[2] for l in lines))
         max_refund = money(inv["total"] - inv["returned_total"])
         total = min(total, max_refund)
-        if refund_method == REFUND_CASH and inv["credit_amount"] > 0 and inv["customer_id"]:
+        if paid_by is not None:
+            # لا يُرد للبطاقة أو المحفظة أكثر مما دُفع بها في هذه الفاتورة
+            before = conn.execute("SELECT COALESCE(SUM(total),0) FROM returns WHERE invoice_id=? AND refund_method=?",
+                                  (invoice_id, refund_method)).fetchone()[0]
+            if total > money(paid_by - before) + 0.009:
+                raise SaleError(f"دُفع بـ«{refund_method}» في هذه الفاتورة {money(paid_by)} فقط، والمتبقي للإرجاع بها "
+                                f"{money(paid_by - before)}. أرجع الباقي نقداً أو بطريقة أخرى.")
+        if refund_method != REFUND_DEBT and inv["credit_amount"] > 0 and inv["customer_id"]:
             # فاتورة بيعت آجلاً: لا يُرد نقداً أكثر مما دفعه الزبون فعلاً ما دام عليه دين
             paid = money(inv["cash_amount"] + inv["card_amount"] + inv["wallet_amount"])
-            refunded = conn.execute("""SELECT COALESCE(SUM(total),0) FROM returns WHERE invoice_id=? AND refund_method=?""",
-                                    (invoice_id, REFUND_CASH)).fetchone()[0]
+            refunded = conn.execute("""SELECT COALESCE(SUM(total),0) FROM returns WHERE invoice_id=? AND refund_method!=?""",
+                                    (invoice_id, REFUND_DEBT)).fetchone()[0]
             if total > money(paid - refunded) + 0.009 and _customer_balance(conn, inv["customer_id"]) > 0.009:
                 raise SaleError("هذه الفاتورة بيعت آجلاً وما زال على العميل دين، فلا يُرد له نقداً أكثر مما دفعه "
                                 f"({money(paid - refunded)}). اختر «{REFUND_DEBT}».")
@@ -330,9 +364,10 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
         number = db.next_number(conn, "return", "RET")
         created = db.now()
         cur = conn.execute("""INSERT INTO returns (return_number, invoice_id, total, tax, cost_total, refund_method, reason,
-                                                   user_id, shift_id, created_at)
-                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                           (number, invoice_id, total, tax, cost_total, refund_method, reason, user_id, shift_id, created))
+                                                   user_id, shift_id, created_at, refund_account)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (number, invoice_id, total, tax, cost_total, refund_method, reason, user_id, shift_id, created,
+                            refund_account))
         ret_id = cur.lastrowid
         for row, q, line_total in lines:
             factor = row["factor"] or 1
@@ -358,7 +393,11 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
                          (inv["customer_id"], -total, invoice_id, f"مرتجع {number}", user_id, shift_id, created))
         if inv["customer_id"] and inv["points_earned"] and inv["total"]:
             lost = float(math.floor(inv["points_earned"] * total / inv["total"] + 0.5))
-            loyalty._record(conn, inv["customer_id"], -lost, invoice_id, f"إلغاء نقاط بسبب المرتجع {number}", user_id)
+            earned = conn.execute("""SELECT SUM(points), SUM(value) FROM loyalty_transactions
+                                     WHERE invoice_id=? AND points > 0""", (invoice_id,)).fetchone()
+            per_point = (earned[1] / earned[0]) if earned and earned[0] and earned[1] is not None else None
+            loyalty._record(conn, inv["customer_id"], -lost, invoice_id, f"إلغاء نقاط بسبب المرتجع {number}", user_id,
+                            value=-money(lost * per_point) if per_point is not None else None)
         audit.log("مرتجع", f"{number} من {inv['invoice_number']} بقيمة {total} ({refund_method})", conn)
 
     return {"return_id": ret_id, "return_number": number, "total": total}

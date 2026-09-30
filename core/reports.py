@@ -35,10 +35,13 @@ def profit_and_loss(date_from, date_to):
     cash_diff = money(db.scalar(f"SELECT SUM(difference) FROM shifts WHERE status='closed' AND {_RANGE.format(col='closed_at')}", p))
     cust_adj = money(db.scalar(f"SELECT SUM(amount) FROM customer_transactions WHERE type='adjust' AND {_RANGE.format(col='created_at')}", p))
     sup_adj = money(db.scalar(f"SELECT SUM(amount) FROM supplier_transactions WHERE type='adjust' AND {_RANGE.format(col='created_at')}", p))
-    pr_diff = money(db.scalar(f"SELECT SUM(total - cost_total) FROM purchase_returns WHERE {_RANGE.format(col='created_at')}", p))
+    pr_diff = money(db.scalar(f"SELECT SUM(total - tax - cost_total) FROM purchase_returns WHERE {_RANGE.format(col='created_at')}", p))
     manual = _manual_pl(date_from, date_to).get(None, 0.0)
     other = money(cash_diff + cust_adj - sup_adj + pr_diff)
-    net_profit = money(gross_profit - expenses - stock_loss + other + manual)
+    from core import loyalty
+    loyalty_cost = money(db.scalar(f"SELECT SUM({loyalty.value_sql()}) FROM loyalty_transactions "
+                                   f"WHERE {_RANGE.format(col='created_at')}", p))
+    net_profit = money(gross_profit - expenses - stock_loss - loyalty_cost + other + manual)
     return {
         "invoice_count": inv["cnt"],
         "gross_sales": money(inv["gross"]),
@@ -54,6 +57,7 @@ def profit_and_loss(date_from, date_to):
         "gross_margin": round(gross_profit / net_revenue * 100, 1) if net_revenue else 0.0,
         "expenses": expenses,
         "stock_loss": stock_loss,
+        "loyalty_cost": loyalty_cost,
         "cash_diff": cash_diff,
         "other_adjustments": other,
         "manual_entries": manual,
@@ -100,6 +104,7 @@ def period_summary(date_from, date_to, group="month"):
     """ملخص المبيعات والأرباح وطرق الدفع لكل يوم/أسبوع/شهر/سنة. مجموع الفترات = تقرير الأرباح والخسائر للمدة كلها"""
     if group not in PERIODS:
         raise ValueError("نوع الفترة غير صحيح")
+    from core import loyalty
     p = (date_from, date_to)
     rows = {}
 
@@ -135,8 +140,10 @@ def period_summary(date_from, date_to, group="month"):
              "created_at", "other", 1),
             ("SELECT {k} AS k, SUM(amount) AS v FROM supplier_transactions WHERE type='adjust' AND {where} GROUP BY k",
              "created_at", "other", -1),
-            ("SELECT {k} AS k, SUM(total - cost_total) AS v FROM purchase_returns WHERE {where} GROUP BY k",
-             "created_at", "other", 1)):
+            ("SELECT {k} AS k, SUM(total - tax - cost_total) AS v FROM purchase_returns WHERE {where} GROUP BY k",
+             "created_at", "other", 1),
+            ("SELECT {k} AS k, SUM(" + loyalty.value_sql() + ") AS v FROM loyalty_transactions WHERE {where} GROUP BY k",
+             "created_at", "other", -1)):
         for r in grouped(sql, col):
             row(r["k"])[field] += sign * (r["v"] or 0)
     for k, v in _manual_pl(date_from, date_to, group).items():
@@ -303,11 +310,13 @@ def vat_report(date_from, date_to):
                             FROM returns WHERE {_RANGE.format(col='created_at')}""", p)
     pur = db.query_one(f"""SELECT COUNT(*) AS cnt, COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax
                            FROM purchases WHERE {_RANGE.format(col='created_at')}""", p)
+    pret = db.query_one(f"""SELECT COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax
+                            FROM purchase_returns WHERE {_RANGE.format(col='created_at')}""", p)
     output_tax = money(sales_["tax"] - rets["tax"])
-    input_tax = money(pur["tax"])
+    input_tax = money(pur["tax"] - pret["tax"])          # مرتجعات المشتريات تعكس ضريبة مدخلاتها
     taxable_sales = money(sales_["total"] - rets["total"] - output_tax)
     return {"sales_count": sales_["cnt"], "sales_total": money(sales_["total"] - rets["total"]),
             "taxable_sales": taxable_sales, "output_tax": output_tax,
-            "purchases_count": pur["cnt"], "purchases_total": money(pur["total"]),
-            "taxable_purchases": money(pur["total"] - input_tax), "input_tax": input_tax,
+            "purchases_count": pur["cnt"], "purchases_total": money(pur["total"] - pret["total"]),
+            "taxable_purchases": money(pur["total"] - pret["total"] - input_tax), "input_tax": input_tax,
             "net_due": money(output_tax - input_tax)}

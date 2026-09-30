@@ -80,7 +80,9 @@ class CashScreen(QWidget):
                     ("= النقد المتوقع", d["expected_cash"]), ("", None), ("مبيعات بطاقة", d["card_sales"]),
                     ("مبيعات دفع إلكتروني (محافظ وتطبيقات)", d["wallet_sales"]),
                     ("مبيعات آجلة", d["credit_sales"]), ("الخصومات الممنوحة", d["discounts"]),
-                    ("تسديدات عملاء (غير نقدية)", d["customer_payments_other"])]
+                    ("تسديدات عملاء (غير نقدية)", d["customer_payments_other"]),
+                    ("مرتجعات أُعيدت للبطاقة أو المحفظة", d["electronic_refunds"]),
+                    ("مرتجعات خُصمت من الدين", d["debt_refunds"])]
             self.details.set_rows([[a, float(b) if b is not None else ""] for a, b in rows])
         else:
             self.status.setText("لا توجد وردية مفتوحة")

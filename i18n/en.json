@@ -1414,7 +1414,18 @@
 "دفع ضريبة القيمة المضافة المستحقة من البنك": "Pay VAT due from the bank",
 "عمولات ومصاريف بنكية خصمها البنك": "Bank charges deducted by the bank",
 "مقاصة ضريبة المدخلات مع الضريبة المستحقة (عند تقديم الإقرار)": "Offset input VAT against VAT due (when filing the return)",
-"هذا المصروف دُفع من درج وردية مغلقة وعُدّ نقدها، وحذفه يغيّر نتيجة الوردية بأثر رجعي.\nإن كان خطأً: سجّل «إدخال نقدي» في الوردية الحالية بنفس المبلغ مع السبب.": "This expense was paid from the drawer of a closed shift whose cash was already counted; deleting it would change that shift's result retroactively.\nIf it was a mistake: record a “Cash in” of the same amount in the current shift with the reason."
+"هذا المصروف دُفع من درج وردية مغلقة وعُدّ نقدها، وحذفه يغيّر نتيجة الوردية بأثر رجعي.\nإن كان خطأً: سجّل «إدخال نقدي» في الوردية الحالية بنفس المبلغ مع السبب.": "This expense was paid from the drawer of a closed shift whose cash was already counted; deleting it would change that shift's result retroactively.\nIf it was a mistake: record a “Cash in” of the same amount in the current shift with the reason.",
+"السعر الافتراضي = تكلفة الحبة عندك بدون ضريبة. إذا اتفقت مع المورد على سعر آخر عدّله؛ الفرق يُسجَّل ربحاً أو خسارة تلقائياً.": "Default price = your unit cost before tax. If you agreed another price with the supplier, change it; the difference is recorded as a gain or loss automatically.",
+"طريقة الإرجاع غير متاحة لهذه الفاتورة: يُرد المبلغ نقداً أو بنفس طريقة الدفع": "This refund method is not available for this invoice: refund in cash or by the original payment method",
+"مرتجعات": "Refunds",
+"مرتجعات أُعيدت للبطاقة أو المحفظة": "Refunds to card or e-wallet",
+"مرتجعات خُصمت من الدين": "Refunds deducted from debt",
+"نقاط ولاء مستحقة للعملاء": "Loyalty points owed to customers",
+"تكلفة نقاط الولاء": "Loyalty points cost",
+"− تكلفة نقاط الولاء (المكتسبة − المستبدلة)": "− Loyalty points cost (earned − redeemed)",
+"عمولات الدفع الإلكتروني": "E-payment fees",
+"إهلاك الأصول": "Depreciation",
+"عمولات ومصاريف بنكية": "Bank charges"
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",
@@ -1719,6 +1730,11 @@
 "إعادة تقييم التكلفة {0} ← {1}": "Cost revaluation {0} → {1}",
 "المحاسبة ونقاط البيع • v{0}": "Accounting & POS • v{0}",
 "حذف المنتج '{0}'؟\n(يبقى ظاهراً في الفواتير القديمة){1}": "Delete product '{0}'?\n(It stays visible on old invoices){1}",
-"هذه الفاتورة بيعت آجلاً وما زال على العميل دين، فلا يُرد له نقداً أكثر مما دفعه ({0}). اختر «{1}».": "This invoice was sold on credit and the customer still owes money, so no more cash than was paid ({0}) can be refunded. Choose “{1}”."
+"هذه الفاتورة بيعت آجلاً وما زال على العميل دين، فلا يُرد له نقداً أكثر مما دفعه ({0}). اختر «{1}».": "This invoice was sold on credit and the customer still owes money, so no more cash than was paid ({0}) can be refunded. Choose “{1}”.",
+"  (منها ضريبة {0})": "  (incl. tax {0})",
+"دُفع بـ«{0}» في هذه الفاتورة {1} فقط، والمتبقي للإرجاع بها {2}. أرجع الباقي نقداً أو بطريقة أخرى.": "Only {1} was paid by “{0}” on this invoice; {2} remains refundable that way. Refund the rest in cash or another way.",
+"نقاط الولاء اليوم ({0} حركة)": "Loyalty points today ({0} movements)",
+"نقاط ولاء {0}: {1}": "Loyalty points {0}: {1}",
+"يرد المورد ضريبة المدخلات عليها ({0}%)": "Supplier refunds the input VAT on it ({0}%)"
 }
 }

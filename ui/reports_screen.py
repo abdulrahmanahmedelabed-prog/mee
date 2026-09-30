@@ -132,7 +132,8 @@ class ReportsScreen(QWidget):
         wal = QWidget()
         wl = QVBoxLayout(wal)
         wl.setContentsMargins(0, 10, 0, 0)
-        self.wallet_table = Table(["طريقة الدفع", "يصل المال إلى", "عدد العمليات", "مبيعات", "تسديد ديون", "الإجمالي"])
+        self.wallet_table = Table(["طريقة الدفع", "يصل المال إلى", "عدد العمليات", "مبيعات", "تسديد ديون", "مرتجعات",
+                                   "الإجمالي"])
         self.wallet_table.itemSelectionChanged.connect(self.load_wallet_ops)
         wl.addWidget(self.wallet_table, 1)
         wl.addWidget(QLabel("عمليات الطريقة المحددة (للمطابقة سطراً بسطر مع كشف المحفظة أو البنك):"))
@@ -181,6 +182,7 @@ class ReportsScreen(QWidget):
                 ("− تكلفة البضاعة المباعة", p["cogs"]), ("= مجمل الربح", p["gross_profit"]),
                 ("− المصاريف التشغيلية", p["expenses"]),
                 ("− خسائر المخزون (تالف، منتهي، عجز جرد)", p["stock_loss"]),
+                ("− تكلفة نقاط الولاء (المكتسبة − المستبدلة)", p["loyalty_cost"]),
                 ("± عجز/زيادة الصندوق والتسويات", p["other_adjustments"]),
                 ("± عمليات مالية (عمولات، إيرادات أخرى)", p["manual_entries"]), ("= صافي الربح", p["net_profit"]),
                 ("", None),
@@ -206,7 +208,7 @@ class ReportsScreen(QWidget):
             from core import wallets
             rows = wallets.summary(a, b)
             self.wallet_table.set_rows([[r["name"], r["dest"], r["count"], float(r["sales"]), float(r["debts"]),
-                                         float(r["total"])] for r in rows], rows)
+                                         float(r["refunds"]), float(r["total"])] for r in rows], rows)
             self.wallet_ops.set_rows([])
         elif name == "حسب الفئة":
             rows = reports.sales_by_category(a, b)

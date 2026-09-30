@@ -26,7 +26,7 @@ if __name__ == "__main__" and len(sys.argv) > 1:
     os.environ["SHOP_DATA_DIR"] = sys.argv[1]
 
 from core import (db, auth, products, customers, suppliers, sales, expenses, shifts, settings,  # noqa: E402
-                  promotions, cheques, ledger, license, wallets)
+                  promotions, cheques, ledger, license, wallets, loyalty)
 from core.utils import money  # noqa: E402
 
 DEFAULT_DAYS = 3 * 365
@@ -256,22 +256,32 @@ class Shop:
             cust = self.wholesale
         elif self.rnd.random() < 0.22 and self.custs:
             cust = self.rnd.choice(self.custs)
-        total = sales.compute_totals(cart)["total"]
+        pts = 0.0
+        if cust and not wholesale and self.rnd.random() < 0.3:
+            # الزبون الدائم يستبدل نقاطه أحياناً (مئات كاملة، وبما لا يتجاوز نصف الفاتورة)
+            have = loyalty.balance(cust)
+            half = sales.compute_totals(cart)["total"] / 2 / max(settings.get_float("loyalty_point_value", 0.05), 0.001)
+            pts = float(int(min(have, half) // 100) * 100) if have >= 300 else 0.0
+        disc = sales.cart_discounts(cart, points=pts)["total"] if pts else 0.0
+        total = sales.compute_totals(cart, disc)["total"]
         pay = {"credit_amount": total, "cash_amount": 0} if wholesale else self.payment(d, total, cust)
         try:
-            res = sales.create_sale(cart, customer_id=cust, shift_id=self.sid, **pay)
+            res = sales.create_sale(cart, customer_id=cust, shift_id=self.sid, points_redeemed=pts, **pay)
         except sales.SaleError:          # تجاوز حد الدين: يدفع نقداً
-            res = sales.create_sale(cart, customer_id=cust, shift_id=self.sid)
+            res = sales.create_sale(cart, customer_id=cust, shift_id=self.sid, points_redeemed=pts)
             pay = {}
         for it in cart:
             self.today_sold[it["product_id"]] += it["quantity"]
         if pay.get("wallet_amount") and wallets.get(pay["wallet_name"])["dest"] == wallets.DEST_WALLET:
             self.wallet_bal += pay["wallet_amount"]
-        if not (pay.get("credit_amount") or pay.get("wallet_amount") or pay.get("card_amount")) \
-                and self.rnd.random() < 0.004:
+        if not pay.get("credit_amount") and self.rnd.random() < 0.004:
+            # مرتجع يُعاد بنفس طريقة الدفع: نقداً، أو للبطاقة، أو لنفس المحفظة
+            method = pay.get("wallet_name") if pay.get("wallet_amount") else \
+                (sales.REFUND_CARD if pay.get("card_amount") else sales.REFUND_CASH)
             it = sales.returnable_items(res["invoice_id"])[0]
             sales.create_return(res["invoice_id"], [{"invoice_item_id": it["id"], "quantity": min(1, it["remaining"])}],
-                                reason=self.rnd.choice(["تالف", "غير مطابق", "غيّر رأيه"]), shift_id=self.sid)
+                                refund_method=method, reason=self.rnd.choice(["تالف", "غير مطابق", "غيّر رأيه"]),
+                                shift_id=self.sid)
 
     def restock(self, d):
         infl = 1.035 ** self.year_index(d)       # غلاء الأسعار عند الموردين
@@ -368,6 +378,16 @@ class Shop:
         if d.weekday() == 0:                     # تاجر الجملة: طلبية أسبوعية آجلة
             self.at(d, 15, 40)
             self.one_sale(d, wholesale=True)
+        if d.day == 12:                          # إرجاع بضاعة تالفة لمورد كبير مع ضريبة مدخلاتها
+            self.at(d, 9, 15)
+            name, (sup, cats, _) = r.choice([(n, v) for n, v in self.sups.items() if not n.startswith(("مخابز", "سوق"))])
+            pool = [p for p in self.pids if self.info[p]["cat"] in cats and self.info[p]["unit"] != "كغم"
+                    and products.get_product(p)["quantity"] >= 8]
+            if pool:
+                pid = r.choice(pool)
+                net = money(2 * products.get_product(pid)["cost_price"])
+                suppliers.create_purchase_return(sup, [{"product_id": pid, "quantity": 2}], "تالف",
+                                                 tax=money(net * 0.16))
         if d.day == 15:
             self.at(d, 16, 30)
             bal = customers.balance(self.wholesale)

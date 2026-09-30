@@ -87,7 +87,9 @@ def summary(shift_id):
         "credit_sales": money(inv["credit"]),
         "discounts": money(inv["discount"]),
         "cash_refunds": one("SELECT SUM(total) FROM returns WHERE shift_id=? AND refund_method='نقدي'"),
-        "debt_refunds": one("SELECT SUM(total) FROM returns WHERE shift_id=? AND refund_method!='نقدي'"),
+        "debt_refunds": one("SELECT SUM(total) FROM returns WHERE shift_id=? AND refund_method='خصم من الدين'"),
+        "electronic_refunds": one("""SELECT SUM(total) FROM returns WHERE shift_id=?
+                                     AND refund_method NOT IN ('نقدي', 'خصم من الدين')"""),
         "customer_payments_cash": -one("SELECT SUM(amount) FROM customer_transactions WHERE shift_id=? AND type='payment' AND method='نقدي'"),
         "customer_payments_other": -one("SELECT SUM(amount) FROM customer_transactions WHERE shift_id=? AND type='payment' AND method!='نقدي'"),
         "expenses_cash": one("SELECT SUM(amount) FROM expenses WHERE shift_id=? AND from_drawer=1"),

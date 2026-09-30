@@ -85,7 +85,7 @@ def qr_text(w):
 
 
 def summary(date_from, date_to):
-    """تقرير المطابقة: لكل طريقة دفع إلكتروني عدد العمليات ومجموعها (مبيعات + تسديد ديون) في الفترة"""
+    """تقرير المطابقة: لكل طريقة دفع إلكتروني عدد العمليات ومجموعها (مبيعات + تسديد ديون − مبالغ أُعيدت للزبائن) في الفترة"""
     rows = db.query("""SELECT wallet_name AS name, COUNT(*) AS count, COALESCE(SUM(wallet_amount),0) AS sales
                        FROM invoices WHERE wallet_amount > 0 AND date(created_at) BETWEEN date(?) AND date(?)
                        GROUP BY wallet_name""", (date_from, date_to))
@@ -101,10 +101,17 @@ def summary(date_from, date_to):
             row = out.setdefault(r["name"], {"name": r["name"], "count": 0, "sales": 0.0, "debts": 0.0})
             row["count"] += r["count"]
             row["debts"] = money(r["paid"])
+    for r in db.query("""SELECT r.refund_method AS name, COALESCE(SUM(r.total),0) AS t FROM returns r
+                         JOIN invoices i ON i.id=r.invoice_id
+                         WHERE r.refund_method = i.wallet_name AND date(r.created_at) BETWEEN date(?) AND date(?)
+                         GROUP BY r.refund_method""", (date_from, date_to)):
+        row = out.setdefault(r["name"], {"name": r["name"], "count": 0, "sales": 0.0, "debts": 0.0})
+        row["refunds"] = money(r["t"])
     dests = {w["name"]: w["dest"] for w in all_wallets()}
     result = []
     for row in out.values():
-        row["total"] = money(row["sales"] + row["debts"])
+        row.setdefault("refunds", 0.0)
+        row["total"] = money(row["sales"] + row["debts"] - row["refunds"])
         row["dest"] = DESTS.get(dests.get(row["name"]), "—")
         result.append(row)
     return sorted(result, key=lambda r: -r["total"])

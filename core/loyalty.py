@@ -5,6 +5,9 @@
 - يستبدل النقاط بخصم على فاتورة لاحقة (مثلاً 100 نقطة = 5 شيكل).
 - المرتجع يلغي النقاط المكتسبة بنفس نسبته.
 الاستبدال يُسجَّل كخصم على الفاتورة، فيبقى حساب الربح صحيحاً.
+
+محاسبياً: النقاط غير المستبدلة دَين على المحل للزبائن. كل حركة نقاط تحفظ قيمتها بالعملة وقت حدوثها:
+الكسب يُقيَّد مصروفاً (تكلفة نقاط الولاء) والتزاماً للعملاء، والاستبدال أو الإلغاء يعكسهما.
 """
 
 import math
@@ -53,10 +56,24 @@ def _check_redeem(conn, customer_id, points):
     return value_of(points)
 
 
-def _record(conn, customer_id, points, invoice_id=None, note="", user_id=None):
+def _record(conn, customer_id, points, invoice_id=None, note="", user_id=None, value=None):
+    """value: قيمة النقاط بالعملة بنفس إشارتها (افتراضياً حسب قيمة النقطة الحالية)"""
     if customer_id and points:
-        conn.execute("""INSERT INTO loyalty_transactions(customer_id, points, invoice_id, note, user_id, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?)""", (customer_id, points, invoice_id, note, user_id, db.now()))
+        if value is None:
+            value = value_of(abs(points)) * (1 if points > 0 else -1)
+        conn.execute("""INSERT INTO loyalty_transactions(customer_id, points, invoice_id, note, user_id, created_at, value)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)""", (customer_id, points, invoice_id, note, user_id, db.now(),
+                                                          money(value)))
+
+
+def value_sql():
+    """قيمة الحركة المحفوظة، أو حسب قيمة النقطة الحالية للحركات القديمة (قبل حفظ القيمة)"""
+    return f"COALESCE(value, ROUND(points * {settings.get_float('loyalty_point_value', 0.05)!r}, 2))"
+
+
+def liability():
+    """قيمة النقاط غير المستبدلة (دَين على المحل للزبائن)"""
+    return money(db.scalar(f"SELECT SUM({value_sql()}) FROM loyalty_transactions"))
 
 
 def adjust(customer_id, points, note="تعديل يدوي"):

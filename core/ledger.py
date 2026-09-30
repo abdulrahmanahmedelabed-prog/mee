@@ -29,6 +29,7 @@ FIXED_ASSETS = "1510"
 PAYABLES = "2110"        # مستحقات الموردين
 CHEQUES_OUT = "2120"     # شيكات أعطيناها للموردين ولم تُصرف بعد
 VAT = "2210"
+LOYALTY = "2230"         # نقاط ولاء مستحقة للعملاء (قيمة النقاط غير المستبدلة)
 LOANS = "2310"
 CAPITAL = "3110"
 OWNER = "3120"           # جاري المالك: ما يسحبه المالك أو يدفعه من جيبه للمحل
@@ -57,6 +58,7 @@ SYSTEM_ACCOUNTS = [
     (PAYABLES, "ذمم الموردين", "liability"),
     (CHEQUES_OUT, "شيكات صادرة مؤجلة", "liability"),
     (VAT, "ضريبة القيمة المضافة المستحقة", "liability"),
+    (LOYALTY, "نقاط ولاء مستحقة للعملاء", "liability"),
     (LOANS, "قروض", "liability"),
     (CAPITAL, "رأس المال", "equity"),
     (OWNER, "جاري المالك (سحوبات وإيداعات)", "equity"),
@@ -76,7 +78,8 @@ CUSTOMER_METHOD_ACCOUNT = {"نقدي": CASH, "بطاقة": BANK, "تحويل": B
 PAYMENT_FEES = EXPENSES + ":عمولات الدفع الإلكتروني"
 DEPRECIATION = EXPENSES + ":إهلاك الأصول"
 BANK_FEES = EXPENSES + ":عمولات ومصاريف بنكية"
-EXTRA_EXPENSE_ACCOUNTS = (PAYMENT_FEES, DEPRECIATION, BANK_FEES)
+LOYALTY_COST = EXPENSES + ":تكلفة نقاط الولاء"
+EXTRA_EXPENSE_ACCOUNTS = (PAYMENT_FEES, DEPRECIATION, BANK_FEES, LOYALTY_COST)
 
 
 def customer_method_account(method):
@@ -93,6 +96,9 @@ SUPPLIER_METHOD_ACCOUNT = {"نقدي من الصندوق": CASH, "نقدي من 
 
 # أسباب حركات المخزون التي يغطيها مستند آخر (فاتورة/مرتجع/مشتريات) فلا تُقيَّد مرتين
 DOC_STOCK_REASONS = ("بيع - فاتورة %", "مشتريات %", "مرتجع RET-%", "مرتجع مشتريات %")
+
+# حساب الاسترداد في مرتجع البيع (للمرتجعات القديمة قبل حفظه: نقدي ← الصندوق، غير ذلك ← ذمم العملاء)
+REFUND_ACCOUNT_SQL = "COALESCE(refund_account, CASE WHEN refund_method='نقدي' THEN '1110' ELSE '1210' END)"
 
 
 def ensure_accounts():
@@ -270,16 +276,28 @@ def _daily_sales_entries(conn, date_from, date_to):
                         (WALLETS, money(r["wallet"]), 0.0), (RECEIVABLES, money(r["credit"]), 0.0),
                         (SALES, 0.0, money(r["net"])), (VAT, 0.0, money(r["tax"])),
                         (COGS, money(r["cost"]), 0.0), (INVENTORY, 0.0, money(r["cost"]))] if ln[1] or ln[2]]})
+    refunds = {}
+    for r in conn.execute(f"""SELECT date(created_at) AS d, {REFUND_ACCOUNT_SQL} AS acc, SUM(total) AS t
+                              FROM returns WHERE 1=1 {cond} GROUP BY d, acc""", params):
+        refunds.setdefault(r["d"], []).append((r["acc"], 0.0, money(r["t"])))
     for r in conn.execute(f"""SELECT date(created_at) AS d, COUNT(*) AS n,
-                                     SUM(CASE WHEN refund_method='نقدي' THEN total ELSE 0 END) AS cash,
-                                     SUM(CASE WHEN refund_method!='نقدي' THEN total ELSE 0 END) AS debt,
                                      SUM(total - tax) AS net, SUM(tax) AS tax, SUM(cost_total) AS cost
                               FROM returns WHERE 1=1 {cond} GROUP BY d""", params):
         out.append({"date": r["d"] + " 23:59:30", "ref": f"ZR-{r['d']}", "description": f"مرتجعات اليوم ({r['n']})",
                     "source": "return", "lines": [ln for ln in [
                         (SALES_RETURNS, money(r["net"]), 0.0), (VAT, money(r["tax"]), 0.0),
-                        (CASH, 0.0, money(r["cash"])), (RECEIVABLES, 0.0, money(r["debt"])),
+                        *sorted(refunds.get(r["d"], [])),
                         (INVENTORY, money(r["cost"]), 0.0), (COGS, 0.0, money(r["cost"]))] if ln[1] or ln[2]]})
+    from core import loyalty
+    for r in conn.execute(f"""SELECT date(created_at) AS d, COUNT(*) AS n,
+                                     SUM(CASE WHEN v > 0 THEN v ELSE 0 END) AS earned,
+                                     SUM(CASE WHEN v < 0 THEN -v ELSE 0 END) AS used
+                              FROM (SELECT created_at, {loyalty.value_sql()} AS v FROM loyalty_transactions
+                                    WHERE 1=1 {cond}) GROUP BY d""", params):
+        out.append({"date": r["d"] + " 23:59:45", "ref": f"ZL-{r['d']}", "description": f"نقاط الولاء اليوم ({r['n']} حركة)",
+                    "source": "loyalty", "lines": [ln for ln in [
+                        (LOYALTY_COST, money(r["earned"]), 0.0), (LOYALTY, 0.0, money(r["earned"])),
+                        (LOYALTY, money(r["used"]), 0.0), (LOYALTY_COST, 0.0, money(r["used"]))] if ln[1] or ln[2]]})
     return out
 
 
@@ -299,9 +317,10 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
             if lines:
                 out.append({"date": date, "ref": ref, "description": desc, "source": source, "lines": lines})
 
+        skip_loyalty = skip_bulk
         if daily_sales and not skip_bulk:
             out.extend(_daily_sales_entries(conn, date_from, date_to))
-            skip_bulk = True
+            skip_bulk = skip_loyalty = True
         # 1) فواتير البيع
         for r in ([] if skip_bulk else q("""SELECT * FROM invoices WHERE 1=1 {cond}""", "created_at")):
             add(r["created_at"], r["invoice_number"], "فاتورة بيع", "sale", [
@@ -314,7 +333,7 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
         # 2) مرتجعات البيع
         for r in ([] if skip_bulk else q("""SELECT r.*, i.invoice_number FROM returns r JOIN invoices i ON i.id=r.invoice_id
                       WHERE 1=1 {cond}""", "r.created_at")):
-            refund_acc = CASH if r["refund_method"] == "نقدي" else RECEIVABLES
+            refund_acc = r["refund_account"] or (CASH if r["refund_method"] == "نقدي" else RECEIVABLES)
             add(r["created_at"], r["return_number"], f"مرتجع من الفاتورة {r['invoice_number']}", "return", [
                 (SALES_RETURNS, money(r["total"] - r["tax"]), 0.0), (VAT, money(r["tax"]), 0.0),
                 (refund_acc, 0.0, money(r["total"])),
@@ -367,8 +386,9 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
         # 6) مرتجعات المشتريات (إرجاع بضاعة للمورد)
         for r in q("""SELECT p.*, s.name FROM purchase_returns p JOIN suppliers s ON s.id=p.supplier_id
                       WHERE 1=1 {cond}""", "p.created_at"):
-            diff = money(r["total"] - r["cost_total"])
-            lines = [(PAYABLES, money(r["total"]), 0.0), (INVENTORY, 0.0, money(r["cost_total"]))]
+            tax = money(r["tax"] or 0)
+            diff = money(r["total"] - tax - r["cost_total"])
+            lines = [(PAYABLES, money(r["total"]), 0.0), (INVENTORY, 0.0, money(r["cost_total"])), (VAT_INPUT, 0.0, tax)]
             if diff > 0:
                 lines.append((OTHER_INCOME, 0.0, diff))
             elif diff < 0:
@@ -419,7 +439,15 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
             add(r["status_date"], f"CHQ-{r['cheque_number'] or r['id']}",
                 "تحصيل شيك وارد في البنك" if r["direction"] == "in" else "صرف شيك صادر من البنك", "cheque", lines)
 
-        # 12) القيود اليدوية
+        # 12) نقاط الولاء: الكسب مصروف والتزام للعملاء، والاستبدال أو الإلغاء يعكسهما
+        from core import loyalty
+        for r in ([] if skip_loyalty else q(f"""SELECT l.id, l.created_at, l.points, l.note, c.name, {loyalty.value_sql()} AS v
+                       FROM loyalty_transactions l JOIN customers c ON c.id=l.customer_id WHERE 1=1 {{cond}}""",
+                                             "l.created_at")):
+            add(r["created_at"], f"L-{r['id']}", f"نقاط ولاء {r['name']}: {r['note'] or ''}".strip(), "loyalty",
+                _pair(LOYALTY_COST, LOYALTY, r["v"]))
+
+        # 13) القيود اليدوية
         for e in q("""SELECT * FROM journal_entries WHERE is_void=0 {cond}""", "entry_date"):
             lines = [(l["account_code"], money(l["debit"]), money(l["credit"]))
                      for l in conn.execute("SELECT * FROM journal_lines WHERE entry_id=? ORDER BY id", (e["id"],))]
@@ -460,14 +488,19 @@ def _bulk_lines(conn, date_from, date_to):
                                 COALESCE(SUM(CASE WHEN wallet_bank=1 THEN wallet_amount END),0),
                                 COALESCE(SUM(CASE WHEN wallet_bank=0 THEN wallet_amount END),0)
                          FROM invoices WHERE 1=1 {cond}""", params).fetchone()
-    r = conn.execute(f"""SELECT COALESCE(SUM(CASE WHEN refund_method='نقدي' THEN total END),0),
-                                COALESCE(SUM(CASE WHEN refund_method!='نقدي' THEN total END),0),
-                                COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0)
+    r = conn.execute(f"""SELECT COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0)
                          FROM returns WHERE 1=1 {cond}""", params).fetchone()
+    refunds = [(a, 0.0, t) for a, t in conn.execute(
+        f"SELECT {REFUND_ACCOUNT_SQL} AS acc, SUM(total) FROM returns WHERE 1=1 {cond} GROUP BY acc", params)]
+    from core import loyalty
+    earned, used = conn.execute(f"""SELECT COALESCE(SUM(CASE WHEN v > 0 THEN v END),0), COALESCE(SUM(CASE WHEN v < 0 THEN -v END),0)
+                                    FROM (SELECT {loyalty.value_sql()} AS v FROM loyalty_transactions WHERE 1=1 {cond})""",
+                                 params).fetchone()
     return [(CASH, i[0], 0.0), (BANK, i[1] + i[6], 0.0), (WALLETS, i[7], 0.0), (RECEIVABLES, i[2], 0.0), (SALES, 0.0, i[3]), (VAT, 0.0, i[4]),
             (COGS, i[5], 0.0), (INVENTORY, 0.0, i[5]),
-            (SALES_RETURNS, r[2], 0.0), (VAT, r[3], 0.0), (CASH, 0.0, r[0]), (RECEIVABLES, 0.0, r[1]),
-            (INVENTORY, r[4], 0.0), (COGS, 0.0, r[4])]
+            (SALES_RETURNS, r[0], 0.0), (VAT, r[1], 0.0), *refunds,
+            (INVENTORY, r[2], 0.0), (COGS, 0.0, r[2]),
+            (LOYALTY_COST, earned, used), (LOYALTY, used, earned)]
 
 
 def _balances(date_from, date_to):

@@ -12,7 +12,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def app_dir():
@@ -265,7 +265,7 @@ CREATE TABLE IF NOT EXISTS returns (
     total REAL NOT NULL,
     tax REAL NOT NULL DEFAULT 0,
     cost_total REAL NOT NULL DEFAULT 0,
-    refund_method TEXT NOT NULL,     -- نقدي / خصم من الدين
+    refund_method TEXT NOT NULL,     -- نقدي / خصم من الدين / بطاقة / اسم المحفظة
     reason TEXT,
     user_id INTEGER,
     shift_id INTEGER,
@@ -549,6 +549,15 @@ ADDED_COLUMNS = {
     ],
     "return_items": [
         ("factor", "REAL NOT NULL DEFAULT 1"),
+    ],
+    "returns": [
+        ("refund_account", "TEXT"),               # حساب الاسترداد: الصندوق/البنك/المحفظة/ذمم العملاء (فارغ = حسب الطريقة)
+    ],
+    "purchase_returns": [
+        ("tax", "REAL NOT NULL DEFAULT 0"),       # ضريبة المدخلات المشمولة في المرتجع (تُعكس من حساب ضريبة المدخلات)
+    ],
+    "loyalty_transactions": [
+        ("value", "REAL"),                        # قيمة النقاط بالعملة وقت الحركة (التزام تجاه العميل)
     ],
     "purchases": [
         ("tax", "REAL NOT NULL DEFAULT 0"),       # ضريبة المدخلات المشمولة في إجمالي فاتورة المورد

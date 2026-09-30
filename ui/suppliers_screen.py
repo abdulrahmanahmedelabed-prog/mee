@@ -306,10 +306,17 @@ class PurchaseReturnDialog(QDialog):
         self.reason.addItems(["منتهي الصلاحية", "تالف", "خطأ في التوريد", "زائد عن الحاجة"])
         self.total_lbl = QLabel("0.00")
         self.total_lbl.setObjectName("bigNumber")
+        from core import settings as _st
+        self.vat_rate = _st.get_float("vat_rate", 0) if _st.get_bool("vat_enabled") else 0.0
+        self.with_vat = QCheckBox(f"يرد المورد ضريبة المدخلات عليها ({self.vat_rate:g}%)")
+        self.with_vat.setChecked(bool(self.vat_rate))
+        self.with_vat.toggled.connect(lambda _=None: self.render())
         form.addRow("السبب:", self.reason)
+        if self.vat_rate:
+            form.addRow("", self.with_vat)
         form.addRow("يُخصم من حساب المورد:", self.total_lbl)
         lay.addLayout(form)
-        lay.addWidget(hint("السعر الافتراضي = تكلفة الحبة عندك. إذا اتفقت مع المورد على سعر آخر عدّله؛ "
+        lay.addWidget(hint("السعر الافتراضي = تكلفة الحبة عندك بدون ضريبة. إذا اتفقت مع المورد على سعر آخر عدّله؛ "
                            "الفرق يُسجَّل ربحاً أو خسارة تلقائياً."))
         ok_cancel(self, lay, "حفظ المرتجع")
         self._busy = False
@@ -346,7 +353,14 @@ class PurchaseReturnDialog(QDialog):
                     it.setFlags(it.flags() & ~Qt.ItemIsEditable)
                 self.table.setItem(r, c, it)
         self._busy = False
-        self.total_lbl.setText(m(sum(l["quantity"] * l["unit_cost"] for l in self.lines)))
+        net = money(sum(money(l["quantity"] * l["unit_cost"]) for l in self.lines))
+        tax = self.tax_amount()
+        self.total_lbl.setText(m(net + tax) + (f"  (منها ضريبة {m(tax)})" if tax else ""))
+
+    def tax_amount(self):
+        if not (self.vat_rate and self.with_vat.isChecked()):
+            return 0.0
+        return money(sum(money(l["quantity"] * l["unit_cost"]) for l in self.lines) * self.vat_rate / 100)
 
     def on_edit(self, item):
         if self._busy:
@@ -367,7 +381,8 @@ class PurchaseReturnDialog(QDialog):
         try:
             res = suppliers.create_purchase_return(
                 self.supplier["id"], [{"product_id": l["product_id"], "quantity": l["quantity"], "unit_cost": l["unit_cost"]}
-                                      for l in self.lines], self.reason.currentText(), shift_id=shifts.current_shift_id())
+                                      for l in self.lines], self.reason.currentText(), shift_id=shifts.current_shift_id(),
+                tax=self.tax_amount())
         except ValueError as e:
             warn(self, str(e))
             return

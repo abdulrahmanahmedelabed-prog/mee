@@ -43,11 +43,14 @@ class ReturnDialog(QDialog):
         lay.addLayout(row)
         form = QFormLayout()
         self.method = QComboBox()
-        self.method.addItem(sales.REFUND_CASH)
-        if invoice["customer_id"]:
-            self.method.addItem(sales.REFUND_DEBT)
-            if invoice["credit_amount"] > 0:
-                self.method.setCurrentText(sales.REFUND_DEBT)
+        self.method.addItems(sales.refund_methods(invoice))
+        # الافتراضي: نفس طريقة الدفع الأصلية
+        if invoice["customer_id"] and invoice["credit_amount"] > 0:
+            self.method.setCurrentText(sales.REFUND_DEBT)
+        elif invoice["wallet_amount"] > 0 and invoice["wallet_amount"] >= invoice["cash_amount"] + invoice["card_amount"]:
+            self.method.setCurrentText(invoice["wallet_name"])
+        elif invoice["card_amount"] > 0 and invoice["card_amount"] >= invoice["cash_amount"]:
+            self.method.setCurrentText(sales.REFUND_CARD)
         self.reason = QLineEdit()
         self.total_lbl = QLabel("0.00")
         self.total_lbl.setObjectName("bigNumber")

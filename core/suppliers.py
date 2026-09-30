@@ -129,10 +129,12 @@ def create_purchase(supplier_id, items, paid=0.0, payment_method=PAY_DRAWER, sup
     return {"purchase_id": pid, "purchase_number": number, "total": total}
 
 
-def create_purchase_return(supplier_id, items, reason="", shift_id=None):
+def create_purchase_return(supplier_id, items, reason="", shift_id=None, tax=0.0):
     """
     إرجاع بضاعة للمورد (تالف، منتهي، زائد عن الحاجة): تُخصم من المخزون ومن حساب المورد.
-    items: dict: product_id, quantity (بالحبة)، (اختياري) unit_cost = السعر الذي سيخصمه المورد (افتراضياً تكلفتنا)
+    items: dict: product_id, quantity (بالحبة)، (اختياري) unit_cost = السعر الذي سيخصمه المورد بدون ضريبة
+           (افتراضياً تكلفتنا)
+    tax: ضريبة المدخلات التي يردّها المورد على البضاعة المرتجعة؛ تُضاف لما يُخصم من حسابه وتُعكس من ضريبة المدخلات
     """
     items = [i for i in items if i.get("quantity", 0) > 0]
     if not supplier_id:
@@ -154,11 +156,14 @@ def create_purchase_return(supplier_id, items, reason="", shift_id=None):
                 raise ValueError(f"الكمية المرتجعة من {p['name']} أكبر من الموجود ({p['quantity']:g})")
             unit_cost = money(it.get("unit_cost") if it.get("unit_cost") is not None else p["cost_price"])
             lines.append((p, q, unit_cost, money(q * unit_cost), money(q * p["cost_price"])))
-        total = money(sum(l[3] for l in lines))
+        tax = money(tax or 0)
+        if tax < 0:
+            raise ValueError("قيمة الضريبة غير صحيحة")
+        total = money(sum(l[3] for l in lines) + tax)
         cost_total = money(sum(l[4] for l in lines))
         cur = conn.execute("""INSERT INTO purchase_returns(return_number, supplier_id, total, cost_total, reason, user_id,
-                                                           shift_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                           (number, supplier_id, total, cost_total, reason, user_id, shift_id, created))
+                                                           shift_id, created_at, tax) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (number, supplier_id, total, cost_total, reason, user_id, shift_id, created, tax))
         rid = cur.lastrowid
         for p, q, unit_cost, line_total, book in lines:
             conn.execute("""INSERT INTO purchase_return_items(return_id, product_id, product_name, quantity, unit_cost,

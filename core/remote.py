@@ -36,7 +36,7 @@ LOCAL_ONLY = {
     "settings": {"get", "get_bool", "get_float", "set", "set_many", "reload", "expense_categories", "ensure_defaults"},
     "auth": {"hash_password", "verify_password", "login", "set_current_user", "current_user", "current_user_id",
              "logout", "has_permission", "ensure_admin"},
-    "sales": {"compute_totals", "payment_label"},
+    "sales": {"compute_totals", "payment_label", "refund_methods"},
     "products": {"is_loss_reason", "export_csv", "import_csv", "price_for"},
     "promotions": {"compute"},
     "backup": {"restore_backup", "validate_backup", "auto_daily_backup"},
