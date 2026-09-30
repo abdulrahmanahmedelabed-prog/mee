@@ -8,6 +8,11 @@ on:
       - "android/**"
       - "**.md"
   workflow_dispatch:
+    inputs:
+      release:
+        description: "رقم إصدار للنشر في صفحة Releases (مثل v8.0)، أو اتركه فارغاً"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -74,17 +79,20 @@ jobs:
         with:
           name: ShopAccounting-Setup
           path: dist/installer/*.exe
-      - name: Publish release files (version tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Prepare release files
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item (Get-ChildItem dist\installer\*.exe | Select-Object -First 1).FullName release\ShopAccounting-Setup.exe
           Compress-Archive -Path dist\ShopAccounting -DestinationPath release\ShopAccounting-Portable.zip
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         with:
-          name: ${{ github.ref_name }}
+          tag_name: ${{ inputs.release || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          name: ${{ inputs.release || github.ref_name }}
           files: |
             release/ShopAccounting-Setup.exe
             release/ShopAccounting-Portable.zip
