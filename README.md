@@ -11,11 +11,21 @@
 - **مراجعة محاسبية شاملة:** كل نقد يدخل الدرج أو يخرج منه يمر بوردية، مرتجع الفاتورة الآجلة لا يُرد نقداً أكثر مما دُفع، أي نقص أو زيادة في المخزون وتعديل التكلفة وحذف الأصناف تظهر في الأرباح، تكلفة القطعة من الكرتونة بدقة 4 خانات، العروض لا تتراكم، رسوم التوصيل تدخل المبيعات، وعمليات جاهزة لتسوية الضريبة والإهلاك وعمولات البنك.
 - **مُختبر تحت الضغط:** 20 كاشيراً معاً على 3 سنوات من بيانات سوبرماركت، وانقطاع الكهرباء أثناء البيع — بلا فاتورة ضائعة أو مكررة.
 
+## ⬇️ تحميل البرنامج
+
+| | |
+|---|---|
+| 🖥 **ويندوز (ملف التثبيت)** | [**ShopAccounting-Setup.exe**](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopAccounting-Setup.exe) |
+| 🗂 **ويندوز بدون تثبيت** | [ShopAccounting-Portable.zip](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopAccounting-Portable.zip) — فك الضغط وشغّل `ShopAccounting.exe` |
+| 📱 **أندرويد** | [ShopPOS-android.apk](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopPOS-android.apk) — تطبيق الجوال للموظفين وصاحب المحل |
+
+كل الإصدارات في صفحة [**Releases**](https://github.com/abdulrahmanahmedelabed-prog/mee/releases). عند التثبيت قد يظهر «ويندوز حمى جهازك»: اضغط «معلومات إضافية» ← «تشغيل على أي حال».
+
 ## ابدأ من هنا
 
 | الخطوة | ماذا تفعل |
 |---|---|
-| **1. خذ نسخة ويندوز** | من GitHub: تبويب **Actions** ← «Windows build (EXE + Setup)» ← آخر تشغيل ← **ShopAccounting-Setup**. أو على جهازك: انقر مرتين على `build_exe.bat` |
+| **1. نزّل البرنامج** | من روابط التحميل أعلاه. أو ابنِه على جهازك: انقر مرتين على `build_exe.bat` |
 | **2. جهّز التفعيل** | انقر مرتين على `license_manager.bat` ← «إنشاء مفاتيحي» (مرة واحدة). منه تصدر مفاتيح التفعيل لزبائنك — الشرح في [دليل التفعيل](docs/07_دليل_التفعيل.md) |
 | **3. تدرّب** | بعد التثبيت افتح «نسخة التدريب» من قائمة ابدأ: سوبرماركت كامل بتاريخ 3 سنوات (الدخول `admin` / `admin`) |
 | **4. بِع** | [دليل التسويق والبيع](docs/05_دليل_التسويق_والبيع.md) والفيديو الإعلاني الجاهز في `marketing/ad` |

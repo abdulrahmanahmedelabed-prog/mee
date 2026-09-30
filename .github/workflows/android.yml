@@ -2,10 +2,15 @@ name: Android app (APK)
 
 on:
   push:
+    branches: ["**"]
+    tags: ["v*"]            # وسم إصدار يضيف ملف APK إلى صفحة Releases
     paths:
       - "android/**"
       - ".github/workflows/android.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -25,3 +30,10 @@ jobs:
         with:
           name: ShopPOS-android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Release file name
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ShopPOS-android.apk
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: ShopPOS-android.apk
