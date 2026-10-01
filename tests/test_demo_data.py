@@ -27,7 +27,8 @@ def test_multi_year_demo_is_consistent(monkeypatch):
     months = reports.period_summary(first, last, "month")
     assert len(months) >= 13 and all(m["net_sales"] > 0 for m in months)
     # الدفع الإلكتروني يزداد مع الوقت، وكل الطرق ظاهرة في تقرير المطابقة
-    assert months[-1]["wallet"] / months[-1]["net_sales"] > months[0]["wallet"] / months[0]["net_sales"]
+    # (الشهر الأول والأخير قد يكونان ناقصين، فالمقارنة بين شهرين كاملين)
+    assert months[-2]["wallet"] / months[-2]["net_sales"] > months[1]["wallet"] / months[1]["net_sales"]
     assert {r["name"] for r in wallets.summary(first, last)} == {"PalPay", "Jawwal Pay", "تحويل بنكي فوري"}
     assert db.scalar("SELECT COUNT(*) FROM cheques WHERE status='bounced'") <= 1
     assert date.fromisoformat(first) < date.today()
