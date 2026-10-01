@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-صانع الفيديو الإعلاني (بدون برامج مونتاج): يرسم المشاهد بـ Qt ويركّب الموسيقى ويصدّر MP4 عبر ffmpeg.
+صانع الفيديو الإعلاني (بدون برامج مونتاج): يرسم المشاهد بـ Qt، ويولّد الموسيقى ومؤثرات صوتية متزامنة مع كل حركة،
+ويصدّر MP4 عبر ffmpeg بعلو صوت -14 LUFS (معيار المنصات).
 
     pip install PySide6 numpy imageio-ffmpeg
     python marketing/ad/make_ad.py --phone "0599 123 456" --name "اسم برنامجك"
 
 الناتج: ad_vertical.mp4 (1080×1920 لريلز/تيك توك/حالة واتساب) و ad_horizontal.mp4 (1920×1080 ليوتيوب/فيسبوك).
-لتغيير النصوص عدّل قائمة SCENES، ولتحديث اللقطات ضع صوراً جديدة بنفس الأسماء في مجلد shots.
+لتغيير النصوص عدّل قائمة SCENES، ولتحديث اللقطات شغّل capture_shots.py (أو ضع صوراً بنفس الأسماء في مجلد shots).
 """
 
 import argparse
@@ -31,25 +32,27 @@ BAR = 4 * 60 / BPM  # ثانيتان وربع تقريباً
 NAVY, NAVY2 = QColor("#0B1224"), QColor("#1E3A8A")
 WHITE, MUTED = QColor("#FFFFFF"), QColor("#CBD5E1")
 GREEN, BLUE, AMBER, RED = QColor("#22C55E"), QColor("#3B82F6"), QColor("#F59E0B"), QColor("#EF4444")
-HEAD_FONT, BODY_FONT = "Noto Kufi Arabic", "Noto Sans Arabic"
+HEAD_FONT = BODY_FONT = "IBM Plex Sans Arabic"      # نفس خط البرنامج (مضمَّن في ui/fonts)
 
 # (المدة بالمقاطع الموسيقية، نوع المشهد، بيانات)
 SCENES = [
     (2, "hook", {"lines": ["لسّا بتحسب على الورقة؟", "ودفتر الديون كل يوم أثقل؟"]}),
     (2, "brand", {}),
-    (2, "shot", {"img": "pos.png", "crop": (0, 0, 1140, 887), "title": "بيع بالباركود في ثانية",
+    (2, "shot", {"img": "pos.png", "crop": (0, 0, 1140, 886), "title": "بيع بالباركود في ثانية",
                  "sub": "كرتونة وحبّة • ميزان • عروض تلقائية • تنبيه الصلاحية"}),
-    (2, "card", {"title": "جاهز للربط مع جهاز البطاقة",
-                 "sub": "المبلغ ينتقل للجهاز تلقائياً • بلا أخطاء • نقدي وآجل أيضاً"}),
-    (2, "shot", {"img": "customers.png", "crop": (0, 60, 1140, 827), "title": "دفتر الديون… صار ذكي",
+    (2, "card", {"title": "كل طرق الدفع في شاشة واحدة",
+                 "sub": "نقدي • بطاقة • محافظ إلكترونية وتطبيقات بنوك برمز QR"}),
+    (2, "shot", {"img": "customers.png", "crop": (0, 80, 1140, 806), "title": "دفتر الديون… صار ذكي",
                  "sub": "رصيد كل زبون • حد دين • تذكير واتساب بضغطة"}),
-    (2, "shot", {"img": "dashboard.png", "crop": (0, 120, 1140, 690), "title": "اعرف ربحك الحقيقي كل يوم",
+    (2, "shot", {"img": "dashboard.png", "crop": (0, 80, 1140, 720), "title": "اعرف ربحك الحقيقي كل يوم",
                  "sub": "المبيعات • الربح • الصندوق • المخزون — بنظرة واحدة"}),
-    (2, "shot", {"img": "insights.png", "crop": (0, 60, 1140, 827), "title": "مستشار ذكي ينبّهك قبل الخسارة",
-                 "sub": "أصناف رابحة ستنفد • بضاعة قاربت على الانتهاء • عجز الصندوق"}),
+    (2, "shot", {"img": "audit.png", "crop": (0, 80, 1140, 806), "title": "مدقق مالي داخل برنامجك",
+                 "sub": "30 فحصاً لكل العمليات • يكشف العجز والتلاعب • رأي ودرجة"}),
+    (2, "shot", {"img": "insights.png", "crop": (0, 80, 1140, 806), "title": "مستشار ذكي ينبّهك قبل الخسارة",
+                 "sub": "أصناف رابحة ستنفد • بضاعة قاربت على الانتهاء • زبون توقف"}),
     (2, "phones", {"title": "محلك في جيبك",
                    "sub": "لوحة المالك • متجر أونلاين بلا عمولة • جرد بالكاميرا"}),
-    (2, "grid", {"title": "وكمان…", "items": ["يعمل بدون إنترنت", "عدة أجهزة كاشير", "محاسبة كاملة",
+    (2, "grid", {"title": "وكمان…", "items": ["يعمل بدون إنترنت", "عدة أجهزة كاشير", "ميزانية وإقرار ضريبي",
                                              "نسخ احتياطي تلقائي", "عربي و English", "فاتورة ضريبية QR"]}),
     (3, "cta", {}),
 ]
@@ -239,7 +242,7 @@ class Renderer:
 
     def scene_card(self, p, t, dur, d):
         _, _, ir, _ = self.layout()
-        pay, term = self.img["payment.png"], self.img["terminal.png"]
+        pay, term = self.img["payment.png"], self.img["wallet_pay.png"]
         a = ease((t - 0.15) / 0.6)
         box = QRectF(ir.x(), ir.y(), ir.width() * 0.62, ir.height())
         tgt = self.fit(pay.width(), pay.height(), box.adjusted(0, 0, 0, -ir.height() * 0.05))
@@ -250,9 +253,9 @@ class Renderer:
         self.card_img(p, pay, (0, 0, pay.width(), pay.height()), tgt, 22 * self.s)
         p.restore()
         b = ease((t - 1.0) / 0.5)
-        tw = ir.width() * 0.62
-        th = tw * term.height() / term.width()
-        tt = QRectF(ir.center().x() - ir.width() * 0.47, tgt.bottom() - th - ir.height() * 0.04, tw, th)
+        th = tgt.height() * 0.78
+        tw = th * term.width() / term.height()
+        tt = QRectF(ir.center().x() - ir.width() * 0.47, tgt.bottom() - th - ir.height() * 0.02, tw, th)
         p.save()
         p.setOpacity(b)
         p.translate(-(1 - b) * 120 * self.s, 0)
@@ -295,14 +298,14 @@ class Renderer:
     def scene_grid(self, p, t, dur, d):
         W, H, s = self.W, self.H, self.s
         a = ease(t / 0.5)
-        self.text(p, QRectF(40, (230 if self.portrait else 90) * s, W - 80, 150 * s), d["title"], HEAD_FONT, 76, WHITE,
+        self.text(p, QRectF(40, (380 if self.portrait else 90) * s, W - 80, 150 * s), d["title"], HEAD_FONT, 76, WHITE,
                   Qt.AlignCenter, a)
         cols = 2 if self.portrait else 3
         rows = math.ceil(len(d["items"]) / cols)
         gw = W - 140 if self.portrait else W * 0.8
         gh = 230 * s
         gap = 30 * s
-        top = (470 if self.portrait else 290) * s
+        top = (590 if self.portrait else 290) * s
         left = (W - gw) / 2
         cw = (gw - gap * (cols - 1)) / cols
         colors = [BLUE, GREEN, QColor("#8B5CF6"), AMBER, QColor("#06B6D4"), QColor("#EC4899")]
@@ -434,6 +437,79 @@ def make_music(path, dur, sr=44100):
         w.writeframes(pcm.tobytes())
 
 
+# ---------------------------------------------------------------------- المؤثرات الصوتية
+PENTA = [880.0, 1046.5, 1174.7, 1318.5, 1568.0, 1760.0]   # سلّم لا الصغير الخماسي (نفس مقام الموسيقى)
+
+
+def cue_sheet(portrait):
+    """توقيت كل صوت مطابق لتوقيت حركة العنصر في دوال المشاهد، وموضعه يمين/يسار حسب مكانه على الشاشة.
+    [(ثانية، الصوت، pan، تعديل dB، معامل إضافي)]"""
+    txt = 0.0 if portrait else 0.5          # في الأفقي: النص يميناً والصورة يساراً
+    img = 0.0 if portrait else -0.45
+    c = []
+    start = 0.0
+    for idx, (bars, kind, d) in enumerate(SCENES):
+        S, D = start, bars * BAR
+        if kind == "hook":
+            for i in range(len(d["lines"])):
+                t = S + 0.2 + i * 1.3
+                c += [(t - 0.06, "whoosh_up", 0.0, -2),
+                      (t + 0.1, "impact", 0.0, -8) if i == 0 else (t + 0.1, "thump", 0.0, -2)]
+                if i:
+                    c.append((t + 0.14, "tick", 0.0))
+        elif kind == "brand":
+            c += [(S - 1.25, "riser", 0.0), (S, "impact", 0.0), (S + 0.12, "shimmer", 0.0),
+                  (S + 0.38, "whoosh_text", 0.0), (S + 0.88, "tick", 0.0, -3)]
+        elif kind in ("shot", "card", "phones"):
+            c += [(S - 0.02, "whoosh_text", txt), (S + 0.33, "tick", txt, -3)]
+            if kind == "shot":
+                c += [(S + 0.12, "whoosh_img", img), (S + 0.32, "thump", img, -9)]
+                if portrait:
+                    c.append((S + 0.6, "drift", 0.0, 0, D - 1.2))
+            elif kind == "card":
+                wal = -0.25 if portrait else -0.75
+                c += [(S + 0.12, "whoosh_img", img + 0.1), (S + 0.32, "thump", img + 0.1, -9),
+                      (S + 0.98, "swipe", wal), (S + 1.15, "thump", wal, -12),
+                      (S + 2.2, "pop", wal, -3, 1318.5), (S + 2.22, "success", wal)]
+            else:
+                side = 0.5 if portrait else 0.3
+                c += [(S + 0.18, "whoosh_up", img), (S + 0.5, "swipe", img - side), (S + 0.55, "swipe", img + side)]
+        elif kind == "grid":
+            cols = 2 if portrait else 3
+            c.append((S - 0.02, "whoosh_text", 0.0))
+            for i in range(len(d["items"])):
+                col = i % cols
+                pan = (0.3 - 0.6 * col) if portrait else (0.5 - 0.5 * col)
+                c.append((S + 0.3 + i * 0.22, "pop", pan, 0, PENTA[i % len(PENTA)]))
+        elif kind == "cta":
+            c += [(S, "impact", 0.0, -7), (S + 0.02, "whoosh_text", 0.0), (S + 0.3, "pop", 0.0, 0, 1046.5),
+                  (S + 0.33, "chime", 0.0), (S + 0.8, "tick", 0.0), (S + 1.3, "ping", 0.0), (S + 1.36, "shimmer", 0.0, -3)]
+        # انتقال: صوت يتصاعد حتى لحظة القطع (إلا قبل الشعار: يسبقه riser)
+        if idx < len(SCENES) - 1 and SCENES[idx + 1][1] != "brand":
+            c.append((S + D - 0.45, "transition", 0.0))
+        start += D
+    return c
+
+
+def make_audio(music_path, out_path, portrait):
+    import sfx
+    dur = total_duration()
+    m = sfx.read_wav_mono(music_path)
+    n = int(dur * sfx.SR)
+    m = np.pad(m, (0, max(0, n - len(m))))[:n]
+    effects = sfx.render(cue_sheet(portrait), dur)
+    music = np.vstack([m, m]) * 0.75
+    sfx.write_wav(out_path, sfx.duck(music, effects) + effects)
+
+
+def load_fonts():
+    from PySide6.QtGui import QFontDatabase
+    d = os.path.join(os.path.dirname(os.path.dirname(HERE)), "ui", "fonts")
+    for f in os.listdir(d) if os.path.isdir(d) else []:
+        if f.endswith(".ttf"):
+            QFontDatabase.addApplicationFont(os.path.join(d, f))
+
+
 def ffmpeg_exe():
     try:
         import imageio_ffmpeg
@@ -448,7 +524,8 @@ def render(w, h, out, name, phone, music, still_dir=None):
     n = int(dur * FPS)
     cmd = [ffmpeg_exe(), "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
            "-r", str(FPS), "-i", "-", "-i", music, "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-           "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart", out]
+           "-pix_fmt", "yuv420p", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-ar", "48000", "-c:a", "aac", "-b:a", "192k",
+           "-shortest", "-movflags", "+faststart", out]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     for i in range(n):
         img = r.frame(i / FPS)
@@ -471,6 +548,8 @@ def main():
     ap.add_argument("--preview", help="ثوانٍ مفصولة بفواصل: يحفظ إطارات فقط بدون فيديو، مثل 2,10,16")
     a = ap.parse_args()
     QGuiApplication(sys.argv)
+    load_fonts()
+    sys.path.insert(0, HERE)
     if a.preview:
         for w, h, tag in ((1080, 1920, "v"), (1920, 1080, "h")):
             r = Renderer(w, h, a.name, a.phone)
@@ -479,10 +558,12 @@ def main():
         return
     music = os.path.join(a.out, "music.wav")
     make_music(music, total_duration())
-    if a.only != "horizontal":
-        render(1080, 1920, os.path.join(a.out, "ad_vertical.mp4"), a.name, a.phone, music, a.stills)
-    if a.only != "vertical":
-        render(1920, 1080, os.path.join(a.out, "ad_horizontal.mp4"), a.name, a.phone, music, a.stills)
+    for w, h, name in ((1080, 1920, "vertical"), (1920, 1080, "horizontal")):
+        if a.only and a.only != name:
+            continue
+        mix = os.path.join(a.out, f"mix_{name}.wav")
+        make_audio(music, mix, h > w)
+        render(w, h, os.path.join(a.out, f"ad_{name}.mp4"), a.name, a.phone, mix, a.stills)
 
 
 if __name__ == "__main__":
