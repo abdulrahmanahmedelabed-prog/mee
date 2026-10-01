@@ -95,6 +95,7 @@ class MainWindow(QMainWindow):
         sub = QLabel(f"المحاسبة ونقاط البيع • v{VERSION}")
         sub.setObjectName("brandSub")
         names.addWidget(sub)
+        self.brand_sub = sub
         head.addLayout(names, 1)
         sl.addLayout(head)
         self.group = QButtonGroup(self)
@@ -144,8 +145,10 @@ class MainWindow(QMainWindow):
         out = button("🚪", "iconBtn", self.logout, "تسجيل خروج")
         ul.addWidget(pw)
         ul.addWidget(out)
+        self.pw_btn = pw
         uwrap = QHBoxLayout()
         uwrap.setContentsMargins(12, 8, 12, 0)
+        self.uwrap = uwrap
         uwrap.addWidget(ucard)
         sl.addLayout(uwrap)
         root.addWidget(self.sidebar)
@@ -179,6 +182,16 @@ class MainWindow(QMainWindow):
         self.clock = QLabel()
         self.clock.setObjectName("chip")
         tl.addWidget(self.clock)
+        # تبديل اللغة فوراً (يظهر اسم اللغة الأخرى بحروفها)
+        from core import i18n as _i18n
+        from ui import i18n_qt as _iq
+        self.lang_btn = QPushButton()
+        self.lang_btn.setObjectName("secondaryBtn")
+        self.lang_btn.setCursor(Qt.PointingHandCursor)
+        _iq.set_raw_text(self.lang_btn, "🌐 English" if _i18n.is_rtl() else "🌐 العربية")
+        self.lang_btn.setToolTip("تغيير لغة الواجهة فوراً")
+        self.lang_btn.clicked.connect(lambda: self.switch_language())
+        tl.addWidget(self.lang_btn)
         content.addWidget(top)
         # شريط الترخيص (يظهر في التجربة أو عند الانتهاء)
         self.license_bar = QFrame()
@@ -201,10 +214,22 @@ class MainWindow(QMainWindow):
         root.addWidget(wrap, 1)
         self.setCentralWidget(central)
 
+        self.page_holders = {}
         for key, label, perms, cls in PAGES:
             w = cls()
             self.pages[key] = w
-            self.stack.addWidget(w)
+            if key == "pos":                  # نقطة البيع تعيد ترتيب نفسها لتظهر كاملة دائماً بلا تمرير
+                holder = w
+            else:                             # بقية الشاشات تتمرر بدل أن تفرض حجماً أكبر من الشاشة
+                holder = QScrollArea()
+                holder.setWidgetResizable(True)
+                holder.setFrameShape(QFrame.NoFrame)
+                holder.setObjectName("pageScroll")
+                holder.setWidget(w)
+            self.page_holders[key] = holder
+            self.stack.addWidget(holder)
+        self._rail = None
+        self.setMinimumSize(760, 520)
         self.pages["pos"].sale_completed.connect(self.update_header)
         self.pages["cash"].shift_changed.connect(self.update_header)
         self.pages["dashboard"].navigate.connect(self.go)
@@ -297,9 +322,15 @@ class MainWindow(QMainWindow):
 
     def on_new_orders(self, n):
         from core.i18n import tr
-        base = self.nav_buttons["orders"].property("_i18n_setText") or self.nav_buttons["orders"].text()
-        label = base.split(" (")[0]
-        self.nav_buttons["orders"].setText(f"{label} ({n})" if n else label)
+        self._orders_count = n
+        b = self.nav_buttons["orders"]
+        base = (b.property("full_label") or b.property("_i18n_setText") or b.text()).split(" (")[0]
+        b.setProperty("full_label", f"{base} ({n})" if n else base)
+        if self._rail:
+            b.setText(base.split("   ")[0] + (f" {n}" if n else ""))
+            b.setToolTip(b.property("full_label"))
+        else:
+            b.setText(f"{base} ({n})" if n else base)
         if n:
             from PySide6.QtWidgets import QApplication
             QApplication.beep()
@@ -336,12 +367,14 @@ class MainWindow(QMainWindow):
         self.greeting.setText(f"{tr(days[n.weekday()])} • {n:%Y-%m-%d}")
 
     def go(self, key):
-        if key not in self.pages or not self.nav_buttons[key].isVisible():
+        if key not in self.pages or self.nav_buttons[key].isHidden():   # مخفية لعدم الصلاحية أو الوضع المبسّط
             return
+        self.current_key = key
         self.nav_buttons[key].setChecked(True)
         w = self.pages[key]
-        self.stack.setCurrentWidget(w)
-        self.page_title.setText(self.nav_buttons[key].text().split("   ")[-1])
+        self.stack.setCurrentWidget(self.page_holders[key])
+        b = self.nav_buttons[key]
+        self.page_title.setText((b.property("full_label") or b.text()).split("   ")[-1].split(" (")[0])
         if hasattr(w, "refresh"):
             w.refresh()
 
@@ -361,7 +394,70 @@ class MainWindow(QMainWindow):
         self.apply_user()
         self.show()
 
+    RAIL_WIDTH = 1300        # أضيق من هذا: القائمة الجانبية أيقونات فقط (مثل تطبيقات الجوال)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.set_rail(self.width() < self.RAIL_WIDTH)
+
+    def set_rail(self, rail):
+        if rail == self._rail:
+            return
+        self._rail = rail
+        self.sidebar.setFixedWidth(96 if rail else 264)
+        self.brand.setVisible(not rail)
+        self.brand_sub.setVisible(not rail)
+        self.user_lbl.setVisible(not rail)
+        self.role_lbl.setVisible(not rail)
+        self.pw_btn.setVisible(not rail)
+        self.uwrap.setContentsMargins(*((6, 8, 6, 0) if rail else (12, 8, 12, 0)))
+        for key, label, _, _ in PAGES:
+            b = self.nav_buttons[key]
+            full = b.property("full_label") or label
+            b.setProperty("full_label", full)
+            if rail:
+                b.setText(full.split("   ")[0] + (f" {self._orders_count}" if key == "orders" and
+                                                    getattr(self, "_orders_count", 0) else ""))
+                b.setToolTip(full)
+                b.setStyleSheet("text-align: center; padding: 11px 0; font-size: 18px;")
+            else:
+                b.setText(full)
+                b.setToolTip("")
+                b.setStyleSheet("")
+
+    def switch_language(self, lang=None):
+        """تبديل لغة الواجهة فوراً: تُبنى النافذة من جديد باللغة الأخرى على نفس الشاشة، دون إعادة تشغيل أو تسجيل دخول.
+        السلة غير المكتملة في نقطة البيع تنتقل للنافذة الجديدة كما هي."""
+        from PySide6.QtWidgets import QApplication
+        from core import i18n
+        from ui import i18n_qt
+        from ui.style import STYLE_SHEET
+        lang = lang or ("en" if i18n.is_rtl() else "ar")
+        pos = self.pages["pos"]
+        cart = pos.cart_state() if pos.cart else None
+        config.save({"language": lang})
+        app = QApplication.instance()
+        i18n_qt.apply_language(lang, app)
+        app.setLayoutDirection(i18n_qt.direction())
+        app.setStyleSheet(i18n_qt.adapt_style(STYLE_SHEET))
+        win = MainWindow()
+        if "🎓" in self.windowTitle():
+            win.setWindowTitle("🎓 نسخة التدريب (بيانات تجريبية) — " + win.windowTitle())
+        win.setGeometry(self.geometry())
+        win.go(getattr(self, "current_key", None) or "dashboard")
+        if cart:
+            win.pages["pos"].restore_cart(cart)       # السلة تنتقل كما هي
+        win.showMaximized() if self.isMaximized() else win.show()
+        app._main_window = win                       # يبقى حياً بعد إغلاق النافذة القديمة
+        self._replaced = True
+        self.setAttribute(Qt.WA_DeleteOnClose)       # تتوقف مؤقتات النافذة القديمة وتُحذف
+        self.close()
+        return win
+
     def closeEvent(self, event):
+        if getattr(self, "_replaced", False):        # استُبدلت بنافذة بلغة أخرى
+            event.accept()
+            return
         pos = self.pages["pos"]
         if pos.cart and not ask(self, "توجد سلة غير مكتملة. هل تريد الخروج؟"):
             event.ignore()

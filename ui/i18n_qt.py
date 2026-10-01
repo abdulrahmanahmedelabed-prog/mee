@@ -18,6 +18,7 @@ from core import i18n
 
 ROLE = Qt.UserRole + 77
 _installed = False
+_NATIVE = {}        # الدوال الأصلية قبل الترجمة (لعرض نص كما هو، مثل اسم اللغة بحروفها)
 _HTML = re.compile(r"<[a-zA-Z/][^>]*>")
 
 
@@ -64,6 +65,7 @@ def _amp(text):
 def _patch_setter(cls, setter, getter=None, escape_amp=False):
     prop = "_i18n_" + setter
     native_set = getattr(cls, setter)
+    _NATIVE[(cls, setter)] = native_set
 
     def set_text(self, text, *args):
         if isinstance(text, str) and i18n.ARABIC.search(text):
@@ -260,6 +262,13 @@ def install(app=None):
         app.setLayoutDirection(direction())
         _filter = _ShowFilter(app)
         app.installEventFilter(_filter)
+
+
+def set_raw_text(button, text):
+    """نص زر يظهر كما هو بدون ترجمة"""
+    native = _NATIVE.get((QAbstractButton, "setText"))
+    button.setProperty("_i18n_setText", text)          # يمنع ترجمته عند الظهور
+    (native or QAbstractButton.setText)(button, text)
 
 
 def apply_language(lang, app=None):

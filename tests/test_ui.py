@@ -91,7 +91,7 @@ def test_all_screens_open(app):
     for key, *_ in PAGES:
         w.go(key)
         app.processEvents()
-        assert w.stack.currentWidget() is w.pages[key]
+        assert w.stack.currentWidget() is w.page_holders[key]
     rep = w.pages["reports"]
     for i in range(rep.tabs.count()):
         rep.tabs.setCurrentIndex(i)
@@ -360,3 +360,53 @@ def test_card_terminal_simulator_and_bridge(app):
                      "card_terminal_timeout": 3})
         payments.charge(5)                                           # الجسر متوقف: رسالة واضحة
     config.save({"card_terminal": "manual"})
+
+
+def test_language_switch_is_instant_and_keeps_cart(app):
+    from PySide6.QtCore import Qt
+    from core import auth
+    auth.login("admin", "admin")
+    qapp = app
+    from core import config, i18n
+    from ui import i18n_qt
+    from ui.main_window import MainWindow
+    a = products.add_product("حليب", "7001", "ألبان", 3, 5, 20, 2)
+    w = MainWindow()
+    w.show()
+    w.go("pos")
+    w.pages["pos"].add_product(products.get_product(a), 2)
+    w2 = w.switch_language("en")
+    assert i18n.language() == "en" and config.get("language") == "en"
+    assert w2.current_key == "pos" and len(w2.pages["pos"].cart) == 1
+    assert qapp.layoutDirection() == Qt.LeftToRight
+    w3 = w2.switch_language("ar")
+    assert i18n.language() == "ar" and qapp.layoutDirection() == Qt.RightToLeft
+    assert len(w3.pages["pos"].cart) == 1 and w3.pages["pos"].cart[0]["quantity"] == 2
+    w3.pages["pos"].clear_cart()
+    w3.close()
+    i18n_qt.apply_language("ar", qapp)
+
+
+def test_window_fits_small_screens_and_pos_shortcuts_stay_visible(app):
+    from core import auth
+    auth.login("admin", "admin")
+    qapp = app
+    from ui.main_window import MainWindow
+    w = MainWindow()
+    w.show()
+    hint = w.minimumSizeHint()
+    assert hint.width() <= 1024 and hint.height() <= 600, (hint.width(), hint.height())
+    for size in ((1366, 705), (1280, 650), (1024, 560)):
+        w.resize(*size)
+        w.go("pos")
+        qapp.processEvents()
+        pos = w.pages["pos"]
+        bottom = pos.height()
+        for b in pos.action_buttons + [pos.pay_btn, pos.keys_hint]:
+            assert b.isVisible()
+            assert b.mapTo(pos, b.rect().bottomLeft()).y() <= bottom, (size, b.text())
+    assert w._rail                      # الشاشة الضيقة: القائمة أيقونات فقط
+    w.resize(1600, 900)
+    qapp.processEvents()
+    assert not w._rail
+    w.close()

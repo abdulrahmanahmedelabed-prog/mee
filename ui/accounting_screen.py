@@ -185,7 +185,8 @@ class AccountingScreen(QWidget):
         self.per_invoice.toggled.connect(self.load)
         head.addWidget(self.per_invoice)
         head.addStretch()
-        head.addWidget(button("➕ عملية مالية (رأس مال، بنك، قرض...)", "successBtn", self.template_entry))
+        head.addWidget(button("➕ عملية مالية", "successBtn", self.template_entry,
+                              "رأس مال، إيداع وسحب من البنك، قرض، شراء معدات، تسوية الضريبة..."))
         head.addWidget(button("📤 تصدير", "secondaryBtn", self.export_current))
         head.addWidget(button("🖨 طباعة", "secondaryBtn", self.print_current))
         lay.addLayout(head)

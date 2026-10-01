@@ -99,7 +99,7 @@ class SettingsScreen(QWidget):
             lang.addItem(name, code)
         self.fields["language"] = lang
         f.addRow("اللغة / Language:", lang)
-        f.addRow("", hint("تغيير اللغة يُطبَّق بعد إعادة تشغيل البرنامج. Restart the program to apply the language."))
+        f.addRow("", hint("تتغير اللغة فوراً عند الحفظ، أو من زر 🌐 أعلى الشاشة. The language changes instantly."))
 
         # --- العملة والضريبة
         f = self._form_tab("العملة والضريبة")
@@ -419,8 +419,13 @@ class SettingsScreen(QWidget):
         except ValueError as e:
             warn(self, str(e))
             return
+        from core import i18n
+        new_lang = values.get("language")
         settings.set_many(values)
         w = self.window()
+        if new_lang and new_lang != i18n.language() and hasattr(w, "switch_language"):
+            w.switch_language(new_lang)               # فوراً، والنافذة الجديدة تفتح على الإعدادات
+            return
         if hasattr(w, "refresh_nav"):
             w.refresh_nav()
         info(self, "تم حفظ الإعدادات")

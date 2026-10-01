@@ -12,7 +12,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QGridLayout, QDialog, QFormLayout, QCheckBox, QInputDialog, QAbstractItemView, QApplication,
-    QScrollArea, QRadioButton, QButtonGroup
+    QScrollArea, QRadioButton, QButtonGroup, QLayout
 )
 
 from core import products, sales, settings, auth, receipts, customers, drawer, audit, loyalty, remote, offline, config
@@ -495,6 +495,7 @@ class POSScreen(QWidget):
         root = QHBoxLayout(self)
         root.setContentsMargins(16, 14, 16, 14)
         root.setSpacing(14)
+        root.setSizeConstraint(QLayout.SetNoConstraint)
 
         # ====== المنطقة الرئيسية ======
         main = QVBoxLayout()
@@ -572,6 +573,7 @@ class POSScreen(QWidget):
         # ====== اللوحة الجانبية ======
         side_w = QWidget()
         side_w.setFixedWidth(340)
+        self.side_w = side_w
         side = QVBoxLayout(side_w)
         side.setContentsMargins(0, 0, 0, 0)
         side.setSpacing(10)
@@ -585,9 +587,11 @@ class POSScreen(QWidget):
         self.lbl_disc = QLabel("0.00")
         self.lbl_tax = QLabel("0.00")
         self.lbl_items = QLabel("0")
+        self.totals_rows = []
         for i, (name, lbl) in enumerate([("عدد الأصناف", self.lbl_items), ("المجموع", self.lbl_sub),
                                          ("الخصم", self.lbl_disc), ("الضريبة", self.lbl_tax)]):
             a = QLabel(name)
+            self.totals_rows += [a, lbl]
             a.setObjectName("totalsLabel")
             lbl.setObjectName("totalsValue")
             lbl.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -612,9 +616,12 @@ class POSScreen(QWidget):
         pay = button("💵  دفع  (F2)", "payBtn", self.checkout)
         pay.setMinimumHeight(56)
         side.addWidget(pay)
+        self.pay_btn = pay
 
         grid = QGridLayout()
         grid.setSpacing(8)
+        self.action_grid = grid
+        self.action_buttons = []
         actions = [
             ("⚡ نقدي سريع  F12", self.quick_cash), ("٪ خصم  F9", self.set_discount),
             ("🔢 كمية  F8", self.change_qty), ("🏷 سعر  F10", self.change_price),
@@ -627,12 +634,70 @@ class POSScreen(QWidget):
         for i, (text, slot) in enumerate(actions):
             b = button(text, "posBtn", slot)
             b.setFocusPolicy(Qt.NoFocus)
-            b.setFixedHeight(40)
-            grid.addWidget(b, i // 2, i % 2)
+            b.setToolTip(text)
+            self.action_buttons.append(b)
         side.addLayout(grid)
         side.addStretch()
-        side.addWidget(hint("Enter إضافة • +/- الكمية • ↓ للتنقل • Esc رجوع للبحث"))
+        self.keys_hint = hint("Enter إضافة • +/- الكمية • ↓ للتنقل • Esc رجوع للبحث")
+        side.addWidget(self.keys_hint)
         root.addWidget(side_w)
+        self._layout_mode = None
+        self._fav_cols = None
+        self.fit_side_panel()
+
+    # ---------------------------------------------------------------- ملاءمة الشاشة
+    # كل أزرار الاختصارات تبقى ظاهرة دائماً بلا تمرير: من الأريح إلى الأصغر حتى تتسع اللوحة لارتفاع الشاشة
+    LAYOUTS = [
+        # (اسم، أعمدة، ارتفاع الزر، حجم الخط، تفاصيل المجموع، سطر اختصارات لوحة المفاتيح، ارتفاع زر الدفع)
+        ("touch", 2, 52, 15, True, True, 64),
+        ("full", 2, 40, 13, True, True, 56),
+        ("compact", 3, 36, 12, True, True, 50),
+        ("tight", 3, 32, 11, False, True, 44),
+        ("mini", 4, 30, 11, False, True, 40),
+    ]
+
+    def _apply_side_layout(self, mode):
+        name, cols, bh, fs, details, keys, pay_h = mode
+        for w in self.totals_rows:
+            w.setVisible(details)
+        self.keys_hint.setVisible(keys)
+        self.pay_btn.setFixedHeight(pay_h)
+        self.pay_btn.setStyleSheet(f"QPushButton {{ min-height: {pay_h}px; max-height: {pay_h}px; padding: 0 8px;"
+                                   f" font-size: {max(15, min(22, pay_h // 3))}px; }}")
+        self.side_w.setFixedWidth(400 if cols == 4 else 340)
+        for b in self.action_buttons:
+            self.action_grid.removeWidget(b)
+        for i, b in enumerate(self.action_buttons):
+            b.setFixedHeight(bh)
+            b.setStyleSheet(f"QPushButton {{ min-height: {bh}px; max-height: {bh}px; padding: 0 4px; font-size: {fs}px; }}")
+            self.action_grid.addWidget(b, i // cols, i % cols)
+
+    def fit_side_panel(self):
+        """يختار أريح تخطيط يتسع فعلاً لارتفاع الشاشة (يُقاس بعد تطبيقه، لا بالتقدير)"""
+        from core import config
+        h = self.height()
+        if h == getattr(self, "_fit_h", None):
+            return
+        self._fit_h = h
+        avail = h - 28
+        modes = [m for m in self.LAYOUTS if m[0] != "touch" or str(config.get("touch_mode") or "0") == "1"]
+        for mode in modes:
+            if mode[0] != self._layout_mode:
+                self._layout_mode = mode[0]
+                self._apply_side_layout(mode)
+            self.side_w.layout().invalidate()
+            if self.side_w.layout().sizeHint().height() <= avail:
+                return
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.fit_side_panel()
+        self.arrange_favorites()
+
+    def minimumSizeHint(self):
+        # لا تفرض نقطة البيع حجماً على النافذة: تتكيف هي مع أي ارتفاع (fit_side_panel)
+        from PySide6.QtCore import QSize
+        return QSize(640, 420)
 
     def setup_shortcuts(self):
         keys = {"F2": self.checkout, "F12": self.quick_cash, "F4": self.pick_customer, "F6": self.hold,
@@ -724,11 +789,26 @@ class POSScreen(QWidget):
         favs = self._try(lambda: products.get_all_products(favorites_only=True),
                          lambda: offline.search("", favorites_only=True))
         self.fav_area.setVisible(bool(favs))
-        cols = 6
-        for i, p in enumerate(favs):
+        self.fav_buttons = []
+        for p in favs:
             b = button(f"{p['name']}\n{m(p['sale_price'])}", "favBtn")
             b.setFocusPolicy(Qt.NoFocus)
+            b.setToolTip(p["name"])
             b.clicked.connect(lambda _=False, pid=p["id"]: self.add_product(self._get_product(pid)))
+            self.fav_buttons.append(b)
+        self._fav_cols = None
+        self.arrange_favorites()
+
+    def arrange_favorites(self):
+        """عدد أعمدة الأصناف المفضلة حسب العرض المتاح (زر لا يقل عن 120 بكسل)"""
+        buttons = getattr(self, "fav_buttons", [])
+        cols = max(3, min(8, (self.fav_area.viewport().width() or 700) // 124))
+        if cols == getattr(self, "_fav_cols", None) or not buttons:
+            return
+        self._fav_cols = cols
+        for b in buttons:
+            self.fav_grid.removeWidget(b)
+        for i, b in enumerate(buttons):
             self.fav_grid.addWidget(b, i // cols, i % cols)
 
     # ------------------------------------------------------------------ البحث
@@ -1164,19 +1244,26 @@ class POSScreen(QWidget):
                 return
             if self.cart:
                 sales.hold_cart(self.cart, self.discount, self.customer["id"] if self.customer else None, "معلّقة تلقائياً")
-            self.cart = dlg.chosen["cart"]
-            # تحديث المخزون المتوفر لكل سطر
-            for it in self.cart:
-                p = products.get_product(it["product_id"])
-                it["stock"] = p["quantity"] if p else 0
-                it["service"] = bool(p and p["is_service"])
-                it.setdefault("base_name", p["name"] if p else it["product_name"])
-                it.setdefault("unit", p["unit"] if p else "")
-            self.discount = dlg.chosen.get("discount", 0)
-            cid = dlg.chosen.get("customer_id")
-            self.set_customer(customers.get_customer(cid) if cid else None)
-            self.render_cart()
+            self.restore_cart(dlg.chosen)
         self.focus_search()
+
+    def cart_state(self):
+        return {"cart": self.cart, "discount": self.discount, "customer_id": self.customer["id"] if self.customer else None}
+
+    def restore_cart(self, data):
+        """استرجاع سلة (معلّقة، أو منقولة من نافذة سابقة عند تبديل اللغة)"""
+        self.cart = data["cart"]
+        # تحديث المخزون المتوفر لكل سطر
+        for it in self.cart:
+            p = products.get_product(it["product_id"])
+            it["stock"] = p["quantity"] if p else 0
+            it["service"] = bool(p and p["is_service"])
+            it.setdefault("base_name", p["name"] if p else it["product_name"])
+            it.setdefault("unit", p["unit"] if p else "")
+        self.discount = data.get("discount", 0)
+        cid = data.get("customer_id")
+        self.set_customer(customers.get_customer(cid) if cid else None)
+        self.render_cart()
 
     def new_product(self, barcode_text=""):
         if not require_permission(self, "inventory"):

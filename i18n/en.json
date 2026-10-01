@@ -1606,7 +1606,12 @@
 "يفحص البرنامج كل العمليات المسجّلة كما يفعل المدقق الخارجي: توازن الدفاتر، مطابقة الديون والمخزون، اكتمال الفواتير، عجز الصندوق ومؤشرات التلاعب، أعمار الديون، البضاعة المنتهية والراكدة، هامش الربح، الضريبة، والنسخ الاحتياطي. اختر الفترة واضغط «ابدأ التدقيق».": "The program examines every recorded transaction like an external auditor: books balance, debt and stock reconciliation, invoice completeness, cash shortages and manipulation indicators, debt aging, expired and dead stock, margins, VAT and backups. Choose the period and press “Start audit”.",
 "▶ ابدأ التدقيق": "▶ Start audit",
 "🔎   التدقيق المالي": "🔎   Financial audit",
-"🖨 تقرير التدقيق": "🖨 Audit report"
+"🖨 تقرير التدقيق": "🖨 Audit report",
+"تتغير اللغة فوراً عند الحفظ، أو من زر 🌐 أعلى الشاشة. The language changes instantly.": "The language changes instantly when you save, or from the 🌐 button at the top.",
+"تغيير لغة الواجهة فوراً": "Switch the interface language instantly",
+"رأس مال، إيداع وسحب من البنك، قرض، شراء معدات، تسوية الضريبة...": "Capital, bank deposits and withdrawals, loans, equipment purchases, VAT settlement...",
+"➕ عملية مالية": "➕ Financial operation",
+"🌐 العربية": "🌐 العربية"
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",
