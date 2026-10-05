@@ -39,8 +39,11 @@ def from_gregorian(g):
 
 
 def fmt(g):
+    """التاريخ الهجري للعرض بلغة الواجهة: «22 ربيع الآخر 1448هـ» أو «22 Rabi' al-Akhir 1448 AH»"""
+    from core.i18n import tr, is_rtl
     y, m, d = from_gregorian(g)
-    return f"{d} {MONTHS[m - 1]} {y}هـ"
+    month = tr(MONTHS[m - 1])
+    return f"{d} {month} {y}هـ" if is_rtl() else f"{d} {month} {y} AH"
 
 
 def next_occurrence(month, day, today=None, span_days=0):

@@ -44,6 +44,17 @@ from ui.suppliers_screen import PaySupplierDialog
 d = PaySupplierDialog(None, {"name": "Acme"}, 10)
 assert d.method.currentText() == "نقدي من الصندوق"                  # طرق الدفع تبقى بيانات عربية للمحاسبة
 assert d.method.itemText(0) == "نقدي من الصندوق" and d.method.property("currentText") == "Cash from drawer"
+# المساعدة: كل الأدلة إنجليزية بالكامل (لا نص عربي في الدليل ولا في القائمة)
+w.go("help"); app.processEvents()
+hp = w.pages["help"]
+labels = [hp.list.item(i).text() for i in range(hp.list.count())]
+assert labels and not any(i18n.ARABIC.search(t) for t in labels), labels
+for i in range(hp.list.count()):
+    hp.list.setCurrentRow(i); app.processEvents()
+    text = hp.view.toPlainText()
+    arabic = len(i18n.ARABIC.findall(text))
+    assert len(text) > 500 and arabic < len(text) * 0.02, (labels[i], arabic)   # أمثلة قليلة بالعربية مقبولة
+assert "Accounting Made Simple" in (hp.list.setCurrentRow(3) or hp.view.toPlainText())
 print("EN-OK")
 '''
 

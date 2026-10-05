@@ -13,7 +13,10 @@ from ui.widgets import page, hint, button
 GUIDES_AR = [("🧾 بطاقة الكاشير", "04_بطاقة_الكاشير.md"), ("🎓 دليل التدريب الشامل", "03_دليل_التدريب.md"),
              ("⭐ مزايا البرنامج", "00_مزايا_البرنامج.md"), ("📚 المحاسبة ببساطة", "02_المحاسبة_ببساطة.md"),
              ("⚖ المقارنة مع المنافسين", "08_المقارنة_مع_المنافسين.md")]
-GUIDES_EN = [("📄 Product overview", "Product_Sheet_EN.md")]
+# الواجهة الإنجليزية تعرض أدلة إنجليزية كاملة (docs/en)، والعربية تعرض العربية ومعها الملخص الإنجليزي
+GUIDES_EN = [("🧾 Cashier card", "en/Cashier_Card.md"), ("🎓 Complete training guide", "en/Training_Guide.md"),
+             ("⭐ Product overview", "Product_Sheet_EN.md"), ("📚 Accounting made simple", "en/Accounting_Made_Simple.md"),
+             ("⚖ How we compare", "en/Competitor_Comparison.md")]
 
 
 def docs_dir():
@@ -32,7 +35,8 @@ class HelpScreen(QWidget):
         self.layout().setContentsMargins(0, 0, 0, 0)
         split = QSplitter(Qt.Horizontal)
         self.list = QListWidget()
-        self.guides = (GUIDES_AR + GUIDES_EN) if i18n.is_rtl() else (GUIDES_EN + GUIDES_AR)
+        self.guides = (GUIDES_AR + [("📄 Product overview (English)", "Product_Sheet_EN.md")]) if i18n.is_rtl() \
+            else GUIDES_EN
         for label, _ in self.guides:
             self.list.addItem(label)
         self.list.currentRowChanged.connect(self.show_guide)
@@ -65,7 +69,7 @@ class HelpScreen(QWidget):
             text = open(path, encoding="utf-8").read()
         except OSError:
             text = i18n.tr("الدليل غير موجود في مجلد البرنامج")
-        self.view.setSearchPaths([docs_dir()])   # صور الأدلة (docs/*.png)
+        self.view.setSearchPaths([docs_dir(), os.path.dirname(path)])   # صور الأدلة (docs/*.png)
         self.view.setMarkdown(text)
 
     def contact(self):

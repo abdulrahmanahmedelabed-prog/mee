@@ -324,10 +324,12 @@ class AccountingScreen(QWidget):
             rows.append(["= الالتزامات + حقوق الملكية", "", float(money(bs["total_liabilities"] + bs["total_equity"]))])
             colors.append("#DCFCE7" if bs["balanced"] else "#FEE2E2")
             self.bs_table.set_rows(rows, colors=colors)
-            note = "✓ الميزانية متوازنة: الأصول = الالتزامات + حقوق الملكية." if bs["balanced"] else "✗ الميزانية غير متوازنة!"
+            from core.i18n import tr
+            note = tr("✓ الميزانية متوازنة: الأصول = الالتزامات + حقوق الملكية." if bs["balanced"]
+                      else "✗ الميزانية غير متوازنة!")
             if bs["inventory_physical"] is not None and abs(bs["inventory_physical"] - bs["inventory_book"]) >= 0.01:
-                note += (f"  ملاحظة: قيمة المخزون الفعلية حسب الكميات {m(bs['inventory_physical'])} والدفترية "
-                         f"{m(bs['inventory_book'])} (الفرق من تعديلات التكلفة أو البيع بمخزون سالب).")
+                note += "  " + tr(f"ملاحظة: قيمة المخزون الفعلية حسب الكميات {m(bs['inventory_physical'])} والدفترية "
+                                  f"{m(bs['inventory_book'])} (الفرق من تعديلات التكلفة أو البيع بمخزون سالب).")
             self.bs_note.setText(note)
         elif name == "قائمة الدخل":
             s = ledger.income_statement(a, b)

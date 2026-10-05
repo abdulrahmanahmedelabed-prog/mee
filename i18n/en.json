@@ -2509,6 +2509,10 @@
 "🧾 الفواتير — {0}": "🧾 Invoices — {0}",
 "🧾 المبيعات — {0}": "🧾 Sales — {0}",
 "🧾 مبيعات {0} — {1}": "🧾 {0} sales — {1}",
-"{0} • تجربة {1} يوماً": "{0} • {1}-day trial"
+"{0} • تجربة {1} يوماً": "{0} • {1}-day trial",
+"الباقة: {0} — الأجهزة المسموحة: {1}": "Plan: {0} — allowed devices: {1}",
+"ملاحظة: قيمة المخزون الفعلية حسب الكميات {0} والدفترية {1} (الفرق من تعديلات التكلفة أو البيع بمخزون سالب).": "Note: the physical stock value by quantities is {0} and the book value is {1} (the difference comes from cost adjustments or selling with negative stock).",
+"⚠ المفتاح المحفوظ: {0}": "⚠ Saved key: {0}",
+"{0}:رواتب": "{0}:Salaries"
 }
 }

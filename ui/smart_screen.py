@@ -217,8 +217,10 @@ class SmartScreen(QWidget):
         if not s.get("enough_data"):
             self.f_note.setText("أحتاج أسبوعين من المبيعات على الأقل لأتوقع.")
             return
-        self.k_sales.set(m(s["total"]), f"بين {m(s['low'])} و{m(s['high'])}" +
-                         (f" • {s['change_pct']:+.1f}% عن آخر 30 يوماً" if s["change_pct"] is not None else ""))
+        rng = tr(f"بين {m(s['low'])} و{m(s['high'])}")
+        if s["change_pct"] is not None:
+            rng += tr(f" • {s['change_pct']:+.1f}% عن آخر 30 يوماً")
+        self.k_sales.set(m(s["total"]), rng)
         self.k_trend.set(f"{s['trend_pct_week']:+.1f}%", f"أقوى يوم: {s['best_day']} • أضعف يوم: {s['worst_day']}")
         self.f_chart.set_data([d["date"][5:] for d in s["days"]], [d["value"] for d in s["days"]],
                               [f"{tr(d['weekday'])}: {m(d['value'])} ({m(d['low'])} – {m(d['high'])})" for d in s["days"]])

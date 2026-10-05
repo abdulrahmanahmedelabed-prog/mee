@@ -597,17 +597,20 @@ class SettingsScreen(QWidget):
     def load_license(self):
         from core import license, vendor
         st = license.status()
-        icon = {"licensed": "✅", "trial": "🎁", "free": "🌱"}.get(st["state"], "⛔")
-        extra = f"\nالباقة: {st['plan_label']} — الأجهزة المسموحة: {st['terminals'] or 'غير محدود'}"
+        from core.i18n import tr
+        icon = {"licensed": "✅ ", "free": "🌱 "}.get(st["state"], "" if st["state"] == "trial" else "⛔ ")
+        lines = [icon + tr(st["message"])]            # كل جزء يُترجم وحده فتظهر الحالة كاملة بلغة الواجهة
+        plan = tr(f"الباقة: {tr(st['plan_label'])} — الأجهزة المسموحة: {st['terminals'] or tr('غير محدود')}")
         if st["state"] == "licensed":
-            extra += f" — المحل: {st['shop']}"
+            plan += tr(f" — المحل: {st['shop']}")
+        lines.append(plan)
         if st.get("key_error"):
-            extra += f"\n⚠ المفتاح المحفوظ: {st['key_error']}"
-        self.lic_status.setText(f"{icon} {st['message']}{extra}")
+            lines.append(tr(f"⚠ المفتاح المحفوظ: {tr(st['key_error'])}"))
+        self.lic_status.setText("\n".join(lines))
         self.machine_lbl.setText(st["machine_id"])
-        v = [vendor.PRODUCT_NAME + f" — الإصدار {vendor.VERSION}", f"المزوّد: {vendor.VENDOR_NAME}"]
+        v = [tr(vendor.PRODUCT_NAME) + tr(f" — الإصدار {vendor.VERSION}"), tr(f"المزوّد: {vendor.VENDOR_NAME}")]
         if vendor.VENDOR_PHONE:
-            v.append(f"الدعم: {vendor.VENDOR_PHONE} ({vendor.SUPPORT_HOURS})")
+            v.append(tr(f"الدعم: {vendor.VENDOR_PHONE} ({tr(vendor.SUPPORT_HOURS)})"))
         if vendor.VENDOR_WEBSITE:
             v.append(vendor.VENDOR_WEBSITE)
         self.vendor_lbl.setText("  •  ".join(v))

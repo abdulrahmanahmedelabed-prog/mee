@@ -52,7 +52,7 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 | 💎 Pro | 5 | $29 | $290 | $599 | Accounting & balance sheet, financial audit, payroll, online store, owner dashboard, zakat |
 | 👑 Max | unlimited | $49 | $490 | $999 | Ask your shop, forecasting, seasons planner, branches |
 
-**First 30 days: the full Max plan, free.** Afterwards the program moves to Free — **selling never stops** and your data is never locked. See the [competitor comparison](08_المقارنة_مع_المنافسين.md) (Arabic).
+**First 30 days: the full Max plan, free.** Afterwards the program moves to Free — **selling never stops** and your data is never locked. See [how we compare](en/Competitor_Comparison.md) with 11 Arab and global products.
 
 ## Requirements
 Windows 10/11 PC, any thermal receipt printer (58/80 mm), USB barcode scanner, optional cash drawer and customer display. Multiple tills connect over the shop's local network.
