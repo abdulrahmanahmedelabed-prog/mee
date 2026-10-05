@@ -41,33 +41,34 @@ class CustomerDisplay(QWidget):
         self.setWindowTitle("شاشة الزبون")
         from ui.i18n_qt import direction
         self.setLayoutDirection(direction())
-        self.setStyleSheet("QWidget#cd { background:#0F172A; } QLabel { color:white; background:transparent; }")
+        self.setStyleSheet("/*fixed*/QWidget#cd { background:#0F172A; } QLabel { color:white; background:transparent; }")
         self.setObjectName("cd")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(40, 30, 40, 30)
         self.shop = QLabel()
         self.shop.setAlignment(Qt.AlignCenter)
-        self.shop.setStyleSheet("font-size:34px; font-weight:900; color:#93C5FD;")
+        self.shop.setTextFormat(Qt.RichText)
+        self.shop.setStyleSheet("/*fixed*/font-size:34px; font-weight:900; color:#93C5FD;")
         lay.addWidget(self.shop)
         line = QFrame()
-        line.setStyleSheet("background:#1E293B; min-height:2px; max-height:2px;")
+        line.setStyleSheet("/*fixed*/background:#1E293B; min-height:2px; max-height:2px;")
         lay.addWidget(line)
         self.items = QLabel()
         self.items.setAlignment(Qt.AlignTop | Qt.AlignRight)
-        self.items.setStyleSheet("font-size:26px; line-height:150%;")
+        self.items.setStyleSheet("/*fixed*/font-size:26px; line-height:150%;")
         self.items.setTextFormat(Qt.RichText)
         lay.addWidget(self.items, 1)
         self.saving = QLabel()
         self.saving.setAlignment(Qt.AlignCenter)
-        self.saving.setStyleSheet("font-size:26px; font-weight:800; color:#F9A8D4;")
+        self.saving.setStyleSheet("/*fixed*/font-size:26px; font-weight:800; color:#F9A8D4;")
         lay.addWidget(self.saving)
         self.total = QLabel()
         self.total.setAlignment(Qt.AlignCenter)
-        self.total.setStyleSheet("font-size:72px; font-weight:900; color:#4ADE80;")
+        self.total.setStyleSheet("/*fixed*/font-size:72px; font-weight:900; color:#4ADE80;")
         lay.addWidget(self.total)
         self.footer = QLabel()
         self.footer.setAlignment(Qt.AlignCenter)
-        self.footer.setStyleSheet("font-size:24px; color:#FACC15; font-weight:800;")
+        self.footer.setStyleSheet("/*fixed*/font-size:24px; color:#FACC15; font-weight:800;")
         lay.addWidget(self.footer)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
@@ -89,9 +90,19 @@ class CustomerDisplay(QWidget):
     def _sym(self):
         return settings.get("currency_symbol") or ""
 
+    def _head(self):
+        from html import escape
+        from core import branding
+        logo = branding.logo_img(56)
+        return (f"{logo}&nbsp;&nbsp;{escape(settings.get('shop_name') or '')}" if logo
+                else f"🏪 {escape(settings.get('shop_name') or '')}")
+
     def idle(self):
-        self.shop.setText(f"🏪 {settings.get('shop_name')}")
-        self.items.setText("<div style='text-align:center; font-size:40px; color:#CBD5E1'><br><br>أهلاً وسهلاً بكم 🌷</div>")
+        from core import branding
+        self.shop.setText(self._head())
+        big = branding.logo_img(220)               # شعار المحل كبيراً بين الزبائن
+        self.items.setText("<div style='text-align:center; font-size:40px; color:#CBD5E1'>"
+                           + (f"<br>{big}<br>" if big else "<br><br>") + "أهلاً وسهلاً بكم 🌷</div>")
         self.saving.setText("")
         self.total.setText("")
         self.footer.setText(settings.get("receipt_footer") or "")
@@ -102,7 +113,7 @@ class CustomerDisplay(QWidget):
                 self.idle()
             return
         self._timer.stop()
-        self.shop.setText(f"🏪 {settings.get('shop_name')}")
+        self.shop.setText(self._head())
         rows = "".join(
             f"<tr><td style='padding:4px 0'>{it['product_name']}</td>"
             f"<td style='padding:4px 20px; color:#94A3B8'>× {fmt_qty(it['quantity'])}</td>"

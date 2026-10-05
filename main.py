@@ -107,9 +107,8 @@ def main():
     font.setPointSize(10)
     font.setHintingPreference(QFont.PreferNoHinting)
     app.setFont(font)
-    from ui.style import STYLE_SHEET
-    from ui.i18n_qt import adapt_style
-    app.setStyleSheet(adapt_style(STYLE_SHEET))
+    from ui import theme
+    theme.apply(app)                   # فاتح / داكن / تلقائي، بألوان ثابتة لا يغيّرها إعداد ويندوز
     sys.excepthook = excepthook
 
     mode = config.load()["mode"]
@@ -138,7 +137,7 @@ def main():
             pass
 
     from ui.dialogs import LoginDialog, ChangePasswordDialog
-    if LoginDialog().exec() != QDialog.Accepted:
+    if not LoginDialog.run_login():
         return 0
     if auth.current_user().get("must_change_password"):
         ChangePasswordDialog(None, forced=True).exec()
@@ -146,12 +145,13 @@ def main():
     if auth.has_permission("settings") and needs_setup():
         SetupWizard().exec()
         i18n_qt.apply_language(config.load().get("language") or "ar", app)   # إن اختار الإنجليزية في المعالج
-        app.setStyleSheet(adapt_style(STYLE_SHEET))
+        theme.apply(app)
 
     from ui.main_window import MainWindow
     window = MainWindow()
     if DEMO:
-        window.setWindowTitle("🎓 نسخة التدريب (بيانات تجريبية) — " + window.windowTitle())
+        window.training = True
+        window.update_header()
     window.showMaximized()
     code = app.exec()
     remote.stop_server()

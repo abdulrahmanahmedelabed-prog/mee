@@ -65,6 +65,20 @@ class UserDialog(QDialog):
         super().accept()
 
 
+def logo_for_thermal(img):
+    """نسخة الطابعة الحرارية: على خلفية بيضاء (الشفاف لا يصبح أسود) ثم رمادي، بعرض 400 بكسل كحد أقصى"""
+    from PySide6.QtGui import QImage, QPainter, QColor
+    from PySide6.QtCore import Qt
+    if img.width() > 400:
+        img = img.scaledToWidth(400, Qt.SmoothTransformation)
+    flat = QImage(img.size(), QImage.Format_RGB32)
+    flat.fill(QColor("white"))
+    p = QPainter(flat)
+    p.drawImage(0, 0, img)
+    p.end()
+    return flat.convertToFormat(QImage.Format_Grayscale8)
+
+
 class SettingsScreen(QWidget):
     def __init__(self):
         super().__init__()
@@ -93,7 +107,9 @@ class SettingsScreen(QWidget):
         logo_row.addWidget(button("🖼 اختيار شعار...", "secondaryBtn", self.choose_logo))
         logo_row.addWidget(button("إزالة", "secondaryBtn", self.clear_logo))
         logo_row.addStretch()
-        f.addRow("شعار المحل على الفاتورة:", logo_row)
+        f.addRow("شعار المحل:", logo_row)
+        f.addRow("", hint("يظهر في القائمة الجانبية وشاشة الدخول وشاشة الزبون، وعلى الفواتير والكشوف والتقارير "
+                          "وقسائم الرواتب، وفي لوحة المالك والمتجر الأونلاين."))
         lang = QComboBox()
         from core import i18n as _i18n
         for code, name in _i18n.LANGUAGES.items():
@@ -101,6 +117,15 @@ class SettingsScreen(QWidget):
         self.fields["language"] = lang
         f.addRow("اللغة / Language:", lang)
         f.addRow("", hint("تتغير اللغة فوراً عند الحفظ، أو من زر 🌐 أعلى الشاشة. The language changes instantly."))
+        from ui import theme as _theme
+        from core import config as _config
+        self.theme_combo = QComboBox()
+        for code in (_theme.LIGHT, _theme.DARK, _theme.AUTO):
+            self.theme_combo.addItem(_theme.NAMES[code], code)
+        self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(_config.load().get("theme") or _theme.LIGHT)))
+        f.addRow("مظهر البرنامج:", self.theme_combo)
+        f.addRow("", hint("الداكن مريح للعين في الليل والإضاءة الخافتة، والتلقائي يتبع إعداد ويندوز. "
+                          "يتغير فوراً، أو من زر 🌙 أعلى الشاشة. لكل جهاز مظهره."))
 
         # --- العملة والضريبة
         f = self._form_tab("العملة والضريبة")
@@ -368,6 +393,11 @@ class SettingsScreen(QWidget):
                 w.setPlainText(v)
             else:
                 w.setText(v)
+        from core import i18n
+        lang = self.fields["language"]                 # لغة هذا الجهاز (قد تكون بُدّلت من زر 🌐)
+        lang.setCurrentIndex(max(0, lang.findData(i18n.language())))
+        from core import config
+        self.theme_combo.setCurrentIndex(max(0, self.theme_combo.findData(config.load().get("theme") or "light")))
         self.printer.setCurrentIndex(max(0, self.printer.findData(settings.get("printer_name"))))
         self.width.setCurrentIndex(max(0, self.width.findData(settings.get("receipt_width_mm"))))
         is_admin = auth.has_permission("users")
@@ -424,6 +454,17 @@ class SettingsScreen(QWidget):
         new_lang = values.get("language")
         settings.set_many(values)
         w = self.window()
+        from core import config
+        new_theme = self.theme_combo.currentData()
+        if new_theme != (config.load().get("theme") or "light") and hasattr(w, "switch_theme"):
+            if new_lang and new_lang != i18n.language():
+                config.save({"language": new_lang})
+                from ui import i18n_qt
+                from PySide6.QtWidgets import QApplication
+                i18n_qt.apply_language(new_lang, QApplication.instance())
+                QApplication.instance().setLayoutDirection(i18n_qt.direction())
+            w.switch_theme(new_theme)
+            return
         if new_lang and new_lang != i18n.language() and hasattr(w, "switch_language"):
             w.switch_language(new_lang)               # فوراً، والنافذة الجديدة تفتح على الإعدادات
             return
@@ -617,7 +658,7 @@ class SettingsScreen(QWidget):
     def load_logo(self):
         from PySide6.QtGui import QPixmap
         import base64
-        data = settings.get("shop_logo") or ""
+        data = settings.get("shop_logo_color") or settings.get("shop_logo") or ""
         if data:
             pm = QPixmap()
             pm.loadFromData(base64.b64decode(data))
@@ -636,19 +677,28 @@ class SettingsScreen(QWidget):
         if img.isNull():
             warn(self, "تعذر قراءة الصورة")
             return
-        if img.width() > 400:
-            img = img.scaledToWidth(400)
-        img = img.convertToFormat(QImage.Format_Grayscale8)   # الطابعات الحرارية أبيض وأسود
-        buf = QByteArray()
-        io = QBuffer(buf)
-        io.open(QIODevice.WriteOnly)
-        img.save(io, "PNG")
-        settings.set("shop_logo", base64.b64encode(bytes(buf)).decode("ascii"))
+        from PySide6.QtCore import Qt as _Qt
+
+        def b64(im):
+            buf = QByteArray()
+            io = QBuffer(buf)
+            io.open(QIODevice.WriteOnly)
+            im.save(io, "PNG")
+            return base64.b64encode(bytes(buf)).decode("ascii")
+        color = img.scaled(480, 480, _Qt.KeepAspectRatio, _Qt.SmoothTransformation) if max(img.width(), img.height()) > 480 else img
+        gray = logo_for_thermal(img)
+        settings.set_many({"shop_logo": b64(gray), "shop_logo_color": b64(color)})
         self.load_logo()
+        w = self.window()
+        if hasattr(w, "update_header"):
+            w.update_header()                      # يظهر فوراً في القائمة الجانبية
 
     def clear_logo(self):
-        settings.set("shop_logo", "")
+        settings.set_many({"shop_logo": "", "shop_logo_color": ""})
         self.load_logo()
+        w = self.window()
+        if hasattr(w, "update_header"):
+            w.update_header()
 
     def test_terminal(self):
         from core import payments

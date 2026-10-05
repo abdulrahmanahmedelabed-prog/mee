@@ -53,10 +53,17 @@ def _page(body, refresh=False):
             f"<title>لوحة المالك</title><style>{CSS}</style></head><body>{body}</body></html>")
 
 
+def _brand(size):
+    """شعار المحل واسمه (أو أيقونة المتجر إن لم يوجد شعار)"""
+    from core import branding
+    logo = branding.logo_img(size, style="vertical-align:middle; border-radius:6px")
+    return f"{logo or '🏪'} {escape(settings.get('shop_name'))}"
+
+
 def login_page(error=""):
     err = f"<p class='bad'>{escape(error)}</p>" if error else ""
     return _page(f"""<form method='post' action='/owner/login'>
-        <h3>🏪 {escape(settings.get('shop_name'))}</h3><p style='color:var(--muted)'>لوحة المالك — للقراءة فقط</p>{err}
+        <h3>{_brand(64)}</h3><p style='color:var(--muted)'>لوحة المالك — للقراءة فقط</p>{err}
         <label>اسم المستخدم</label><input name='username' autocomplete='username'>
         <label>كلمة المرور</label><input name='password' type='password' autocomplete='current-password'>
         <button>دخول</button></form>""")
@@ -110,7 +117,7 @@ def dashboard_page():
         return "".join("<tr>" + "".join(cols(i)) + "</tr>" for i in items) or \
             "<tr><td colspan='5' style='color:var(--muted)'>لا يوجد</td></tr>"
 
-    body = f"""<header><b>🏪 {escape(settings.get('shop_name'))}</b><span><small>{db.now()[:16]}</small>
+    body = f"""<header><b>{_brand(28)}</b><span><small>{db.now()[:16]}</small>
       &nbsp; <a href='/owner/logout'>خروج</a></span></header><main>
     <div class='grid'>
       <div class='k'><small>مبيعات اليوم</small><b>{_m(t['net_sales'])}</b><i>{t['invoice_count']} فاتورة • متوسط {_m(t['avg_basket'])}</i></div>

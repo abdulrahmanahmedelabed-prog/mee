@@ -155,7 +155,7 @@ def status_message(order):
 # ---------------------------------------------------------------------------
 
 def store_page():
-    from core import i18n
+    from core import i18n, branding
     rtl = i18n.is_rtl()
     t = i18n.tr
     cur = settings.get("currency_symbol") or ""
@@ -193,7 +193,7 @@ dialog{{border:0;border-radius:14px;padding:16px;width:min(520px,94vw);backgroun
 .q{{display:flex;gap:6px;align-items:center}}.q button{{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}}
 label{{display:block;margin-top:8px;color:var(--muted);font-size:13px}}.closed{{background:#FEE2E2;color:#991B1B;padding:10px;border-radius:10px;margin:10px 0}}
 </style></head><body>
-<header><h1>🏪 {escape(settings.get('shop_name'))}</h1><p>{escape(t(settings.get('online_store_message') or ''))} • {escape(settings.get('shop_phone') or '')}</p></header>
+<header><h1>{branding.logo_img(40, style="vertical-align:middle; border-radius:8px") or '🏪'} {escape(settings.get('shop_name'))}</h1><p>{escape(t(settings.get('online_store_message') or ''))} • {escape(settings.get('shop_phone') or '')}</p></header>
 <main>{closed}<input id='s' placeholder='{labels["search"]}'><div class='cats'><button class='cat on' data-c=''>{labels["all"]}</button>{cat_btns}</div>
 <div class='grid' id='g'></div></main>
 <div class='bar'><button id='open'>🛒 {labels["cart"]} — <span id='sum'>0.00</span> {escape(cur)}</button></div>

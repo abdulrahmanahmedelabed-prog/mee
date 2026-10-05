@@ -142,7 +142,6 @@ def payroll_total(date_from, date_to):
 
 def payslip_html(payment_id):
     from html import escape
-    from core import settings
     p = db.query_one("""SELECT p.*, e.name, e.job FROM payroll_payments p JOIN employees e ON e.id=p.employee_id
                         WHERE p.id=?""", (payment_id,))
     if not p:
@@ -151,12 +150,11 @@ def payslip_html(payment_id):
     rows = [("الراتب الأساسي", p["base"]), ("مكافأة / إضافي", p["bonus"]), ("خصومات (غياب، تأخير...)", -p["deductions"]),
             ("= الراتب المستحق", gross), ("خصم من السلف", -p["advances"]), ("= الصافي المدفوع", p["net"])]
     body = "".join(f"<tr><td>{escape(k)}</td><td style='text-align:left'>{v:,.2f}</td></tr>" for k, v in rows)
-    return (f"<html><body dir='rtl' style='font-family:Tahoma;font-size:11pt'>"
-            f"<h2 style='text-align:center'>{escape(settings.get('shop_name') or '')}</h2>"
-            f"<h3 style='text-align:center'>قسيمة راتب — {escape(p['period'])}</h3>"
+    from core import branding
+    return branding.document(
             f"<p>الموظف: <b>{escape(p['name'])}</b>{(' — ' + escape(p['job'])) if p['job'] else ''}<br>"
             f"تاريخ الصرف: {p['created_at'][:10]} • طريقة الدفع: {escape(p['method'])}<br>"
             f"السلف المتبقية بعد هذا الراتب: {advances_balance(p['employee_id']):,.2f}</p>"
             f"<table width='100%' border='1' cellspacing='0' cellpadding='6' style='border-collapse:collapse'>{body}</table>"
-            f"<p style='margin-top:40px'>توقيع الموظف: ____________ &nbsp;&nbsp;&nbsp; توقيع المدير: ____________</p>"
-            f"</body></html>")
+            f"<p style='margin-top:40px'>توقيع الموظف: ____________ &nbsp;&nbsp;&nbsp; توقيع المدير: ____________</p>",
+            f"قسيمة راتب — {p['period']}", size_pt=11)

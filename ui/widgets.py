@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import auth, i18n
+from ui import theme
 from core.utils import money, fmt_qty
 
 
@@ -107,7 +108,7 @@ class Table(QTableWidget):
                     item = SortItem("" if val is None else i18n.tr(str(val)))
                 item.setData(Qt.UserRole, r)
                 if colors and colors[r]:
-                    item.setBackground(QColor(colors[r]))
+                    item.setBackground(QColor(theme.c(colors[r])))
                 self.setItem(r, c, item)
         self.setSortingEnabled(self._sortable)
 
@@ -371,7 +372,7 @@ class BarChart(QWidget):
     def __init__(self, color="#2563EB", height=220):
         super().__init__()
         self.setMinimumHeight(height)
-        self.color = QColor(color)
+        self.color = QColor(theme.c(color))
         self.labels, self.values, self.tips = [], [], []
         self.setMouseTracking(True)
         self._bars = []
@@ -386,7 +387,7 @@ class BarChart(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
         top, bottom, side = 24, 28, 10
-        p.fillRect(self.rect(), QColor("white"))
+        p.fillRect(self.rect(), QColor(theme.c("white")))
         n = len(self.values)
         self._bars = []
         if not n:
@@ -397,7 +398,7 @@ class BarChart(QWidget):
         f = QFont(self.font())
         f.setPointSize(8)
         p.setFont(f)
-        p.setPen(QPen(QColor("#E2E8F0")))
+        p.setPen(QPen(QColor(theme.c("#E2E8F0"))))
         p.drawLine(side, h - bottom, w - side, h - bottom)
         step = max(1, n // 14)
         for i, v in enumerate(self.values):
@@ -407,13 +408,13 @@ class BarChart(QWidget):
             rect = QRectF(x, h - bottom - bh, bw, bh)
             self._bars.append((QRectF(x, top, bw, h - top - bottom), i))
             p.setPen(Qt.NoPen)
-            p.setBrush(self.color if v > 0 else QColor("#CBD5E1"))
+            p.setBrush(self.color if v > 0 else QColor(theme.c("#CBD5E1")))
             p.drawRoundedRect(rect, 3, 3)
-            p.setPen(QColor("#64748B"))
+            p.setPen(QColor(theme.c("#64748B")))
             if i % step == 0 or i == n - 1:
                 p.drawText(QRectF(x - slot / 2, h - bottom + 4, bw + slot, 18), Qt.AlignCenter, self.labels[i])
             if v > 0 and n <= 16:
-                p.setPen(QColor("#0F172A"))
+                p.setPen(QColor(theme.c("#0F172A")))
                 p.drawText(QRectF(x - slot / 2, h - bottom - bh - 18, bw + slot, 16), Qt.AlignCenter, f"{v:,.0f}")
         p.end()
 

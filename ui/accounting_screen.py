@@ -429,9 +429,7 @@ class AccountingScreen(QWidget):
             body += "<tr>" + "".join(f"<td>{escape(t.item(r, c).text() if t.item(r, c) else '')}</td>"
                                      for c in range(t.columnCount())) + "</tr>"
         period = f"في {b}" if name == "الميزانية العمومية" else f"من {a} إلى {b}"
-        html = (f"<html><body dir='rtl' style='font-family:Tahoma;font-size:10pt'>"
-                f"<h2 style='text-align:center'>{escape(settings.get('shop_name'))}</h2>"
-                f"<h3 style='text-align:center'>{escape(name)}</h3><p style='text-align:center'>{period}</p>"
-                f"<table width='100%' border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse'>"
-                f"<tr style='background:#eee'>{heads}</tr>{body}</table></body></html>")
+        from core import branding
+        html = branding.document(f"<table width='100%' border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse'>"
+                                 f"<tr style='background:#eee'>{heads}</tr>{body}</table>", name, period)
         printing.print_html(self, html, width_mm=210, preview=True)

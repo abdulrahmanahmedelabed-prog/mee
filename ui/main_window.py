@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, Q
 
 from core import auth, settings, shifts, backup, config, remote, license, vendor
 from ui.widgets import button, ask
+from ui import theme
 from ui.dialogs import ChangePasswordDialog, LoginDialog
 
 from ui.dashboard_screen import DashboardScreen
@@ -60,10 +61,59 @@ PAGES = [
 ]
 
 
+class _Veil(QFrame):
+    """طبقة شفافة فوق النافذة برسالة (تبديل اللغة/السمة)؛ fade=True تتلاشى وحدها بعد ظهور النافذة"""
+    def __init__(self, win, text, fade=False):
+        from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect
+        from PySide6.QtCore import QPropertyAnimation
+        from ui.i18n_qt import set_raw_text
+        super().__init__(win)
+        self.text = text
+        self.setObjectName("veil")
+        self.setStyleSheet("QFrame#veil { background: rgba(15, 23, 42, 150); }"
+                           "QLabel { background: palette(window); color: palette(window-text); border-radius: 18px;"
+                           " padding: 26px 40px; font-size: 20px; font-weight: 700; }")
+        lay = QVBoxLayout(self)
+        lbl = QLabel()
+        lbl.setAlignment(Qt.AlignCenter)
+        set_raw_text(lbl, text)
+        lay.addWidget(lbl, 0, Qt.AlignCenter)
+        self.setGeometry(win.rect())
+        self.raise_()
+        self.show()
+        if fade:
+            eff = QGraphicsOpacityEffect(self)
+            self.setGraphicsEffect(eff)
+            self.anim = QPropertyAnimation(eff, b"opacity", self)
+            self.anim.setDuration(350)
+            self.anim.setStartValue(1.0)
+            self.anim.setEndValue(0.0)
+            self.anim.finished.connect(self.deleteLater)
+            QTimer.singleShot(60, self.anim.start)
+        else:
+            self.repaint()
+            QApplication.processEvents()
+
+
+class _Pages(dict):
+    """قاموس الشاشات: تُنشأ الشاشة عند أول طلب لها"""
+    def __init__(self, win):
+        super().__init__()
+        self.win = win
+
+    def __missing__(self, key):
+        cls = next(c for k, _, _, c in PAGES if k == key)
+        w = cls()
+        self[key] = w
+        self.win._page_built(key, w)
+        return w
+
+
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, start=None):
         super().__init__()
         self.resize(1360, 820)
+        self._start = start
         from ui.i18n_qt import direction
         self.setLayoutDirection(direction())
         self.pages = {}
@@ -87,6 +137,7 @@ class MainWindow(QMainWindow):
         logo = QLabel("🏪")
         logo.setObjectName("logoTile")
         logo.setFixedSize(44, 44)
+        self.logo_tile = logo
         head.addWidget(logo)
         names = QVBoxLayout()
         names.setSpacing(0)
@@ -194,6 +245,13 @@ class MainWindow(QMainWindow):
         self.lang_btn.setToolTip("تغيير لغة الواجهة فوراً")
         self.lang_btn.clicked.connect(lambda: self.switch_language())
         tl.addWidget(self.lang_btn)
+        self.theme_btn = QPushButton()
+        self.theme_btn.setObjectName("secondaryBtn")
+        self.theme_btn.setCursor(Qt.PointingHandCursor)
+        _iq.set_raw_text(self.theme_btn, "☀" if theme.is_dark() else "🌙")
+        self.theme_btn.setToolTip("الوضع الفاتح" if theme.is_dark() else "الوضع الداكن")
+        self.theme_btn.clicked.connect(lambda: self.switch_theme())
+        tl.addWidget(self.theme_btn)
         content.addWidget(top)
         # شريط الترخيص (يظهر في التجربة أو عند الانتهاء)
         self.license_bar = QFrame()
@@ -216,28 +274,22 @@ class MainWindow(QMainWindow):
         root.addWidget(wrap, 1)
         self.setCentralWidget(central)
 
+        # الشاشات تُبنى عند أول فتح لها (فتح البرنامج وتبديل اللغة أسرع بكثير)؛ نقطة البيع والطلبات تُبنى فوراً
         self.page_holders = {}
+        self.pages = _Pages(self)
         for key, label, perms, cls in PAGES:
-            w = cls()
-            self.pages[key] = w
             if key == "pos":                  # نقطة البيع تعيد ترتيب نفسها لتظهر كاملة دائماً بلا تمرير
-                holder = w
+                holder = self.pages["pos"]
             else:                             # بقية الشاشات تتمرر بدل أن تفرض حجماً أكبر من الشاشة
                 holder = QScrollArea()
                 holder.setWidgetResizable(True)
                 holder.setFrameShape(QFrame.NoFrame)
                 holder.setObjectName("pageScroll")
-                holder.setWidget(w)
             self.page_holders[key] = holder
             self.stack.addWidget(holder)
+        self.pages["orders"]                  # تراقب الطلبات الجديدة في الخلفية
         self._rail = None
         self.setMinimumSize(760, 520)
-        self.pages["pos"].sale_completed.connect(self.update_header)
-        self.pages["cash"].shift_changed.connect(self.update_header)
-        self.pages["dashboard"].navigate.connect(self.go)
-        self.pages["insights"].navigate.connect(self.go)
-        self.pages["orders"].load_into_pos.connect(self.order_to_pos)
-        self.pages["orders"].new_orders.connect(self.on_new_orders)
 
         self._update_info = None
         import threading
@@ -248,6 +300,16 @@ class MainWindow(QMainWindow):
         self._timer.timeout.connect(self.tick)
         self._timer.start(15000)
         self.apply_user()
+
+    def _page_built(self, key, w):
+        holder = self.page_holders.get(key)
+        if isinstance(holder, QScrollArea):
+            holder.setWidget(w)
+        signals = {"pos": [("sale_completed", self.update_header)], "cash": [("shift_changed", self.update_header)],
+                   "dashboard": [("navigate", self.go)], "insights": [("navigate", self.go)],
+                   "orders": [("load_into_pos", self.order_to_pos), ("new_orders", self.on_new_orders)]}
+        for sig, slot in signals.get(key, []):
+            getattr(w, sig).connect(slot)
 
     # ------------------------------------------------------------------
     def apply_user(self):
@@ -263,7 +325,11 @@ class MainWindow(QMainWindow):
         self.avatar.setText((short[:1] or "؟").upper())
         self.update_header()
         # الكاشير يبدأ مباشرة بنقطة البيع
-        self.go("pos" if u["role"] == "cashier" else (first or "pos"))
+        start, self._start = getattr(self, "_start", None), None
+        if start and start in self.page_holders and not self.nav_buttons[start].isHidden():
+            self.go(start)                             # بعد تبديل اللغة/السمة: نفس الشاشة
+        else:
+            self.go("pos" if u["role"] == "cashier" else (first or "pos"))
 
     def refresh_nav(self):
         """إظهار الشاشات حسب الصلاحيات، وإخفاء المتقدمة في الوضع المبسّط"""
@@ -285,7 +351,19 @@ class MainWindow(QMainWindow):
 
     def _update_header(self):
         self.brand.setText(settings.get("shop_name"))
-        self.setWindowTitle(f"{settings.get('shop_name')} — برنامج المحاسبة ونقاط البيع")
+        from core import branding
+        pm = branding.logo_pixmap(40)                 # شعار المحل إن وُجد، وإلا أيقونة المتجر
+        if pm:
+            self.logo_tile.setPixmap(pm)
+            self.logo_tile.setStyleSheet("background: white; border: 1px solid #E9EDF5;")
+        else:
+            self.logo_tile.setText("🏪")
+            self.logo_tile.setStyleSheet("")
+        from core.i18n import tr
+        title = f"{settings.get('shop_name')} — {tr('برنامج المحاسبة ونقاط البيع')}"
+        if getattr(self, "training", False):
+            title = f"🎓 {tr('نسخة التدريب (بيانات تجريبية)')} — {title}"
+        self.setWindowTitle(title)
         s = shifts.current_shift()
         if s:
             self.shift_chip.setText(f"🟢 وردية #{s['id']} مفتوحة")
@@ -369,7 +447,7 @@ class MainWindow(QMainWindow):
         self.greeting.setText(f"{tr(days[n.weekday()])} • {n:%Y-%m-%d}")
 
     def go(self, key):
-        if key not in self.pages or self.nav_buttons[key].isHidden():   # مخفية لعدم الصلاحية أو الوضع المبسّط
+        if key not in self.page_holders or self.nav_buttons[key].isHidden():   # مخفية لعدم الصلاحية أو الوضع المبسّط
             return
         self.current_key = key
         self.nav_buttons[key].setChecked(True)
@@ -387,12 +465,18 @@ class MainWindow(QMainWindow):
         pos.clear_cart()
         auth.logout()
         self.hide()
-        dlg = LoginDialog()
-        if dlg.exec() != QDialog.Accepted:
+        from core import i18n
+        before = (i18n.language(), theme.is_dark())
+        if not LoginDialog.run_login():
             self.close()
             return
         if auth.current_user().get("must_change_password"):
             ChangePasswordDialog(None, forced=True).exec()
+        if (i18n.language(), theme.is_dark()) != before:   # غيّر اللغة من شاشة الدخول: النافذة باللغة الجديدة
+            self.current_key = None
+            self.show()
+            self._rebuild("🌐", lambda app: None)
+            return
         self.apply_user()
         self.show()
 
@@ -430,26 +514,63 @@ class MainWindow(QMainWindow):
     def switch_language(self, lang=None):
         """تبديل لغة الواجهة فوراً: تُبنى النافذة من جديد باللغة الأخرى على نفس الشاشة، دون إعادة تشغيل أو تسجيل دخول.
         السلة غير المكتملة في نقطة البيع تنتقل للنافذة الجديدة كما هي."""
-        from PySide6.QtWidgets import QApplication
         from core import i18n
         from ui import i18n_qt
-        from ui.style import STYLE_SHEET
         lang = lang or ("en" if i18n.is_rtl() else "ar")
+
+        def apply(app):
+            config.save({"language": lang})
+            i18n_qt.apply_language(lang, app)
+            app.setLayoutDirection(i18n_qt.direction())
+            theme.apply(app)
+        return self._rebuild("🌐  جارٍ التبديل إلى العربية…\nSwitching to Arabic…" if lang == "ar"
+                             else "🌐  Switching to English…\nجارٍ التبديل إلى الإنجليزية…", apply)
+
+    def switch_theme(self, choice=None):
+        """فاتح ↔ داكن فوراً (أو تطبيق اختيار الإعدادات: فاتح/داكن/تلقائي)"""
+        choice = choice or (theme.LIGHT if theme.is_dark() else theme.DARK)
+        dark = theme.resolve(choice) == theme.DARK
+        from core import i18n
+        msg = ("🌙  " + ("Dark mode…" if not i18n.is_rtl() else "الوضع الداكن…")) if dark else \
+              ("☀  " + ("Light mode…" if not i18n.is_rtl() else "الوضع الفاتح…"))
+
+        def apply(app):
+            config.save({"theme": choice})
+            theme.apply(app, choice)
+        return self._rebuild(msg, apply)
+
+    def _rebuild(self, message, apply):
+        """إعادة بناء النافذة بعد تغيير اللغة أو السمة، مع إشارة واضحة للمستخدم وتلاشٍ ناعم"""
+        from PySide6.QtWidgets import QApplication
+        import shiboken6
+        app = QApplication.instance()
         pos = self.pages["pos"]
         cart = pos.cart_state() if pos.cart else None
-        config.save({"language": lang})
-        app = QApplication.instance()
-        i18n_qt.apply_language(lang, app)
-        app.setLayoutDirection(i18n_qt.direction())
-        app.setStyleSheet(i18n_qt.adapt_style(STYLE_SHEET))
-        win = MainWindow()
-        if "🎓" in self.windowTitle():
-            win.setWindowTitle("🎓 نسخة التدريب (بيانات تجريبية) — " + win.windowTitle())
-        win.setGeometry(self.geometry())
-        win.go(getattr(self, "current_key", None) or "dashboard")
-        if cart:
-            win.pages["pos"].restore_cart(cart)       # السلة تنتقل كما هي
-        win.showMaximized() if self.isMaximized() else win.show()
+        # صورة ثابتة للنافذة الحالية تبقى ظاهرة خلف الرسالة، وتُحذف محتوياتها الثقيلة فوراً
+        # (إعادة تنسيق آلاف العناصر القديمة كانت تأخذ أكثر من ثانية)
+        self._timer.stop()
+        shot = QLabel()
+        shot.setPixmap(self.grab())
+        shot.setScaledContents(True)
+        old = self.takeCentralWidget()
+        self.setCentralWidget(shot)
+        old.hide()
+        shiboken6.delete(old)
+        self.pages.clear()
+        veil = _Veil(self, message)                  # تظهر فوراً قبل أي عمل
+        app.setOverrideCursor(Qt.WaitCursor)
+        try:
+            apply(app)
+            win = MainWindow(start=getattr(self, "current_key", None))
+            win.training = getattr(self, "training", False)
+            win.update_header()
+            win.setGeometry(self.geometry())
+            if cart:
+                win.pages["pos"].restore_cart(cart)       # السلة تنتقل كما هي
+            _Veil(win, veil.text, fade=True)
+            win.showMaximized() if self.isMaximized() else win.show()
+        finally:
+            app.restoreOverrideCursor()
         app._main_window = win                       # يبقى حياً بعد إغلاق النافذة القديمة
         self._replaced = True
         self.setAttribute(Qt.WA_DeleteOnClose)       # تتوقف مؤقتات النافذة القديمة وتُحذف

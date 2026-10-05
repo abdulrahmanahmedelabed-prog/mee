@@ -793,10 +793,8 @@ def report_html(r, shop_name=""):
                      + (f"<br><i>الإجراء المقترح: {escape(f['action'])}</i>" if f["action"] else "")
                      + (f"<ul style='margin:2px 0'>{samples}</ul>" if samples else "") + "</div>")
     c = r["counts"]
-    return (f"<html><body dir='rtl' style='font-family:Tahoma;font-size:10pt'>"
-            f"<h2 style='text-align:center;margin-bottom:0'>تقرير التدقيق المالي</h2>"
-            f"<p style='text-align:center;margin-top:2px'>{escape(shop_name)}<br>الفترة من {r['date_from']} إلى {r['date_to']}"
-            f" — أُعدّ في {r['generated_at'][:16]}</p>"
+    from core import branding
+    return branding.document(
             f"<table width='100%' border='1' cellspacing='0' cellpadding='6' style='border-collapse:collapse'>"
             f"<tr><td><b>الرأي</b></td><td><b>{escape(r['opinion'])}</b> — {escape(r['opinion_text'])}</td></tr>"
             f"<tr><td><b>الدرجة</b></td><td>{r['score']} / 100 ({escape(r['grade'])}) — {r['procedures']} إجراء تدقيق</td></tr>"
@@ -808,5 +806,5 @@ def report_html(r, shop_name=""):
             f"</table>{rows}"
             f"<p style='color:#667085;font-size:8pt;margin-top:16px'>تدقيق آلي يطبّق إجراءات المراجعة المعتادة على كل "
             f"العمليات المسجّلة في البرنامج (وليس على عيّنة منها). لا يرى ما لم يُسجَّل أصلاً، ولا يغني عن الجرد الفعلي "
-            f"وعدّ الصندوق. الشركات التي يُلزمها القانون بتقرير مدقق مرخّص تقدّم هذا التقرير له ليختصر عمله.</p>"
-            f"</body></html>")
+            f"وعدّ الصندوق. الشركات التي يُلزمها القانون بتقرير مدقق مرخّص تقدّم هذا التقرير له ليختصر عمله.</p>",
+            "تقرير التدقيق المالي", f"الفترة من {r['date_from']} إلى {r['date_to']} — أُعدّ في {r['generated_at'][:16]}")

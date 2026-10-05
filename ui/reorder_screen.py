@@ -126,10 +126,9 @@ class ReorderScreen(QWidget):
         body = "".join(f"<tr><td>{i}</td><td>{escape(r['name'])}</td><td>{fmt_qty(r['order_units'])}</td>"
                        f"<td>{escape(r['unit_name'])}</td><td>{fmt_qty(r['stock'])}</td></tr>"
                        for i, r in enumerate(rows, 1))
-        html = (f"<html><body dir='rtl' style='font-family:Tahoma;font-size:11pt'>"
-                f"<h2 style='text-align:center'>{escape(settings.get('shop_name'))}</h2>"
-                f"<h3 style='text-align:center'>طلبية شراء — {escape(self.supplier.currentText())}</h3>"
-                f"<table width='100%' border='1' cellspacing='0' cellpadding='5' style='border-collapse:collapse'>"
-                f"<tr style='background:#eee'><th>#</th><th>الصنف</th><th>الكمية</th><th>الوحدة</th><th>الموجود</th></tr>"
-                f"{body}</table></body></html>")
+        from core import branding
+        html = branding.document(
+            f"<table width='100%' border='1' cellspacing='0' cellpadding='5' style='border-collapse:collapse'>"
+            f"<tr style='background:#eee'><th>#</th><th>الصنف</th><th>الكمية</th><th>الوحدة</th><th>الموجود</th></tr>"
+            f"{body}</table>", f"طلبية شراء — {self.supplier.currentText()}", size_pt=11)
         printing.print_html(self, html, width_mm=210, preview=True)

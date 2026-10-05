@@ -11,11 +11,16 @@ def _m(v):
     return f"{money(v):,.2f}"
 
 
-def _header():
+def _header(color=None):
+    """رأس الفاتورة: الشعار (رمادي للطابعة الحرارية، ملوّن للـ A4) واسم المحل وبياناته"""
+    from core import branding
     s = settings.get
+    if color is None:
+        color = settings.get_float("receipt_width_mm", 80) >= 150
     parts = []
-    if s("shop_logo"):
-        parts.append(f"<div class='c'><img src='data:image/png;base64,{s('shop_logo')}' width='140'></div>")
+    logo = branding.logo_img(140, color=color)
+    if logo:
+        parts.append(f"<div class='c'>{logo}</div>")
     parts.append(f"<div class='c big'><b>{escape(s('shop_name'))}</b></div>")
     if s("shop_address"):
         parts.append(f"<div class='c'>{escape(s('shop_address'))}</div>")
@@ -189,7 +194,7 @@ def statement_html(customer_id, date_from=None, date_to=None):
                       f"<td class='l'>{_m(r['debit']) if r['debit'] else ''}</td>"
                       f"<td class='l'>{_m(r['credit']) if r['credit'] else ''}</td><td class='l'>{_m(r['running'])}</td></tr>")
     final = rows[-1]["running"] if rows else opening
-    body = (_header() + f"<hr><div class='c'><b>كشف حساب عميل</b></div><div>العميل: <b>{escape(c['name'])}</b> "
+    body = (_header(color=True) + f"<hr><div class='c'><b>كشف حساب عميل</b></div><div>العميل: <b>{escape(c['name'])}</b> "
             f"{escape(c['phone'] or '')}</div>"
             + (f"<div>الفترة: {date_from} إلى {date_to}</div>" if date_from else "")
             + "<hr><table><tr><th>التاريخ</th><th>البيان</th><th class='l'>عليه</th><th class='l'>له</th><th class='l'>الرصيد</th></tr>"

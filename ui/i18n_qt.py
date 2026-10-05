@@ -264,11 +264,12 @@ def install(app=None):
         app.installEventFilter(_filter)
 
 
-def set_raw_text(button, text):
-    """نص زر يظهر كما هو بدون ترجمة"""
-    native = _NATIVE.get((QAbstractButton, "setText"))
-    button.setProperty("_i18n_setText", text)          # يمنع ترجمته عند الظهور
-    (native or QAbstractButton.setText)(button, text)
+def set_raw_text(widget, text):
+    """نص زر أو عنوان يظهر كما هو بدون ترجمة"""
+    cls = QLabel if isinstance(widget, QLabel) else QAbstractButton
+    native = _NATIVE.get((cls, "setText"))
+    widget.setProperty("_i18n_setText", text)          # يمنع ترجمته عند الظهور
+    (native or cls.setText)(widget, text)
 
 
 def apply_language(lang, app=None):

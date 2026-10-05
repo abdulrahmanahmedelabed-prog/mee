@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWi
 
 from core import insights, products, settings
 from ui.widgets import Table, button, page, hint, info, ask, m, qty_cell, require_permission, KpiCard
+from ui import theme
 
 COLORS = {"danger": ("#FEF2F2", "#DC2626", "⛔"), "warning": ("#FFFBEB", "#D97706", "⚠"),
           "info": ("#EFF6FF", "#2563EB", "💡"), "success": ("#F0FDF4", "#16A34A", "✅")}
@@ -30,7 +31,7 @@ def cards_html(cards):
             f"<br><span style='color:#334155'>{escape(tr(c['detail']))}</span>"
             + (f"<br><span style='color:#475569; font-size:10pt'>{items}</span>" if items else "")
             + "</td></tr></table>")
-    return f"<div dir='{'rtl' if is_rtl() else 'ltr'}'>{''.join(out)}</div>"
+    return theme.html(f"<div dir='{'rtl' if is_rtl() else 'ltr'}'>{''.join(out)}</div>")
 
 
 class InsightsScreen(QWidget):

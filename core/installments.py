@@ -142,17 +142,15 @@ def reminder_message(customer_id):
 
 def schedule_html(plan_id):
     from html import escape
-    from core import settings
     p = db.query_one("""SELECT ip.*, c.name, c.phone FROM installment_plans ip JOIN customers c ON c.id=ip.customer_id
                         WHERE ip.id=?""", (plan_id,))
     s = summary(p)
     body = "".join(f"<tr><td>{r['seq']}</td><td>{r['due']}</td><td>{r['amount']:,.2f}</td><td>{r['paid']:,.2f}</td>"
                    f"<td>{STATUS[r['status']]}</td></tr>" for r in s["rows"])
-    return (f"<html><body dir='rtl' style='font-family:Tahoma;font-size:11pt'>"
-            f"<h2 style='text-align:center'>{escape(settings.get('shop_name') or '')}</h2>"
-            f"<h3 style='text-align:center'>جدول أقساط</h3>"
+    from core import branding
+    return branding.document(
             f"<p>العميل: <b>{escape(p['name'])}</b> {escape(p['phone'] or '')}<br>"
             f"المبلغ المقسط: {p['total']:,.2f} على {p['count']} أقساط • المسدَّد {s['paid']:,.2f} • المتبقي {s['remaining']:,.2f}</p>"
             f"<table width='100%' border='1' cellspacing='0' cellpadding='6' style='border-collapse:collapse'>"
             f"<tr style='background:#eee'><th>#</th><th>تاريخ الاستحقاق</th><th>القسط</th><th>المسدَّد</th><th>الحالة</th></tr>"
-            f"{body}</table><p style='margin-top:40px'>توقيع العميل: ____________</p></body></html>")
+            f"{body}</table><p style='margin-top:40px'>توقيع العميل: ____________</p>", "جدول أقساط", size_pt=11)

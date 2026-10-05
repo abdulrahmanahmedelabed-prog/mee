@@ -21,7 +21,14 @@ class LoginDialog(QDialog):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(28, 24, 28, 24)
         lay.setSpacing(10)
-        head = QLabel(f"🏪  {settings.get('shop_name')}")
+        from core import branding
+        pm = branding.logo_pixmap(96)
+        if pm:                                     # شعار المحل أعلى شاشة الدخول
+            logo = QLabel()
+            logo.setPixmap(pm)
+            logo.setAlignment(Qt.AlignCenter)
+            lay.addWidget(logo)
+        head = QLabel(settings.get('shop_name') if pm else f"🏪  {settings.get('shop_name')}")
         head.setObjectName("titleLabel")
         head.setAlignment(Qt.AlignCenter)
         lay.addWidget(head)
@@ -63,9 +70,26 @@ class LoginDialog(QDialog):
         ResetPasswordDialog(self).exec()
 
     def change_language(self, code):
+        """تُطبَّق اللغة فوراً: تُعاد شاشة الدخول باللغة الجديدة (انظر run_login)"""
         from core import config
+        from PySide6.QtWidgets import QApplication
+        from ui import i18n_qt, theme
         config.save({"language": code})
-        info(self, "أعد تشغيل البرنامج لتطبيق اللغة.\nRestart the program to apply the language.")
+        app = QApplication.instance()
+        i18n_qt.apply_language(code, app)
+        app.setLayoutDirection(i18n_qt.direction())
+        theme.apply(app)
+        self.relang = True
+        self.done(QDialog.Rejected)
+
+    @staticmethod
+    def run_login():
+        """شاشة الدخول؛ تُعاد فوراً عند تغيير اللغة منها. ترجع True عند نجاح الدخول"""
+        while True:
+            dlg = LoginDialog()
+            ok = dlg.exec() == QDialog.Accepted
+            if not getattr(dlg, "relang", False):
+                return ok
 
     def try_login(self):
         if auth.login(self.user.text(), self.pw.text()):

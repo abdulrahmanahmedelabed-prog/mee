@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
 from core import financial_audit, settings
 from ui import printing
 from ui.widgets import Table, button, page, hint, card, KpiCard, DateRange, m
+from ui import theme
 
 SEV_COLORS = {"critical": "#B42318", "high": "#C4320A", "medium": "#B54708", "low": "#175CD3", "ok": "#067647"}
 SEV_BG = {"critical": "#FEF3F2", "high": "#FFF4ED", "medium": "#FFFAEB", "low": "#EFF8FF", "ok": None}
@@ -121,7 +122,7 @@ class AuditScreen(QWidget):
                             items, [SEV_BG[f["severity"]] for f in items])
         for r, f in enumerate(items):
             it = self.table.item(r, 0)
-            it.setForeground(QColor(SEV_COLORS[f["severity"]]))
+            it.setForeground(QColor(theme.c(SEV_COLORS[f["severity"]])))
 
     def show_detail(self):
         f = self.table.selected_data()
