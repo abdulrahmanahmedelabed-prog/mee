@@ -152,7 +152,12 @@ class InsightsScreen(QWidget):
             self.pairs.set_rows([[r["a"], r["b"], r["count"]] for r in rows])
 
     def load_cards(self):
-        self.cards.setHtml(cards_html(insights.insights(30)))
+        self._cards = insights.insights(30)
+        self.cards.setHtml(cards_html(self._cards))
+
+    def retheme(self):
+        if getattr(self, "_cards", None) is not None:
+            self.cards.setHtml(cards_html(self._cards))
 
     def on_action(self, action):
         if action == "insights:prices":

@@ -148,20 +148,40 @@ def palette(mode):
 
 
 _patched = False
+_native = None
 
 
 def _patch():
-    """كل setStyleSheet داخل الشاشات يمر عبر css() فيتحول للداكن تلقائياً"""
-    global _patched
+    """كل setStyleSheet داخل الشاشات يمر عبر css() فيتحول للداكن تلقائياً، ويُحفظ الأصل لإعادة التلوين لاحقاً"""
+    global _patched, _native
     if _patched:
         return
     from PySide6.QtWidgets import QWidget
-    native = QWidget.setStyleSheet
+    _native = QWidget.setStyleSheet
 
     def setStyleSheet(self, text):
-        native(self, css(text))
+        if text or self.property("_theme_css"):
+            self.setProperty("_theme_css", text)
+        _native(self, css(text))
     QWidget.setStyleSheet = setStyleSheet
     _patched = True
+
+
+def restyle(app):
+    """تبديل السمة على النوافذ المفتوحة نفسها (بلا إعادة بناء ولا إعادة تحميل للبيانات):
+    يعيد تلوين تصميم كل عنصر من أصله، ثم يستدعي retheme() لما يرسم ألوانه بنفسه (الجداول، الرسوم، بطاقات HTML)"""
+    widgets = app.allWidgets()
+    for w in widgets:
+        orig = w.property("_theme_css")
+        if orig:
+            _native(w, css(orig))
+    for w in widgets:
+        fn = getattr(w, "retheme", None)
+        if callable(fn):
+            try:
+                fn()
+            except RuntimeError:          # عنصر داخلي حُذف (شاشة مقفلة أو مستبدلة) — لا شيء لإعادة تلوينه
+                pass
 
 
 def apply(app, choice=None):
@@ -173,8 +193,9 @@ def apply(app, choice=None):
     choice = choice or config.load().get("theme") or LIGHT
     _mode = resolve(choice)
     _patch()
-    if app.style().name().lower() != "fusion":
-        app.setStyle("Fusion")             # مظهر موحد لا يتأثر بإعداد ويندوز الداكن/الفاتح
+    if not app.property("_fusion"):
+        app.setStyle("Fusion")             # مظهر موحد لا يتأثر بإعداد ويندوز الداكن/الفاتح (مرة واحدة)
+        app.setProperty("_fusion", True)
     app.setPalette(palette(_mode))
     sheet = adapt_style(style(STYLE_SHEET))
     if app.styleSheet() != sheet:

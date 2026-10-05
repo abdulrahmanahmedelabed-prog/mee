@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
 
 from core import financial_audit, settings
 from ui import printing
-from ui.widgets import Table, button, page, hint, card, KpiCard, DateRange, m
+from ui.widgets import Table, button, page, hint, card, KpiCard, DateRange, m, RAW_FG
 from ui import theme
 
 SEV_COLORS = {"critical": "#B42318", "high": "#C4320A", "medium": "#B54708", "low": "#175CD3", "ok": "#067647"}
@@ -96,6 +96,18 @@ class AuditScreen(QWidget):
         finally:
             QApplication.restoreOverrideCursor()
             self.run_btn.setEnabled(True)
+        self.show_result()
+
+    def theme_state(self):
+        return self.result
+
+    def restore_theme_state(self, result):
+        """بعد تبديل السمة: نفس نتيجة التدقيق دون إعادته"""
+        if result:
+            self.result = result
+            self.show_result()
+
+    def show_result(self):
         r = self.result
         c = r["counts"]
         color = "#16A34A" if r["score"] >= 90 else "#2563EB" if r["score"] >= 75 else "#D97706" if r["score"] >= 60 else "#DC2626"
@@ -122,6 +134,7 @@ class AuditScreen(QWidget):
                             items, [SEV_BG[f["severity"]] for f in items])
         for r, f in enumerate(items):
             it = self.table.item(r, 0)
+            it.setData(RAW_FG, SEV_COLORS[f["severity"]])
             it.setForeground(QColor(theme.c(SEV_COLORS[f["severity"]])))
 
     def show_detail(self):

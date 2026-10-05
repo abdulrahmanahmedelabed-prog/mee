@@ -200,7 +200,9 @@ class ReportsScreen(QWidget):
         self.load()
 
     def _add_tab(self, widget, name, table):
+        self.tabs.blockSignals(True)          # لا تحميل أثناء البناء: refresh() عند فتح الشاشة يحمّل مرة واحدة
         idx = self.tabs.addTab(widget, name)
+        self.tabs.blockSignals(False)
         self.tables[idx] = (table, name)
 
     def refresh(self):

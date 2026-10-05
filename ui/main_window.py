@@ -295,6 +295,7 @@ class MainWindow(QMainWindow):
 
         # الشاشات تُبنى عند أول فتح لها (فتح البرنامج وتبديل اللغة أسرع بكثير)؛ نقطة البيع والطلبات تُبنى فوراً
         self.page_holders = {}
+        self._refresh_cost = {}               # كم تأخذ كل شاشة لتحميل بياناتها (لتبديل السمة بأسرع طريقة)
         self.pages = _Pages(self)
         for key, label, perms, cls in PAGES:
             if key == "pos":                  # نقطة البيع تعيد ترتيب نفسها لتظهر كاملة دائماً بلا تمرير
@@ -525,7 +526,10 @@ class MainWindow(QMainWindow):
         w = self.pages[key]
         self.stack.setCurrentWidget(self.page_holders[key])
         if hasattr(w, "refresh"):
+            import time
+            t = time.perf_counter()
             w.refresh()
+            self._refresh_cost[key] = time.perf_counter() - t
 
     def logout(self):
         pos = self.pages["pos"]
@@ -602,17 +606,54 @@ class MainWindow(QMainWindow):
                              else "🌐  Switching to English…\nجارٍ التبديل إلى الإنجليزية…", apply)
 
     def switch_theme(self, choice=None):
-        """فاتح ↔ داكن فوراً (أو تطبيق اختيار الإعدادات: فاتح/داكن/تلقائي)"""
+        """فاتح ↔ داكن فوراً على نفس النافذة (أو تطبيق اختيار الإعدادات: فاتح/داكن/تلقائي).
+        لا إعادة بناء ولا إعادة تحميل للبيانات: تتلاشى صورة المظهر القديم فوق الجديد في ربع ثانية."""
+        import shiboken6
+        from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect
+        from PySide6.QtCore import QPropertyAnimation
         choice = choice or (theme.LIGHT if theme.is_dark() else theme.DARK)
-        dark = theme.resolve(choice) == theme.DARK
-        from core import i18n
-        msg = ("🌙  " + ("Dark mode…" if not i18n.is_rtl() else "الوضع الداكن…")) if dark else \
-              ("☀  " + ("Light mode…" if not i18n.is_rtl() else "الوضع الفاتح…"))
-
-        def apply(app):
+        app = QApplication.instance()
+        shot = QLabel(self)                                  # المظهر الحالي يبقى ظاهراً حتى يكتمل الجديد
+        shot.setPixmap(self.grab())
+        shot.setGeometry(self.rect())
+        shot.show()
+        shot.raise_()
+        app.setOverrideCursor(Qt.WaitCursor)
+        try:
+            # الشاشات المبنية تُحذف وتُبنى عند فتحها (كل فتح لشاشة يحدّث بياناتها أصلاً) — بناؤها جديدة أسرع من
+            # إعادة تلوين عناصرها. تبقى نقطة البيع (السلة) والطلبات، والشاشة الحالية إن كان فيها حساب ثقيل أو عمل
+            # للمستخدم لا نريد إعادته (KEEP_ON_THEME: المحاسبة)، وما فيه عمل للمستخدم يُنقل (theme_state: المحادثة، التدقيق).
+            cur = getattr(self, "current_key", None)
+            page = dict.get(self.pages, cur)
+            keep = {"pos", "orders"} | ({cur} if getattr(page, "KEEP_ON_THEME", False) else set())
+            saved = page.theme_state() if cur not in keep and hasattr(page, "theme_state") else None
+            for key in [k for k in dict.keys(self.pages) if k not in keep]:
+                w = dict.pop(self.pages, key)
+                holder = self.page_holders.get(key)
+                if isinstance(holder, QScrollArea):
+                    holder.takeWidget()
+                shiboken6.delete(w)
             config.save({"theme": choice})
             theme.apply(app, choice)
-        return self._rebuild(msg, apply)
+            theme.restyle(app)
+            if cur and cur not in dict.keys(self.pages):
+                self.go(cur)                                 # تُبنى بالسمة الجديدة
+                if saved is not None:
+                    self.pages[cur].restore_theme_state(saved)   # نفس ما كان يراه المستخدم (المحادثة، نتيجة التدقيق)
+            from ui import i18n_qt as _iq
+            _iq.set_raw_text(self.theme_btn, "☀" if theme.is_dark() else "🌙")
+            self.theme_btn.setToolTip("الوضع الفاتح" if theme.is_dark() else "الوضع الداكن")
+        finally:
+            app.restoreOverrideCursor()
+        eff = QGraphicsOpacityEffect(shot)
+        shot.setGraphicsEffect(eff)
+        anim = QPropertyAnimation(eff, b"opacity", shot)
+        anim.setDuration(260)
+        anim.setStartValue(1.0)
+        anim.setEndValue(0.0)
+        anim.finished.connect(shot.deleteLater)
+        anim.start()
+        return self
 
     def _rebuild(self, message, apply):
         """إعادة بناء النافذة بعد تغيير اللغة أو السمة، مع إشارة واضحة للمستخدم وتلاشٍ ناعم"""
@@ -621,6 +662,9 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         pos = self.pages["pos"]
         cart = pos.cart_state() if pos.cart else None
+        cur = getattr(self, "current_key", None)
+        page = dict.get(self.pages, cur)
+        saved = page.theme_state() if page is not None and hasattr(page, "theme_state") else None
         # صورة ثابتة للنافذة الحالية تبقى ظاهرة خلف الرسالة، وتُحذف محتوياتها الثقيلة فوراً
         # (إعادة تنسيق آلاف العناصر القديمة كانت تأخذ أكثر من ثانية)
         self._timer.stop()
@@ -642,6 +686,8 @@ class MainWindow(QMainWindow):
             win.setGeometry(self.geometry())
             if cart:
                 win.pages["pos"].restore_cart(cart)       # السلة تنتقل كما هي
+            if saved is not None and cur in dict.keys(win.pages):
+                win.pages[cur].restore_theme_state(saved)  # المحادثة ونتيجة التدقيق تنتقل أيضاً
             _Veil(win, veil.text, fade=True)
             win.showMaximized() if self.isMaximized() else win.show()
         finally:

@@ -12,7 +12,7 @@ import urllib.parse
 import sys
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 SCHEMA_VERSION = 9
 
@@ -731,6 +731,7 @@ def init_db():
         conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('schema_version', ?)", (str(SCHEMA_VERSION),))
         conn.execute("INSERT OR IGNORE INTO meta(key, value) VALUES ('install_date', ?)", (today(),))
         conn.commit()
+        _refresh_statistics(conn)
     finally:
         conn.close()
 
@@ -739,6 +740,30 @@ def init_db():
     settings.ensure_defaults()
     auth.ensure_admin()
     ledger.ensure_accounts()
+
+
+def _refresh_statistics(conn, force=False):
+    """إحصاءات الجداول لمخطِّط الاستعلامات (ANALYZE) مرة أسبوعياً: بدونها يختار SQLite طرقاً بطيئة مع البيانات الكبيرة
+    (المستشار الذكي 0.9 ثانية بدلاً من 0.14). تستغرق أجزاء من الثانية."""
+    try:
+        row = conn.execute("SELECT value FROM meta WHERE key='analyzed_at'").fetchone()
+        has_stats = conn.execute("SELECT 1 FROM sqlite_master WHERE name='sqlite_stat1'").fetchone()
+        stale = not row or not has_stats or row[0] < (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        if force or stale:
+            conn.execute("ANALYZE")
+            conn.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('analyzed_at', ?)", (today(),))
+            conn.commit()
+    except sqlite3.Error:
+        pass
+
+
+def refresh_statistics():
+    conn = get_connection()
+    try:
+        _refresh_statistics(conn, force=True)
+    finally:
+        if conn is not _SHARED:
+            conn.close()
 
 
 def get_meta(key, default=None):

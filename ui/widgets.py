@@ -64,6 +64,9 @@ class SortItem(QTableWidgetItem):
         return self.text() < other.text()
 
 
+RAW_BG, RAW_FG = Qt.UserRole + 7, Qt.UserRole + 8      # ألوان الصف الأصلية (فاتحة) قبل تحويلها للسمة
+
+
 class Table(QTableWidget):
     """جدول للعرض فقط مع دعم الترتيب وتخزين بيانات كل صف"""
 
@@ -108,9 +111,21 @@ class Table(QTableWidget):
                     item = SortItem("" if val is None else i18n.tr(str(val)))
                 item.setData(Qt.UserRole, r)
                 if colors and colors[r]:
+                    item.setData(RAW_BG, colors[r])            # اللون الأصلي: يُعاد تحويله عند تبديل السمة
                     item.setBackground(QColor(theme.c(colors[r])))
                 self.setItem(r, c, item)
         self.setSortingEnabled(self._sortable)
+
+    def retheme(self):
+        for r in range(self.rowCount()):
+            for c in range(self.columnCount()):
+                it = self.item(r, c)
+                if it is None:
+                    continue
+                if it.data(RAW_BG):
+                    it.setBackground(QColor(theme.c(it.data(RAW_BG))))
+                if it.data(RAW_FG):
+                    it.setForeground(QColor(theme.c(it.data(RAW_FG))))
 
     def selected_data(self):
         items = self.selectedItems()
@@ -372,6 +387,7 @@ class BarChart(QWidget):
     def __init__(self, color="#2563EB", height=220):
         super().__init__()
         self.setMinimumHeight(height)
+        self._raw_color = color
         self.color = QColor(theme.c(color))
         self.labels, self.values, self.tips = [], [], []
         self.setMouseTracking(True)
@@ -417,6 +433,10 @@ class BarChart(QWidget):
                 p.setPen(QColor(theme.c("#0F172A")))
                 p.drawText(QRectF(x - slot / 2, h - bottom - bh - 18, bw + slot, 16), Qt.AlignCenter, f"{v:,.0f}")
         p.end()
+
+    def retheme(self):
+        self.color = QColor(theme.c(self._raw_color))
+        self.update()
 
     def mouseMoveEvent(self, e):
         for rect, i in self._bars:

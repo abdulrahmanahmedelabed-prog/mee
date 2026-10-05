@@ -48,12 +48,14 @@ SCENES = [
                  "sub": "المبيعات • الربح • الصندوق • المخزون — بنظرة واحدة"}),
     (2, "shot", {"img": "audit.png", "crop": (0, 80, 1140, 806), "title": "مدقق مالي داخل برنامجك",
                  "sub": "33 فحصاً لكل العمليات • يكشف العجز والتلاعب • رأي ودرجة"}),
-    (2, "shot", {"img": "insights.png", "crop": (0, 80, 1140, 806), "title": "مستشار ذكي ينبّهك قبل الخسارة",
-                 "sub": "أصناف رابحة ستنفد • بضاعة قاربت على الانتهاء • زبون توقف"}),
+    (2, "shot", {"img": "smart_ask.png", "crop": (0, 80, 1140, 806), "title": "اسأل محلك… بلهجتك",
+                 "sub": "كم ربحت؟ مين عليه دين؟ شو رح يخلص؟ — الجواب فوراً وبدون إنترنت"}),
+    (2, "shot", {"img": "seasons.png", "crop": (0, 80, 1140, 806), "title": "جاهز لرمضان قبل الكل",
+                 "sub": "تقويم هجري • كم تطلب من كل صنف • ومتى تطلب"}),
     (2, "phones", {"title": "محلك في جيبك",
                    "sub": "لوحة المالك • متجر أونلاين بلا عمولة • جرد بالكاميرا"}),
-    (2, "grid", {"title": "وكمان…", "items": ["يعمل بدون إنترنت", "تقرير لكل الفروع", "رواتب وسلف الموظفين",
-                                             "تقسيط ديون الزبائن", "ميزانية وإقرار ضريبي", "عربي و English"]}),
+    (2, "grid", {"title": "وكمان…", "items": ["تنبؤ بالمبيعات والسيولة", "حاسبة الزكاة", "تقرير لكل الفروع",
+                                             "رواتب وأقساط", "وضع داكن وشعار محلك", "عربي و English"]}),
     (3, "cta", {}),
 ]
 
@@ -333,7 +335,7 @@ class Renderer:
         a = ease(t / 0.5)
         p.save()
         p.translate(0, (1 - a) * 40 * s)
-        self.text(p, QRectF(40, H / 2 - 420 * s, W - 80, 180 * s), "جرّبه مجاناً", HEAD_FONT, 110, WHITE, Qt.AlignCenter, a)
+        self.text(p, QRectF(40, H / 2 - 420 * s, W - 80, 180 * s), "أول شهر ماكس مجاناً", HEAD_FONT, 110, WHITE, Qt.AlignCenter, a)
         p.restore()
         b = ease((t - 0.3) / 0.5)
         pulse = 1 + 0.04 * math.sin(t * 6) * (b >= 1)
@@ -344,10 +346,10 @@ class Renderer:
         p.setPen(Qt.NoPen)
         p.setBrush(GREEN)
         p.drawRoundedRect(br, bh / 2, bh / 2)
-        self.text(p, br, "30 يوماً بكل المزايا", HEAD_FONT, 64, WHITE)
+        self.text(p, br, "ثم مجاني للأبد", HEAD_FONT, 64, WHITE)
         p.restore()
         c = ease((t - 0.8) / 0.5)
-        self.text(p, QRectF(40, H / 2 + 20 * s, W - 80, 120 * s), "تركيب وتدريب لموظفيك • دعم بالعربي", BODY_FONT,
+        self.text(p, QRectF(40, H / 2 + 20 * s, W - 80, 120 * s), "البيع لا يتوقف أبداً • تركيب وتدريب • دعم بالعربي", BODY_FONT,
                   42, MUTED, Qt.AlignCenter, c, bold=False)
         e = ease((t - 1.3) / 0.5)
         contact = f"واتساب: {self.phone}" if self.phone else "راسلنا على واتساب الآن"

@@ -457,15 +457,13 @@ class SettingsScreen(QWidget):
         w = self.window()
         from core import config
         new_theme = self.theme_combo.currentData()
-        if new_theme != (config.load().get("theme") or "light") and hasattr(w, "switch_theme"):
-            if new_lang and new_lang != i18n.language():
-                config.save({"language": new_lang})
-                from ui import i18n_qt
-                from PySide6.QtWidgets import QApplication
-                i18n_qt.apply_language(new_lang, QApplication.instance())
-                QApplication.instance().setLayoutDirection(i18n_qt.direction())
-            w.switch_theme(new_theme)
+        theme_changed = new_theme != (config.load().get("theme") or "light")
+        if theme_changed and not (new_lang and new_lang != i18n.language()) and hasattr(w, "switch_theme"):
+            w.switch_theme(new_theme)               # فوراً على نفس الشاشة
+            info(self, "تم حفظ الإعدادات")
             return
+        if theme_changed:
+            config.save({"theme": new_theme})       # تُطبَّق مع اللغة الجديدة أدناه
         if new_lang and new_lang != i18n.language() and hasattr(w, "switch_language"):
             w.switch_language(new_lang)               # فوراً، والنافذة الجديدة تفتح على الإعدادات
             return

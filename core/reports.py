@@ -6,7 +6,8 @@ from datetime import date, timedelta
 from core import db
 from core.utils import money
 
-_RANGE = "date({col}) BETWEEN date(?) AND date(?)"
+# مقارنة مباشرة على العمود (وليس date(العمود)) حتى يستخدم SQLite فهرس التاريخ: أسرع بكثير مع مئات الآلاف من الفواتير
+_RANGE = "{col} >= date(?) AND {col} < date(?, '+1 day')"
 
 
 def profit_and_loss(date_from, date_to):

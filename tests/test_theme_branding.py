@@ -155,3 +155,33 @@ def test_pages_build_on_demand_and_switch_is_fast(app):
     w5 = w4.switch_language("ar")
     assert "برنامج المحاسبة" in w5.windowTitle() and i18n.language() == "ar"
     w5.close()
+
+
+def test_theme_switch_in_place_keeps_window_and_work(app):
+    """تبديل السمة على نفس النافذة: لا إعادة بناء، والسلة والمحادثة باقية، وألوان الجداول تتحول"""
+    from ui import theme
+    from ui.main_window import MainWindow
+    from ui.widgets import Table
+    pid = products.add_product("شاي", "8001", "", 5, 8, 20, 2)
+    w = MainWindow()
+    w.show()
+    w.pages["pos"].add_product(products.get_product(pid), 1)
+    w.go("smart")
+    w.pages["smart"].ask("كم بعت اليوم؟")
+    t = Table(["أ"])
+    t.set_rows([["x"]], colors=["#FEE2E2"])
+    try:
+        same = w.switch_theme("dark")
+        assert same is w and theme.is_dark()
+        assert len(w.pages["pos"].cart) == 1
+        assert len(w.pages["smart"]._history) == 1 and "المبيعات" in w.pages["smart"].chat.toPlainText()
+        assert t.item(0, 0).background().color().name().upper() == theme.INLINE_MAP["#FEE2E2"]
+        assert w.theme_btn.text() == "☀"
+        w.go("reports")                                  # الشاشات المحذوفة تُبنى من جديد بالسمة الداكنة
+        assert "reports" in dict.keys(w.pages)
+        w.switch_theme("light")
+        assert t.item(0, 0).background().color().name().upper() == "#FEE2E2"
+    finally:
+        theme.apply(app, "light")
+        w.pages["pos"].clear_cart()
+        w.close()

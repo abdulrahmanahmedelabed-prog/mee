@@ -21,7 +21,7 @@ def suggestions(days=30, cover_days=14, include_all_low=True):
     sold = {r["product_id"]: r["q"] for r in db.query("""
         SELECT ii.product_id, SUM((ii.quantity - ii.returned_qty) * ii.factor) AS q
         FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
-        WHERE date(i.created_at) >= date(?) GROUP BY ii.product_id""", (since,))}
+        WHERE i.created_at >= date(?) GROUP BY ii.product_id""", (since,))}
     last_sup = {r["product_id"]: r for r in db.query("""
         SELECT pi.product_id, p.supplier_id, s.name AS supplier_name, s.phone AS supplier_phone,
                pi.unit_cost / COALESCE(NULLIF(pi.factor,0),1) AS base_cost

@@ -545,6 +545,7 @@ def main(progress=None):
         db.now, db.today = orig_clock
         license.require_active = orig_license
     finishing_touches(shop.pids, shop.custs)
+    db.refresh_statistics()                 # إحصاءات الجداول: التقارير والمستشار سريعة من أول فتح
     if progress:
         progress(1.0, "")
     n = db.scalar("SELECT COUNT(*) FROM invoices")

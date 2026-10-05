@@ -453,7 +453,7 @@ def _stock(q, today):
     rows = []
     for p in prods:
         sold = db.scalar("""SELECT SUM((ii.quantity - ii.returned_qty) * ii.factor) FROM invoice_items ii
-                            JOIN invoices i ON i.id=ii.invoice_id WHERE ii.product_id=? AND date(i.created_at) >= date(?)""",
+                            JOIN invoices i ON i.id=ii.invoice_id WHERE ii.product_id=? AND i.created_at >= date(?)""",
                          (p["id"], since)) or 0
         rate = sold / 30
         days = (p["quantity"] / rate) if rate > 0 else None

@@ -27,7 +27,7 @@ def _sold_since(since):
                SUM((ii.quantity - ii.returned_qty) * ii.unit_price) AS revenue,
                SUM((ii.quantity - ii.returned_qty) * (ii.unit_price - ii.cost_price)) AS profit
         FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
-        WHERE date(i.created_at) >= date(?) GROUP BY ii.product_id""", (since,))}
+        WHERE i.created_at >= date(?) GROUP BY ii.product_id""", (since,))}
 
 
 def _card(severity, key, title, detail, items=None, action=None, action_label=None):
@@ -104,7 +104,7 @@ def insights(days=30):
     churn = db.query("""
         SELECT c.id, c.name, c.phone, COUNT(i.id) AS cnt, MAX(i.created_at) AS last_buy, SUM(i.total) AS total
         FROM customers c JOIN invoices i ON i.customer_id=c.id
-        WHERE c.is_active=1 AND date(i.created_at) >= date('now','localtime','-120 days')
+        WHERE c.is_active=1 AND i.created_at >= date('now','localtime','-120 days')
         GROUP BY c.id HAVING cnt >= 3 AND date(last_buy) < date('now','localtime','-30 days')
         ORDER BY total DESC LIMIT 20""")
     if churn:
@@ -140,7 +140,7 @@ def insights(days=30):
     # 7) خصومات الكاشير
     rows = db.query("""SELECT COALESCE(u.full_name, u.username) AS name, SUM(i.discount - i.promo_discount - i.points_value) AS disc,
                               SUM(i.subtotal) AS gross, COUNT(*) AS cnt
-                       FROM invoices i JOIN users u ON u.id=i.user_id WHERE date(i.created_at) >= date(?)
+                       FROM invoices i JOIN users u ON u.id=i.user_id WHERE i.created_at >= date(?)
                        GROUP BY i.user_id HAVING gross > 0""", (since,))
     if len(rows) >= 1:
         total_d = sum(r["disc"] or 0 for r in rows)
@@ -177,9 +177,9 @@ def insights(days=30):
 
     # 10) ساعة الذروة وأفضل يوم
     peak = db.query_one("""SELECT CAST(strftime('%H', created_at) AS INTEGER) AS h, SUM(total) AS t FROM invoices
-                           WHERE date(created_at) >= date(?) GROUP BY h ORDER BY t DESC LIMIT 1""", (since,))
+                           WHERE created_at >= date(?) GROUP BY h ORDER BY t DESC LIMIT 1""", (since,))
     wd = db.query_one("""SELECT CAST(strftime('%w', created_at) AS INTEGER) AS d, SUM(total) AS t FROM invoices
-                         WHERE date(created_at) >= date(?) GROUP BY d ORDER BY t DESC LIMIT 1""", (since,))
+                         WHERE created_at >= date(?) GROUP BY d ORDER BY t DESC LIMIT 1""", (since,))
     if peak and wd:
         days_ar = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
         out.append(_card("info", "peak", f"ذروة البيع الساعة {peak['h']:02d}:00، وأفضل يوم {days_ar[wd['d']]}",
@@ -245,7 +245,7 @@ def bought_together(days=60, limit=10):
                COUNT(DISTINCT a.invoice_id) AS count
         FROM invoice_items a JOIN invoice_items b ON a.invoice_id=b.invoice_id AND a.product_id < b.product_id
         JOIN invoices i ON i.id=a.invoice_id
-        WHERE date(i.created_at) >= date('now','localtime', ?)
+        WHERE i.created_at >= date('now','localtime', ?)
         GROUP BY a.product_id, b.product_id HAVING count >= 3 ORDER BY count DESC LIMIT ?""", (f"-{int(days)} days", limit))]
 
 

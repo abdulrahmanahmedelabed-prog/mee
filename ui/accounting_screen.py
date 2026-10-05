@@ -169,6 +169,7 @@ class AccountDialog(QDialog):
 
 
 class AccountingScreen(QWidget):
+    KEEP_ON_THEME = True          # تبديل السمة يعيد تلوينها دون إعادة الحساب
     def __init__(self):
         super().__init__()
         w, lay = page()
@@ -283,7 +284,9 @@ class AccountingScreen(QWidget):
         self._add_tab(ca, "دليل الحسابات", self.ca_table)
 
     def _add_tab(self, widget, name, table):
+        self.tabs.blockSignals(True)          # لا تحميل أثناء البناء: refresh() عند فتح الشاشة يحمّل مرة واحدة
         idx = self.tabs.addTab(widget, name)
+        self.tabs.blockSignals(False)
         self.tables[idx] = (table, name)
 
     def refresh(self):

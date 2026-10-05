@@ -122,6 +122,20 @@ class SmartScreen(QWidget):
         self._history = self._history[-20:]
         self._render()
 
+    def theme_state(self):
+        return {"history": list(getattr(self, "_history", [])), "tab": self.tabs.currentIndex()}
+
+    def restore_theme_state(self, st):
+        """بعد تبديل السمة: نفس المحادثة ونفس التبويب"""
+        if hasattr(self, "chat") and st.get("history"):
+            self._history = st["history"]
+            self._render()
+        self.tabs.setCurrentIndex(st.get("tab", 0))
+
+    def retheme(self):
+        if hasattr(self, "chat"):
+            self._render()
+
     def _on_link(self, url):
         s = url.toString()
         if s.startswith("go:"):

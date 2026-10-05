@@ -23,12 +23,13 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 def main():
     app = QApplication(sys.argv)
     app.setLayoutDirection(Qt.RightToLeft)
-    from ui.style import STYLE_SHEET, load_fonts
+    from ui.style import load_fonts
     f = QFont()
     f.setFamilies([load_fonts() or "Noto Sans Arabic"])
     f.setPointSize(10)
     app.setFont(f)
-    app.setStyleSheet(STYLE_SHEET)
+    from ui import theme
+    theme.apply(app, "light")
     from core import auth, db, wallets, backup, settings
     import tempfile
     db.init_db()
@@ -82,6 +83,13 @@ def main():
     wd.show()
     app.processEvents()
     wd.grab().save(os.path.join(OUT, "wallet_pay.png"))
+    w.go("smart")
+    sm = w.pages["smart"]
+    sm.ask("كم ربحت الشهر الماضي؟")
+    sm.ask("مين عليه دين؟")
+    snap("smart", "smart_ask.png")
+    sm.tabs.setCurrentIndex(2)
+    snap("smart", "seasons.png")
     print("✓", OUT)
 
 

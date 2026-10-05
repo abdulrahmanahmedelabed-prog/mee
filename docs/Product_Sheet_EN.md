@@ -1,9 +1,16 @@
 # Shop Accounting & POS — Product Sheet
 
 **Point of sale + real accounting for grocery stores, mini-markets and small supermarkets.**
-Works fully offline on your own computer, in **English and Arabic**. Buy once — or subscribe monthly.
+Works fully offline on your own computer, in **English and Arabic**. **Free forever plan**, then Plus, Pro and Max — and **your first month is the full Max plan, free.**
 
 ![Point of sale](en_pos.png)
+
+## Superpowers
+- **Ask your shop** — type a question the way you'd ask your accountant (English, Arabic or Arabic dialect): “sales yesterday?”, “who owes me money?”, “how much milk is left?”, “compare this month with last month”, “what should I prepare for Ramadan?”. Instant answers from your own data, offline. Ctrl+K from any screen.
+- **Sales & cash-flow forecast** — next 30 days day by day with a confidence band; expected cash including salaries, cheques, purchases and collections, with a warning before cash runs short.
+- **Seasons & Ramadan planner** — Hijri calendar: Ramadan, both Eids, back to school and summer, with last season's uplift per item, a first-order quantity and an order-by date.
+- **Zakat calculator** — zakat on trade goods straight from the books, nisab by gold price, Hijri or Gregorian year, next zakat date and a printable report.
+- **Dark, light or auto theme**, and **your logo** on every screen and every printout.
 
 ## Why shop owners choose it
 - **Fast checkout** — barcode, weighing-scale labels, cartons vs. pieces, hold/recall, quick keys, `3*barcode`.
@@ -38,13 +45,14 @@ Works fully offline on your own computer, in **English and Arabic**. Buy once �
 | ![Smart advisor](en_insights.png) | ![Owner phone dashboard](owner_mobile.png) |
 
 ## Plans (suggested)
-| Plan | Perpetual license | Subscription |
-|---|---|---|
-| Basic — 1 till | $249 | $19 / month |
-| Pro — up to 3 tills | $499 | $39 / month |
-| Enterprise — unlimited tills | $899 | $69 / month |
+| Plan | Tills | Monthly | Yearly | Perpetual | Adds |
+|---|---|---|---|---|---|
+| 🌱 Free | 1 | **$0 forever** | — | — | POS, inventory & expiry, customer/supplier debts, cards & e-wallets, shifts, reports & VAT |
+| ⚡ Plus | 2 | $15 | $149 | $299 | Smart advisor, smart reorder, offers & loyalty, cheques, installments, mobile app |
+| 💎 Pro | 5 | $29 | $290 | $599 | Accounting & balance sheet, financial audit, payroll, online store, owner dashboard, zakat |
+| 👑 Max | unlimited | $49 | $490 | $999 | Ask your shop, forecasting, seasons planner, branches |
 
-All plans include every feature. **30-day free trial, full features.** When a trial or subscription ends only selling stops — your reports and data remain available.
+**First 30 days: the full Max plan, free.** Afterwards the program moves to Free — **selling never stops** and your data is never locked. See the [competitor comparison](08_المقارنة_مع_المنافسين.md) (Arabic).
 
 ## Requirements
 Windows 10/11 PC, any thermal receipt printer (58/80 mm), USB barcode scanner, optional cash drawer and customer display. Multiple tills connect over the shop's local network.
