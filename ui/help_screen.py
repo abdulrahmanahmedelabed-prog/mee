@@ -46,8 +46,8 @@ class HelpScreen(QWidget):
         split.addWidget(self.view)
         split.setSizes([260, 900])
         lay.addWidget(split, 1)
-        support = f"{vendor.VENDOR_NAME}" + (f" — واتساب {vendor.VENDOR_PHONE}" if vendor.VENDOR_PHONE else "") + \
-                  (f" — {vendor.SUPPORT_HOURS}" if vendor.VENDOR_PHONE else "")
+        support = vendor.display_name() + (f" — واتساب {vendor.VENDOR_PHONE_DISPLAY}" if vendor.VENDOR_PHONE else "") + \
+                  (f" — {i18n.tr(vendor.SUPPORT_HOURS)}" if vendor.VENDOR_PHONE else "")
         row = QHBoxLayout()
         row.addWidget(hint(f"الدعم الفني: {support}   •   {vendor.PRODUCT_NAME} v{vendor.VERSION}"))
         row.addStretch()

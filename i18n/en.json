@@ -1981,7 +1981,16 @@
 "💎 برو": "💎 Pro",
 "⚡ بلس": "⚡ Plus",
 "🌱 مجاني": "🌱 Free",
-"⚖ المقارنة مع المنافسين": "⚖ Competitor comparison"
+"⚖ المقارنة مع المنافسين": "⚖ Competitor comparison",
+"الجرد من الجوال": "Stock counting from phone",
+"جرد الرفوف بكاميرا الجوال (فحص الأسعار والكميات من الجوال مجاني)": "Count shelves with the phone camera (checking prices and stock from the phone is free)",
+"شركة الحسن للبرمجة والدعاية": "Al-Hassan Software & Advertising",
+"عبد الرحمن العابد": "Abdulrahman Al-Abed",
+"طلب كبير جداً": "Request too large",
+"غيّر كلمة المرور الافتراضية من البرنامج على الكمبيوتر أولاً، ثم ادخل بها": "Change the default password in the program on the computer first, then sign in with it",
+"مثلاً: كم بعت اليوم؟ مين عليه دين؟": "e.g. How much did I sell today? Who owes me?",
+"هذه الميزة لمن لديه صلاحية التقارير في باقة ماكس": "This feature is for users with reports permission on the Max plan",
+"وظيفة غير معروفة": "Unknown function"
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",
@@ -2513,6 +2522,9 @@
 "الباقة: {0} — الأجهزة المسموحة: {1}": "Plan: {0} — allowed devices: {1}",
 "ملاحظة: قيمة المخزون الفعلية حسب الكميات {0} والدفترية {1} (الفرق من تعديلات التكلفة أو البيع بمخزون سالب).": "Note: the physical stock value by quantities is {0} and the book value is {1} (the difference comes from cost adjustments or selling with negative stock).",
 "⚠ المفتاح المحفوظ: {0}": "⚠ Saved key: {0}",
-"{0}:رواتب": "{0}:Salaries"
+"{0}:رواتب": "{0}:Salaries",
+"خطأ غير متوقع في الجهاز الرئيسي ({0})": "Unexpected error on the main computer ({0})",
+"محاولات دخول خاطئة كثيرة. حاول بعد {0} ثانية.": "Too many failed sign-in attempts. Try again in {0} seconds.",
+"محاولات دخول خاطئة كثيرة. حاول بعد {0} دقيقة.": "Too many failed sign-in attempts. Try again in {0} minutes."
 }
 }

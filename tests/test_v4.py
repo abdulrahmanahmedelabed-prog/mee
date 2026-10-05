@@ -285,6 +285,10 @@ def test_owner_web_and_daily_summary():
     token, err = owner_web.login(b"username=admin&password=wrong")
     assert token is None and err
     token, err = owner_web.login(b"username=admin&password=admin")
+    assert token is None and "الافتراضية" in err          # كلمة المرور الافتراضية لا تفتح من الشبكة
+    with db.tx() as conn:
+        conn.execute("UPDATE users SET must_change_password=0")
+    token, err = owner_web.login(b"username=admin&password=admin")
     assert token and not err
     user = owner_web.user_from_cookie(f"a=b; {owner_web.COOKIE}={token}")
     assert user["username"] == "admin"

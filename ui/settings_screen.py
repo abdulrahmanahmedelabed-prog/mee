@@ -608,9 +608,9 @@ class SettingsScreen(QWidget):
             lines.append(tr(f"⚠ المفتاح المحفوظ: {tr(st['key_error'])}"))
         self.lic_status.setText("\n".join(lines))
         self.machine_lbl.setText(st["machine_id"])
-        v = [tr(vendor.PRODUCT_NAME) + tr(f" — الإصدار {vendor.VERSION}"), tr(f"المزوّد: {vendor.VENDOR_NAME}")]
+        v = [tr(vendor.PRODUCT_NAME) + tr(f" — الإصدار {vendor.VERSION}"), tr(f"المزوّد: {vendor.display_name()}")]
         if vendor.VENDOR_PHONE:
-            v.append(tr(f"الدعم: {vendor.VENDOR_PHONE} ({tr(vendor.SUPPORT_HOURS)})"))
+            v.append(tr(f"الدعم: {vendor.VENDOR_PHONE_DISPLAY} ({tr(vendor.SUPPORT_HOURS)})"))
         if vendor.VENDOR_WEBSITE:
             v.append(vendor.VENDOR_WEBSITE)
         self.vendor_lbl.setText("  •  ".join(v))

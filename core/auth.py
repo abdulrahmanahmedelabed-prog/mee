@@ -134,6 +134,8 @@ def update_user(user_id, full_name, role, is_active):
                 raise ValueError("لا يمكن إزالة آخر مدير نظام فعّال")
         conn.execute("UPDATE users SET full_name=?, role=?, is_active=? WHERE id=?",
                      (full_name, role, 1 if is_active else 0, user_id))
+        if not is_active:
+            conn.execute("DELETE FROM web_sessions WHERE user_id=?", (user_id,))
 
 
 def change_password(user_id, new_password):
@@ -142,6 +144,7 @@ def change_password(user_id, new_password):
     with db.tx() as conn:
         conn.execute("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?",
                      (hash_password(new_password), user_id))
+        conn.execute("DELETE FROM web_sessions WHERE user_id=?", (user_id,))   # تُغلق جلسات الجوال القديمة
     u = context.user()
     if u and u["id"] == user_id:
         u["must_change_password"] = 0

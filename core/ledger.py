@@ -517,8 +517,44 @@ def _bulk_lines(conn, date_from, date_to):
             (LOYALTY_COST, earned, used), (LOYALTY, used, earned)]
 
 
+_BAL_CACHE = {}
+
+
+def _data_stamp():
+    """بصمة حالة قاعدة البيانات: تتغير مع أي حفظ (من أي جهاز أو عملية)، فلا تُعرض أرقام قديمة أبداً"""
+    import os
+    if db._SHARED is not None:
+        return None                     # أثناء التوليد/الاستيراد الكبير: بلا تخزين مؤقت
+    path = getattr(db._READONLY, "path", None) or db.DB_PATH
+    stamp = [path]
+    for p in (path, path + "-wal"):
+        try:
+            st = os.stat(p)
+            stamp.append((st.st_mtime_ns, st.st_size))
+        except OSError:
+            stamp.append(None)
+    return tuple(stamp)
+
+
 def _balances(date_from, date_to):
-    """{حساب: [رصيد ما قبل الفترة (مدين-دائن)، مدين الفترة، دائن الفترة]}"""
+    """{حساب: [رصيد ما قبل الفترة (مدين-دائن)، مدين الفترة، دائن الفترة]}
+    تُحفظ النتيجة مؤقتاً حتى يتغير شيء في البيانات: فتح الميزانية وميزان المراجعة وقائمة الدخل
+    للفترة نفسها (أو العودة لشاشة المحاسبة) يصبح فورياً مع سنوات من البيانات."""
+    stamp = _data_stamp()
+    key = (date_from, date_to, db.today() if not date_to else None)
+    if stamp is not None:
+        hit = _BAL_CACHE.get(key)
+        if hit and hit[0] == stamp:
+            return {a: list(v) for a, v in hit[1].items()}
+    acc = _compute_balances(date_from, date_to)
+    if stamp is not None:
+        if len(_BAL_CACHE) > 32:
+            _BAL_CACHE.clear()
+        _BAL_CACHE[key] = (stamp, {a: list(v) for a, v in acc.items()})
+    return acc
+
+
+def _compute_balances(date_from, date_to):
     from datetime import date as _d, timedelta as _td
     acc = {}
     conn = db.get_connection()

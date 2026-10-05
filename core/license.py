@@ -267,6 +267,7 @@ def reset_admin_password(code, new_password):
     if not row:
         raise LicenseError("لا يوجد مدير نظام")
     with db.tx() as conn:
+        conn.execute("DELETE FROM web_sessions WHERE user_id=?", (row["id"],))
         conn.execute("UPDATE users SET password_hash=?, is_active=1, must_change_password=0 WHERE id=?",
                      (auth.hash_password(new_password), row["id"]))
     db.set_meta("used_reset_codes", ",".join(x for x in sorted(used | {data.get("id", "")}) if x))

@@ -13,7 +13,6 @@ from urllib.parse import parse_qs
 from core import auth, reports, products, customers, suppliers, shifts, cheques, settings, db
 from core.utils import money, fmt_qty
 
-TOKENS = {}  # token -> user_id
 COOKIE = "owner_session"
 
 
@@ -69,33 +68,37 @@ def login_page(error=""):
         <button>دخول</button></form>""")
 
 
-def login(body_bytes):
+def login(body_bytes, ip=""):
     """يرجع (token, None) عند النجاح أو (None, رسالة خطأ)"""
+    from core import web_sessions, throttle
     form = parse_qs(body_bytes.decode("utf-8", "replace"))
-    user = auth.authenticate(form.get("username", [""])[0], form.get("password", [""])[0])
+    username = form.get("username", [""])[0][:100]
+    wait = throttle.wait_seconds(ip, username)
+    if wait:
+        return None, throttle.message(wait)
+    user = auth.authenticate(username, form.get("password", [""])[0][:200])
     if not user:
+        throttle.failed(ip, username)
         return None, "اسم المستخدم أو كلمة المرور غير صحيحة"
+    throttle.succeeded(ip, username)
+    if user.get("must_change_password"):
+        return None, "غيّر كلمة المرور الافتراضية من البرنامج على الكمبيوتر أولاً، ثم ادخل بها"
     if not auth.has_permission("reports", user):
         return None, "هذا الحساب لا يملك صلاحية التقارير"
-    token = secrets.token_urlsafe(24)
-    TOKENS[token] = user["id"]
-    return token, None
+    return web_sessions.create(user["id"], "owner"), None
 
 
 def user_from_cookie(cookie_header):
-    for part in (cookie_header or "").split(";"):
-        k, _, v = part.strip().partition("=")
-        if k == COOKIE and v in TOKENS:
-            row = db.query_one("SELECT * FROM users WHERE id=? AND is_active=1", (TOKENS[v],))
-            return dict(row) if row else None
-    return None
+    from core import web_sessions
+    u = web_sessions.user(web_sessions.cookie_value(cookie_header, COOKIE), "owner")
+    return u if u and auth.has_permission("reports", u) else None
 
 
 def logout(cookie_header):
-    for part in (cookie_header or "").split(";"):
-        k, _, v = part.strip().partition("=")
-        if k == COOKIE:
-            TOKENS.pop(v, None)
+    from core import web_sessions
+    token = web_sessions.cookie_value(cookie_header, COOKIE)
+    if token:
+        web_sessions.delete(token)
 
 
 def dashboard_page():

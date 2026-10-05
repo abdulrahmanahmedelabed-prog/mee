@@ -41,6 +41,7 @@ class OrdersScreen(QWidget):
         split.addWidget(self.table)
         c, cl = card()
         self.detail = title("", "subTitle")
+        self.detail.setTextFormat(Qt.PlainText)    # بيانات الزبون من الإنترنت: نص فقط، لا HTML
         cl.addWidget(self.detail)
         self.items = Table(["الصنف", "الكمية", "السعر", "الإجمالي"], stretch=0, sortable=False)
         cl.addWidget(self.items)

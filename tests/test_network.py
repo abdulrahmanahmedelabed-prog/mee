@@ -104,6 +104,14 @@ def test_owner_page_and_server_side_permissions(server):
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
     body = urllib.parse.urlencode({"username": "admin", "password": "admin"}).encode()
     page = opener.open(base + "/owner/login", data=body).read().decode("utf-8")
+    assert "كلمة المرور الافتراضية" in page and "مبيعات اليوم" not in page   # admin/admin لا يفتح من الشبكة
+    # بعد تغيير كلمة المرور الافتراضية (كما يطلب البرنامج عند أول دخول) يفتح من الشبكة
+    def post(path, payload):
+        r = urllib.request.Request(base + path, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
+        return json.loads(urllib.request.urlopen(r).read())
+    tok = post("/login", {"username": "admin", "password": "admin", "link_code": "ABC123", "terminal": "t"})
+    post("/rpc", {"token": tok["token"], "module": "auth", "func": "change_password", "args": [tok["user"]["id"], "admin"]})
+    page = opener.open(base + "/owner/login", data=body).read().decode("utf-8")
     assert "مبيعات اليوم" in page
 
     # المتجر الإلكتروني العام

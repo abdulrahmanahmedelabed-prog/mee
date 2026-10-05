@@ -355,6 +355,9 @@ class Renderer:
         contact = f"واتساب: {self.phone}" if self.phone else "راسلنا على واتساب الآن"
         self.text(p, QRectF(40, H / 2 + 170 * s, W - 80, 140 * s), contact, HEAD_FONT, 60, AMBER, Qt.AlignCenter, e)
         self.text(p, QRectF(40, H / 2 + 330 * s, W - 80, 120 * s), self.name, BODY_FONT, 36, WHITE, Qt.AlignCenter, e)
+        if getattr(self, "company", ""):
+            self.text(p, QRectF(40, H / 2 + 420 * s, W - 80, 100 * s), self.company, BODY_FONT, 32, MUTED, Qt.AlignCenter, e,
+                      bold=False)
 
     # ------------------------------------------------------------------ الإطار
     def frame(self, t):
@@ -544,11 +547,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", default="برنامج المحاسبة ونقاط البيع")
     ap.add_argument("--phone", default="", help="رقم واتساب يظهر في آخر الإعلان")
+    ap.add_argument("--company", default="", help="اسم الشركة تحت اسم البرنامج في آخر الإعلان")
     ap.add_argument("--out", default=HERE)
     ap.add_argument("--only", choices=["vertical", "horizontal"])
     ap.add_argument("--stills", help="مجلد لحفظ لقطات للمراجعة")
     ap.add_argument("--preview", help="ثوانٍ مفصولة بفواصل: يحفظ إطارات فقط بدون فيديو، مثل 2,10,16")
     a = ap.parse_args()
+    Renderer.company = a.company
     QGuiApplication(sys.argv)
     load_fonts()
     sys.path.insert(0, HERE)

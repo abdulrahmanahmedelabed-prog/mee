@@ -47,8 +47,8 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 ## Plans (suggested)
 | Plan | Tills | Monthly | Yearly | Perpetual | Adds |
 |---|---|---|---|---|---|
-| 🌱 Free | 1 | **$0 forever** | — | — | POS, inventory & expiry, customer/supplier debts, cards & e-wallets, shifts, reports & VAT |
-| ⚡ Plus | 2 | $15 | $149 | $299 | Smart advisor, smart reorder, offers & loyalty, cheques, installments, mobile app |
+| 🌱 Free | 1 | **$0 forever** | — | — | POS, inventory & expiry, customer/supplier debts, cards & e-wallets, shifts, reports & VAT, mobile price-check app |
+| ⚡ Plus | 2 | $15 | $149 | $299 | Smart advisor, smart reorder, offers & loyalty, cheques, installments, stock counting from phone |
 | 💎 Pro | 5 | $29 | $290 | $599 | Accounting & balance sheet, financial audit, payroll, online store, owner dashboard, zakat |
 | 👑 Max | unlimited | $49 | $490 | $999 | Ask your shop, forecasting, seasons planner, branches |
 

@@ -24,6 +24,7 @@ from core import (config, context, auth, products, sales, customers, suppliers, 
                   wallets, financial_audit, payroll, installments, branches, assistant, forecast, seasons, zakat)
 
 PROTOCOL_VERSION = 2
+MAX_BODY = 20 * 1024 * 1024     # أكبر طلب مقبول من جهاز فرعي
 
 MODULES = {"products": products, "sales": sales, "customers": customers, "suppliers": suppliers,
            "expenses": expenses, "shifts": shifts, "reports": reports, "audit": audit, "backup": backup,
@@ -81,23 +82,96 @@ PLAN_FEATURE = {("assistant", "answer"): "ask", ("forecast", "sales_forecast"): 
                 ("installments", "create_plan"): "installments", ("branches", "consolidated"): "branches"}
 
 
-def check_permission(key, user, args, kwargs):
-    """يرفع PermissionError إن لم يكن للمستخدم حق تنفيذ الوظيفة عبر الشبكة"""
+# صلاحيات بقية الوظائف (يكفي أي واحدة منها). كل وحدة لها صلاحية افتراضية، والاستثناءات بالاسم.
+# الهدف: جهاز فرعي معدّل أو مستخدم يعرف رمز الربط لا يستطيع تنفيذ ما لا تسمح به صلاحياته.
+MODULE_PERMISSION = {
+    "ledger": ("accounting",), "financial_audit": ("accounting",), "zakat": ("accounting",),
+    "reports": ("reports",), "insights": ("reports",), "branches": ("reports",), "assistant": ("reports",),
+    "forecast": ("reports",), "seasons": ("reports",),
+    "cheques": ("cheques",), "expenses": ("expenses",), "payroll": ("expenses",),
+    "suppliers": ("suppliers",), "reorder": ("suppliers",), "backup": ("backup",),
+}
+FUNCTION_PERMISSION = {
+    # لوحة التحكم
+    ("reports", "dashboard"): ("reports", "dashboard"), ("reports", "last_n_days"): ("reports", "dashboard"),
+    ("reports", "top_products"): ("reports", "dashboard"), ("reports", "daily_summary_text"): ("reports", "dashboard"),
+    ("audit", "recent"): ("reports",),
+    # المخزون
+    **{("products", f): ("inventory",) for f in (
+        "add_product", "update_product", "delete_product", "adjust_stock", "set_stock_count", "set_units",
+        "assign_internal_barcode", "next_internal_barcode", "write_off_batch", "stock_movements", "get_batches")},
+    ("products", "inventory_value"): ("inventory", "reports"),
+    ("products", "expiring_batches"): ("inventory", "reports", "dashboard"),
+    ("products", "get_low_stock_products"): ("inventory", "reports", "dashboard", "suppliers"),
+    # العملاء
+    **{("customers", f): ("customers",) for f in (
+        "adjust_balance", "deactivate_customer", "receive_payment", "statement", "update_customer", "total_debts",
+        "reminder_message")},
+    ("customers", "add_customer"): ("customers", "pos"),
+    ("installments", "summary"): ("customers",), ("installments", "schedule_html"): ("customers",),
+    ("installments", "reminder_message"): ("customers",), ("installments", "overdue"): ("customers", "reports"),
+    # البيع والفواتير والمرتجعات
+    **{("sales", f): ("pos",) for f in ("create_sale", "import_offline_sale", "hold_cart", "take_held_cart",
+                                       "list_held_carts", "cart_discounts")},
+    ("shifts", "open_shift"): ("pos", "cash"),
+    ("sales", "create_return"): ("returns",),
+    ("sales", "get_invoices"): ("invoices", "returns", "reports"), ("sales", "get_returns"): ("invoices", "returns", "reports"),
+    ("sales", "returnable_items"): ("returns", "invoices"),
+    # الصندوق
+    ("shifts", "close_shift"): ("cash",), ("shifts", "cash_movement"): ("cash",), ("shifts", "list_shifts"): ("cash",),
+    ("shifts", "movements"): ("cash",), ("shifts", "summary"): ("cash", "reports"),
+    # الطلبات الأونلاين
+    ("orders", "set_status"): ("pos",), ("orders", "list_orders"): ("pos",), ("orders", "get_order"): ("pos",),
+    ("orders", "new_count"): ("pos",), ("orders", "status_message"): ("pos",),
+    # العروض والولاء
+    ("promotions", "list_promotions"): ("promotions",), ("loyalty", "top_members"): ("promotions",),
+    ("loyalty", "history"): ("promotions", "customers"), ("loyalty", "liability"): ("promotions", "reports"),
+    # الموردون: القائمة تظهر أيضاً في فلاتر التقارير والشيكات، والإضافة من استيراد البيانات
+    ("suppliers", "list_suppliers"): ("suppliers", "reports", "cheques"),
+    ("suppliers", "add_supplier"): ("suppliers", "settings"),
+    ("cheques", "due_soon"): ("cheques", "reports", "dashboard"),
+    ("payroll", "payslip_html"): ("expenses",),
+}
+# متاحة لكل مستخدم مسجّل (يحتاجها البيع والطباعة على كل الأجهزة)
+OPEN_FUNCTIONS = {("auth", "authenticate"), ("auth", "change_password"), ("audit", "log")}
+
+ELEVATION_SECONDS = 300      # موافقة المدير على جهاز الكاشير صالحة 5 دقائق لهذه الجلسة
+
+
+def needed_permissions(key):
+    if key in OPEN_FUNCTIONS:
+        return ()
+    if key in REQUIRED_PERMISSION:
+        return (REQUIRED_PERMISSION[key],)
+    if key in FUNCTION_PERMISSION:
+        return FUNCTION_PERMISSION[key]
+    return MODULE_PERMISSION.get(key[0], ())
+
+
+def _allowed(perm, user, elevated):
+    return auth.has_permission(perm, user) or perm in (elevated or ())
+
+
+def check_permission(key, user, args, kwargs, elevated=None):
+    """يرفع PermissionError إن لم يكن للمستخدم حق تنفيذ الوظيفة عبر الشبكة.
+    elevated: صلاحيات مدير وافق عليها للتو على نفس الجهاز (نافذة «موافقة المدير»)"""
     if key == ("auth", "change_password"):
         target = args[0] if args else kwargs.get("user_id")
-        if target != user["id"] and not auth.has_permission("users", user):
+        if target != user["id"] and not _allowed("users", user, elevated):
             raise PermissionError("لا يمكنك تغيير كلمة مرور مستخدم آخر")
         return
     if key == ("sales", "create_sale") and ("offline" in kwargs or len(args) > 12):
         raise PermissionError("الترحيل يتم عبر import_offline_sale فقط")
-    perm = REQUIRED_PERMISSION.get(key)
-    if perm and not auth.has_permission(perm, user):
-        raise PermissionError(f"ليست لديك صلاحية: {auth.PERMISSIONS.get(perm, perm)}")
+    perms = needed_permissions(key)
+    if perms and not any(_allowed(p, user, elevated) for p in perms):
+        raise PermissionError(f"ليست لديك صلاحية: {auth.PERMISSIONS.get(perms[0], perms[0])}")
     feature = PLAN_FEATURE.get(key)
     if feature:
         from core import plans
         if not plans.has(feature):
             raise PermissionError(f"هذه الميزة متاحة في باقة {plans.NAMES[plans.required(feature)]} وما فوقها")
+
+
 # دوال مسموحة قبل تسجيل الدخول
 PUBLIC = {("settings", "all_values"), ("license", "reset_admin_password"), ("license", "machine_id")}
 
@@ -148,6 +222,7 @@ class _Server:
         self.tokens = {}          # token -> user_id
         self.functions = remote_functions()
         self.clients = {}         # terminal -> آخر اتصال
+        self.elevations = {}      # token -> (صلاحيات المدير الموافق، تنتهي في)
 
 
 SERVER = _Server()
@@ -158,6 +233,23 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+    # رؤوس أمان لكل رد: لا تُعرض الصفحات داخل إطار موقع آخر، ولا تُحمَّل موارد من خارج جهاز المحل
+    SECURITY_HEADERS = {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "no-referrer",
+        "Content-Security-Policy": "default-src 'self' data: blob: 'unsafe-inline'; frame-ancestors 'none'; "
+                                   "form-action 'self'; base-uri 'none'",
+    }
+
+    def end_headers(self):
+        for k, v in self.SECURITY_HEADERS.items():
+            self.send_header(k, v)
+        super().end_headers()
+
+    def _ip(self):
+        return self.client_address[0] if self.client_address else ""
 
     def _send(self, code, payload):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -198,6 +290,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif path == "/m/logout":
+            mobile_web.logout(self.headers.get("Cookie"))
             self._redirect("/m", f"{mobile_web.COOKIE}=; Max-Age=0; Path=/m; HttpOnly; SameSite=Strict")
         elif path == "/m/api/find":
             if not user:
@@ -206,6 +299,13 @@ class Handler(BaseHTTPRequestHandler):
             q = parse_qs(urlparse(self.path).query).get("q", [""])[0]
             with context.request(user, "جوال"):
                 self._send(200, to_json(mobile_web.find(q)))
+        elif path == "/m/api/ask":
+            if not user:
+                self._send(401, {"error": "login"})
+                return
+            q = parse_qs(urlparse(self.path).query).get("q", [""])[0]
+            with context.request(user, "جوال"):
+                self._send(200, to_json(mobile_web.ask(user, q)))
         elif user:
             self._html(200, mobile_web.app_page(user))
         else:
@@ -216,11 +316,13 @@ class Handler(BaseHTTPRequestHandler):
         length = min(int(self.headers.get("Content-Length", 0) or 0), 10000)
         body = self.rfile.read(length)
         if path == "/m/login":
-            token, err = mobile_web.login(body)
+            token, err = mobile_web.login(body, self._ip())
             if err:
                 self._html(200, mobile_web.login_page(i18n.tr(err)))
             else:
-                self._redirect("/m", f"{mobile_web.COOKIE}={token}; Path=/m; HttpOnly; SameSite=Strict")
+                from core import web_sessions
+                self._redirect("/m", f"{mobile_web.COOKIE}={token}; Max-Age={web_sessions.MAX_AGE_SECONDS}; "
+                                     f"Path=/m; HttpOnly; SameSite=Strict")
             return
         user = mobile_web.user_from_cookie(self.headers.get("Cookie"))
         if not user:
@@ -235,8 +337,9 @@ class Handler(BaseHTTPRequestHandler):
     def _plan_locked(self, path):
         """الواجهات الويب حسب الباقة: الجوال (بلس)، لوحة المالك والمتجر (برو)"""
         from core import plans
+        # تطبيق الجوال يفتح في كل الباقات (الأسعار والكميات)؛ الجرد منه في بلس، والسؤال في ماكس
         feature = ("owner" if path.startswith("/owner") else "online" if path.startswith("/shop")
-                   else "mobile" if path.startswith("/m") else None)
+                   else "mobile" if path == "/m/api/count" else "ask" if path == "/m/api/ask" else None)
         if not feature or plans.has(feature):
             return False
         from core import i18n
@@ -297,15 +400,22 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.split("?", 1)[0] == "/owner/login":
             from core import owner_web
             length = min(int(self.headers.get("Content-Length", 0) or 0), 10000)
-            token, err = owner_web.login(self.rfile.read(length))
+            token, err = owner_web.login(self.rfile.read(length), self._ip())
             if err:
                 self._html(200, owner_web.login_page(err))
             else:
-                self._redirect("/owner", f"{owner_web.COOKIE}={token}; Path=/owner; HttpOnly; SameSite=Strict")
+                from core import web_sessions
+                self._redirect("/owner", f"{owner_web.COOKIE}={token}; Max-Age={web_sessions.MAX_AGE_SECONDS}; "
+                                         f"Path=/owner; HttpOnly; SameSite=Strict")
             return
         try:
-            length = int(self.headers.get("Content-Length", 0))
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            if length < 0 or length > MAX_BODY:
+                self._send(413, {"error": {"type": "BadRequest", "message": "طلب كبير جداً"}})
+                return
             req = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(req, dict):
+                raise ValueError("bad request")
         except (ValueError, OSError):
             self._send(400, {"error": {"type": "BadRequest", "message": "طلب غير صالح"}})
             return
@@ -316,14 +426,27 @@ class Handler(BaseHTTPRequestHandler):
         else:
             self._send(404, {"error": {"type": "NotFound", "message": "not found"}})
 
+    def _link_ok(self, req):
+        return secrets.compare_digest(str(req.get("link_code") or "").strip().upper(),
+                                      str(config.get("link_code") or "").upper()) and bool(config.get("link_code"))
+
     def _login(self, req):
-        if not secrets.compare_digest(req.get("link_code", "").strip().upper(), str(config.get("link_code")).upper()):
+        from core import throttle
+        username = str(req.get("username") or "")[:100]
+        wait = throttle.wait_seconds(self._ip(), username)
+        if wait:
+            self._send(429, {"error": {"type": "Throttle", "message": throttle.message(wait)}})
+            return
+        if not self._link_ok(req):
+            throttle.failed(self._ip())
             self._send(403, {"error": {"type": "LinkCode", "message": "رمز الربط غير صحيح"}})
             return
-        user = auth.authenticate(req.get("username", ""), req.get("password", ""))
+        user = auth.authenticate(username, str(req.get("password") or "")[:200])
         if not user:
+            throttle.failed(self._ip(), username)
             self._send(401, {"error": {"type": "Auth", "message": "اسم المستخدم أو كلمة المرور غير صحيحة"}})
             return
+        throttle.succeeded(self._ip(), username)
         terminal = req.get("terminal")
         limit = license.max_terminals()
         if limit and terminal not in SERVER.clients:
@@ -340,14 +463,25 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, {"token": token, "user": to_json(user)})
 
     def _rpc(self, req):
+        import time
+        from core import throttle
         key = (req.get("module"), req.get("func"))
         fn = SERVER.functions.get(key)
         if not fn:
-            self._send(404, {"error": {"type": "NotFound", "message": f"وظيفة غير معروفة {key}"}})
+            self._send(404, {"error": {"type": "NotFound", "message": "وظيفة غير معروفة"}})
             return
         user = None
-        if key not in PUBLIC:
-            uid = SERVER.tokens.get(req.get("token"))
+        token = req.get("token")
+        if key in PUBLIC:
+            # قبل تسجيل الدخول: للأجهزة المربوطة فقط (رمز الربط)، لا لأي جهاز على واي فاي المحل
+            wait = throttle.wait_seconds(self._ip())
+            if wait or not self._link_ok(req):
+                if not wait:
+                    throttle.failed(self._ip())
+                self._send(403, {"error": {"type": "LinkCode", "message": "رمز الربط غير صحيح"}})
+                return
+        else:
+            uid = SERVER.tokens.get(token) if isinstance(token, str) else None
             row = db.query_one("SELECT * FROM users WHERE id=? AND is_active=1", (uid,)) if uid else None
             if not row:
                 self._send(401, {"error": {"type": "Auth", "message": "انتهت الجلسة، سجّل الدخول مرة أخرى"}})
@@ -357,22 +491,53 @@ class Handler(BaseHTTPRequestHandler):
         if user is not None:
             SERVER.clients[terminal] = db.now()
         args, kwargs = req.get("args", []), req.get("kwargs", {})
+        if not isinstance(args, list) or not isinstance(kwargs, dict):
+            self._send(400, {"error": {"type": "BadRequest", "message": "طلب غير صالح"}})
+            return
+        elevated = None
+        if user is not None:
+            perms, until = SERVER.elevations.get(token, ((), 0))
+            if until > time.time():
+                elevated = perms
+            else:
+                SERVER.elevations.pop(token, None)
         try:
             if user is not None:
-                check_permission(key, user, args, kwargs)
+                check_permission(key, user, args, kwargs, elevated)
         except PermissionError as e:
             self._send(403, {"error": {"type": "Permission", "message": str(e)}})
             return
+        if key == ("auth", "authenticate"):       # «موافقة المدير» من جهاز الكاشير: محمية من التخمين
+            name = str((args or [kwargs.get("username", "")])[0] or "")[:100]
+            wait = throttle.wait_seconds(self._ip(), name)
+            if wait:
+                self._send(200, {"result": None})
+                return
         try:
             with context.request(user, terminal):
                 result = fn(*args, **kwargs)
+            if key == ("auth", "authenticate"):
+                if result:
+                    throttle.succeeded(self._ip(), name)
+                    SERVER.elevations[token] = (tuple(p for p in auth.PERMISSIONS if auth.has_permission(p, result)),
+                                                time.time() + ELEVATION_SECONDS)
+                    result = {k: result[k] for k in ("id", "username", "full_name", "role", "permissions")
+                              if k in result.keys()}
+                else:
+                    throttle.failed(self._ip(), name)
             self._send(200, {"result": to_json(result)})
         except sales.SaleError as e:
             self._send(200, {"error": {"type": "SaleError", "message": str(e)}})
         except ValueError as e:
             self._send(200, {"error": {"type": "ValueError", "message": str(e)}})
-        except Exception as e:  # خطأ غير متوقع: لا نوقف الخادم
-            self._send(500, {"error": {"type": type(e).__name__, "message": str(e)}})
+        except PermissionError as e:
+            self._send(403, {"error": {"type": "Permission", "message": str(e)}})
+        except TypeError:
+            self._send(400, {"error": {"type": "BadRequest", "message": "طلب غير صالح"}})
+        except Exception as e:  # خطأ غير متوقع: لا نوقف الخادم ولا نكشف تفاصيله الداخلية
+            import logging
+            logging.getLogger(__name__).exception("RPC %s failed", key)
+            self._send(500, {"error": {"type": "Internal", "message": f"خطأ غير متوقع في الجهاز الرئيسي ({type(e).__name__})"}})
 
 
 def start_server(host="0.0.0.0", port=None):
@@ -450,7 +615,8 @@ class Client:
         return body["user"]
 
     def call(self, module, func, *args, **kwargs):
-        payload = {"terminal": self.terminal, "module": module, "func": func, "args": list(args), "kwargs": kwargs}
+        payload = {"terminal": self.terminal, "module": module, "func": func, "args": list(args), "kwargs": kwargs,
+                   "link_code": self.link_code}
         try:
             return self._post("/rpc", dict(payload, token=self.token)).get("result")
         except SessionExpired:

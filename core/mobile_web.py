@@ -14,27 +14,36 @@ from urllib.parse import parse_qs
 
 from core import auth, products, db, settings, context
 
-TOKENS = {}
 COOKIE = "staff_session"
 
 
-def login(body_bytes):
+def login(body_bytes, ip=""):
+    from core import web_sessions, throttle
     form = parse_qs(body_bytes.decode("utf-8", "replace"))
-    user = auth.authenticate(form.get("username", [""])[0], form.get("password", [""])[0])
+    username = form.get("username", [""])[0][:100]
+    wait = throttle.wait_seconds(ip, username)
+    if wait:
+        return None, throttle.message(wait)
+    user = auth.authenticate(username, form.get("password", [""])[0][:200])
     if not user:
+        throttle.failed(ip, username)
         return None, "اسم المستخدم أو كلمة المرور غير صحيحة"
-    token = secrets.token_urlsafe(24)
-    TOKENS[token] = user["id"]
-    return token, None
+    throttle.succeeded(ip, username)
+    if user.get("must_change_password"):
+        return None, "غيّر كلمة المرور الافتراضية من البرنامج على الكمبيوتر أولاً، ثم ادخل بها"
+    return web_sessions.create(user["id"], "mobile"), None
 
 
 def user_from_cookie(cookie_header):
-    for part in (cookie_header or "").split(";"):
-        k, _, v = part.strip().partition("=")
-        if k == COOKIE and v in TOKENS:
-            row = db.query_one("SELECT * FROM users WHERE id=? AND is_active=1", (TOKENS[v],))
-            return dict(row) if row else None
-    return None
+    from core import web_sessions
+    return web_sessions.user(web_sessions.cookie_value(cookie_header, COOKIE), "mobile")
+
+
+def logout(cookie_header):
+    from core import web_sessions
+    token = web_sessions.cookie_value(cookie_header, COOKIE)
+    if token:
+        web_sessions.delete(token)
 
 
 def _product_json(p):
@@ -52,6 +61,23 @@ def find(q):
     if p:
         return [_product_json(p)]
     return [_product_json(p) for p in products.get_all_products(search=q)[:25]]
+
+
+def can_ask(user):
+    from core import plans
+    return auth.has_permission("reports", user) and plans.has("ask")
+
+
+def ask(user, question):
+    """«اسأل محلك» من الجوال (لمن لديه صلاحية التقارير وفي باقة ماكس). الإجابة مترجمة للغة الواجهة"""
+    from core import assistant, i18n
+    if not can_ask(user):
+        return {"error": i18n.tr("هذه الميزة لمن لديه صلاحية التقارير في باقة ماكس")}
+    r = assistant.answer(question)
+    t = r.get("table") or {}
+    return {"title": i18n.tr(r.get("title", "")), "lines": [i18n.tr(x) for x in r.get("lines", [])],
+            "headers": [i18n.tr(h) for h in t.get("headers", [])],
+            "rows": [[i18n.tr(str(c)) for c in row] for row in (t.get("rows") or [])[:12]]}
 
 
 def count(user, product_id, counted):
@@ -91,19 +117,29 @@ def login_page(error=""):
 <input name='password' type='password' placeholder='{escape(_t("كلمة المرور"))}'><br><br><button style='width:100%'>دخول</button></form>""")
 
 
+def _js(value):
+    """قيمة JSON آمنة داخل <script> (لا يستطيع نص مثل </script> في اسم أو إعداد كسر الصفحة)"""
+    return json.dumps(value, ensure_ascii=False).replace("</", "<\\/")
+
+
 def app_page(user):
     from core import i18n
     t = i18n.tr
-    can_count = auth.has_permission("inventory", user)
+    from core import plans
+    can_count = auth.has_permission("inventory", user) and plans.has("mobile")
+    can_q = can_ask(user)
     cur = settings.get("currency_symbol") or ""
     L = {k: t(v) for k, v in {"price": "السعر", "stock": "المتوفر", "exp": "أقرب صلاحية", "whole": "سعر الجملة",
                               "count": "الكمية الفعلية على الرف:", "save": "حفظ الجرد", "saved": "تم الحفظ",
                               "none": "لا يوجد منتج بهذا الاسم", "diff": "الفرق"}.items()}
     return _page(f"""<div class='row'><input id='q' placeholder='{escape(t("امسح أو اكتب اسم الصنف أو الباركود"))}' autofocus>
 <button id='scan' style='display:none'>📷</button></div><video id='v' playsinline style='width:100%;display:none;border-radius:12px'></video>
-<div id='out'></div><p class='muted'>👤 {escape(user['full_name'] or user['username'])} — <a href='/m/logout'>خروج</a></p>
+<div id='out'></div>
+<div class='card' id='askbox' style='display:none'><b>✨ {escape(t("اسأل محلك"))}</b>
+<div class='row'><input id='aq' placeholder='{escape(t("مثلاً: كم بعت اليوم؟ مين عليه دين؟"))}'><button id='ab'>{escape(t("اسأل"))}</button></div>
+<div id='aout'></div></div><p class='muted'>👤 {escape(user['full_name'] or user['username'])} — <a href='/m/logout'>خروج</a></p>
 <script>
-const CAN={json.dumps(can_count)};const L={json.dumps(L, ensure_ascii=False)};const CUR={json.dumps(cur, ensure_ascii=False)};
+const CAN={json.dumps(can_count)};const L={_js(L)};const CUR={_js(cur)};
 const q=document.getElementById('q'),out=document.getElementById('out');
 async function find(v){{if(!v)return;const r=await fetch('/m/api/find?q='+encodeURIComponent(v));const j=await r.json();
  out.innerHTML='';if(!j.length){{out.textContent=L.none;return}}
@@ -117,6 +153,17 @@ async function find(v){{if(!v)return;const r=await fetch('/m/api/find?q='+encode
    const k=await r.json();c.querySelector('.res').textContent=k.error?('⚠ '+k.error):('✓ '+L.saved+' — '+L.diff+': '+k.diff);}}}}
   out.appendChild(c);}});}}
 q.addEventListener('keydown',e=>{{if(e.key==='Enter'){{find(q.value.trim());q.select()}}}});
+if({json.dumps(can_q)}){{const box=document.getElementById('askbox'),aq=document.getElementById('aq'),ao=document.getElementById('aout');
+ box.style.display='';const go=async()=>{{const v=aq.value.trim();if(!v)return;ao.textContent='…';
+  const r=await fetch('/m/api/ask?q='+encodeURIComponent(v));const j=await r.json();ao.innerHTML='';
+  if(j.error){{ao.textContent='⚠ '+j.error;return}}
+  const h=document.createElement('div');h.innerHTML='<b></b>';h.querySelector('b').textContent=j.title;ao.appendChild(h);
+  j.lines.forEach(l=>{{const d=document.createElement('div');d.textContent=l;ao.appendChild(d)}});
+  if(j.rows.length){{const tb=document.createElement('table');tb.style.width='100%';tb.style.fontSize='13px';
+   const tr0=document.createElement('tr');j.headers.forEach(x=>{{const th=document.createElement('th');th.textContent=x;th.style.textAlign='start';tr0.appendChild(th)}});tb.appendChild(tr0);
+   j.rows.forEach(rw=>{{const tr=document.createElement('tr');rw.forEach(x=>{{const td=document.createElement('td');td.textContent=x;tr.appendChild(td)}});tb.appendChild(tr)}});ao.appendChild(tb)}}}};
+ document.getElementById('ab').onclick=go;aq.addEventListener('keydown',e=>{{if(e.key==='Enter')go()}});
+ if(location.hash==='#ask')aq.focus();}}
 window.onNativeScan=v=>{{if(v){{q.value=v;find(v)}}}};
 if(window.AndroidBridge){{const b=document.getElementById('scan');b.style.display='';b.onclick=()=>AndroidBridge.scan();}}
 else if('BarcodeDetector' in window && navigator.mediaDevices){{const b=document.getElementById('scan');b.style.display='';

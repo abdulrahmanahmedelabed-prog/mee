@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- سمة مظلمة تلقائياً عند تفعيل الوضع الليلي في الجوال (والصفحات تتبعها عبر prefers-color-scheme) -->
+<resources>
+    <style name="AppTheme" parent="android:Theme.Material">
+        <item name="android:colorPrimary">#1E293B</item>
+        <item name="android:colorPrimaryDark">#0F172A</item>
+        <item name="android:colorAccent">#60A5FA</item>
+    </style>
+</resources>

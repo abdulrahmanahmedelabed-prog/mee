@@ -29,9 +29,17 @@ def check(url=None, current=None, timeout=4):
     if not url:
         return None
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
-            data = json.loads(r.read().decode("utf-8"))
-        if is_newer(data.get("version", "0"), current):
+        if not url.startswith("https://"):
+            return None
+        req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "ShopAccounting"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read(200_000).decode("utf-8"))
+        if "tag_name" in data:          # صفحة الإصدارات في GitHub مباشرة (releases/latest)
+            data = {"version": str(data["tag_name"]).lstrip("vV"), "url": data.get("html_url", ""),
+                    "notes": data.get("name", "")}
+        if not str(data.get("url", "")).startswith("https://"):
+            data["url"] = ""            # لا نفتح إلا روابط آمنة
+        if is_newer(str(data.get("version", "0")), current):
             return data
     except Exception:
         return None

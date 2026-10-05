@@ -513,6 +513,14 @@ CREATE TABLE IF NOT EXISTS payroll_payments (      -- صرف راتب شهر
 );
 
 -- ===== أقساط الزبائن =====
+CREATE TABLE IF NOT EXISTS web_sessions (
+    token TEXT PRIMARY KEY,           -- جلسة تطبيق الجوال أو لوحة المالك (تبقى بعد إعادة تشغيل جهاز المحل)
+    user_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,               -- mobile / owner
+    created_at TEXT NOT NULL,
+    last_seen TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS installment_plans (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER NOT NULL REFERENCES customers(id),

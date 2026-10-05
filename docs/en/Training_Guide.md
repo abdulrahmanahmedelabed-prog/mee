@@ -83,7 +83,7 @@ In this order:
 For the **first 30 days you get the full 👑 Max plan free** (every feature, unlimited tills). After that the program runs on the **🌱 Free plan**: selling, inventory, debts and basic reports **never stop**, and advanced features show a 🔒 lock. To upgrade to ⚡ Plus, 💎 Pro or 👑 Max you need an "activation key" for your computer, sent by your program provider.
 
 - **To see your plan and compare plans:** click the plan badge at the top (for example "👑 Max • 23-day trial") or the **💎 Plans & upgrade** button.
-- **What each plan includes:** Free covers selling, inventory, debts and reports; Plus adds the smart advisor, smart reordering, offers, cheques, installments and the mobile app; Pro adds accounting, the financial audit, payroll, the online store, the owner dashboard and zakat; Max adds the superpowers and branches.
+- **What each plan includes:** Free covers selling, inventory, debts and reports; Plus adds the smart advisor, smart reordering, offers, cheques, installments and stock counting from the phone (the mobile app for price checks is available on every plan); Pro adds accounting, the financial audit, payroll, the online store, the owner dashboard and zakat; Max adds the superpowers and branches.
 
 **Activation steps (from an administrator account):**
 1. Click **💎 Plans & upgrade** → **🔑 I have an activation key**, or Settings → **License & activation**. (Or click **"Get Pro"**, for example, in the plan comparison — the request reaches your provider on WhatsApp.)
@@ -355,12 +355,18 @@ Each branch runs its own copy, and the owner sees all branches in one report:
 ## 6. Mobile: the app, owner dashboard and online store
 
 ### 6.1 The mobile app (Android)
-1. Install the app (from your provider or the store).
-2. On the main cashier computer: Settings → Loyalty points & owner dashboard → enable "Run the owner dashboard on mobile" → a **QR code to pair the mobile app** appears.
-3. In the app: **📷 Scan pairing code** → scan the code on the screen. (The phone must be on the shop's Wi-Fi.)
-4. Log in with the same username and password as in the program.
-5. The 📷 button scans any item's barcode: its price, quantity and expiry appear. Staff with inventory permission can type "Actual quantity on the shelf" → **Save count**.
-6. From the app menu (⋮): **Owner dashboard**, **Store**, or change shop.
+1. Install the app (from your provider or the releases page). It asks for no permissions.
+2. On the main cashier computer: Settings → Loyalty points & owner dashboard → enable "Run the owner dashboard on mobile".
+3. Open the app with the phone on the shop's Wi-Fi: it **finds the shop computer automatically** and opens directly. (If several shops are on the network it lists them; if none is found, use **📷 Scan pairing QR** shown in the settings.)
+4. Log in once with the same username and password as in the program — **you stay signed in**, even after the computer or phone restarts (until you sign out, change the password, or 90 days without use).
+5. The 📷 button scans any item's barcode: its price, quantity and expiry appear (every plan). Staff with inventory permission can type "Actual quantity on the shelf" → **Save count** (Plus and above).
+6. From the app menu (⋮): **✨ Ask your shop** (Max), **Owner dashboard**, **Store**, or change shop.
+7. If the computer's address changes (for example after the router restarts), the app finds it again automatically.
+8. It follows the phone's dark/light mode automatically.
+
+> **One time only:** if an old version of the app is on the phone and updating shows "App not installed", uninstall the old version and install the new one. Later updates install over it directly.
+
+> **Security:** the default password (admin) does not work from the phone; change it in the program first. After 5 wrong sign-in attempts, signing in is locked for a short time.
 
 > **iPhone:** open the address shown under "Owner dashboard" in the settings in Safari, then "Add to Home Screen".
 
@@ -426,7 +432,9 @@ Do them in order. After each exercise, check the expected result.
 | Card terminal "can't connect" | Settings → Printing & cash drawer → "💳 Test connection". If it continues: pay the manual way and contact your provider |
 | Repeated cash shortages | Activity log: manual drawer openings, cash refunds, discounts; make sure withdrawals are recorded with "Cash withdrawal" |
 | A secondary till "can't connect" | Is the main computer running? On the same network? Did the firewall allow the program? Has the main computer's address changed? |
-| The mobile app "can't reach the shop computer" | Is the phone on the shop's Wi-Fi? Is the program running on the main computer? Scan the pairing code again |
+| The mobile app "can't reach the shop computer" | Is the phone on the shop's Wi-Fi? Is the program running on the main computer? Tap "Retry" to search for it automatically, or scan the pairing code again |
+| The phone says "Change the default password" | Sign in to the program on the computer and change the admin password, then use it on the phone |
+| "Too many failed sign-in attempts" | Wait for the time shown (starting at 30 seconds), then enter the correct password |
 | "Maximum number of licensed devices reached" | Your plan allows fewer tills; ask your provider to upgrade |
 | A feature shows a 🔒 lock | It isn't in your current plan. Click **💎 Compare plans & upgrade** to see which plan includes it; your data and selling are not affected |
 | "Activation key is for another device" | The key was issued for a different computer. Send your provider this device's code for a new key |

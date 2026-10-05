@@ -476,7 +476,7 @@ class MainWindow(QMainWindow):
             self.license_lbl.setStyleSheet("color:#1D4ED8; font-weight:600;")
         text = st["message"]
         if vendor.VENDOR_PHONE:
-            text += f"   —   للتفعيل والدعم: {vendor.VENDOR_NAME} {vendor.VENDOR_PHONE}"
+            text += f"   —   للتفعيل والدعم: {vendor.display_name()} {vendor.VENDOR_PHONE_DISPLAY}"
         self.license_lbl.setText(("💎 " if st["state"] in ("free", "trial") else "🔑 ") + text)
 
     def ask_shop(self):
