@@ -1722,7 +1722,8 @@
 "📥 إضافة ملف فرع": "📥 Add branch file",
 "🖨 طباعة الجدول": "🖨 Print schedule",
 "🖨 قسيمة الراتب": "🖨 Payslip",
-"🧾 صرف الراتب": "🧾 Pay salary"
+"🧾 صرف الراتب": "🧾 Pay salary",
+"رواتب الشهر الماضي لم تُصرف": "Last month's salaries not paid"
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",

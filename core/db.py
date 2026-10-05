@@ -687,6 +687,22 @@ CREATE INDEX IF NOT EXISTS ix_orders_status ON online_orders(status, id);
 """
 
 
+def upgrade_file(path):
+    """ترقية بنية ملف قاعدة بيانات آخر (نسخة فرع من إصدار أقدم) ليُقرأ بتقارير هذا الإصدار. لا يمس بياناته"""
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.executescript(SCHEMA)
+        for table, cols in ADDED_COLUMNS.items():
+            have = _columns(conn, table)
+            for name, ddl in cols:
+                if name not in have:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _columns(conn, table):
     return {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
 

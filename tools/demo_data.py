@@ -26,7 +26,7 @@ if __name__ == "__main__" and len(sys.argv) > 1:
     os.environ["SHOP_DATA_DIR"] = sys.argv[1]
 
 from core import (db, auth, products, customers, suppliers, sales, expenses, shifts, settings,  # noqa: E402
-                  promotions, cheques, ledger, license, wallets, loyalty)
+                  promotions, cheques, ledger, license, wallets, loyalty, payroll, installments)
 from core.utils import money  # noqa: E402
 
 DEFAULT_DAYS = 3 * 365
@@ -179,6 +179,9 @@ class Shop:
             self.info[pid] = {"cat": cat, "unit": unit, "cost": cost, "pop": pop}
         self.sold = {pid: deque([self.info[pid]["pop"]] * 14, maxlen=14) for pid in self.pids}
         self.today_sold = {pid: 0.0 for pid in self.pids}
+        self.staff = [payroll.add_employee("سامي", 2400, "كاشير", "0599100100"),
+                      payroll.add_employee("أحمد", 2400, "كاشير", "0599100200"),
+                      payroll.add_employee("يوسف", 1800, "مخزن وتوصيل", "0599100300")]
         self.custs = [customers.add_customer(n, p, credit_limit=l) for n, p, l in CUSTOMERS]
         self.wholesale = customers.add_customer("بقالة الحي (جملة)", "0599887766", credit_limit=3000,
                                                 price_level="wholesale")
@@ -331,8 +334,14 @@ class Shop:
         if d.day == 1:
             self.at(d, 15, 30)
             expenses.add_expense("إيجار", 3000, "إيجار الشهر", from_drawer=False, expense_date=d.isoformat())
-            expenses.add_expense("رواتب", money(2 * 2400 * (1.04 ** int(y))), "رواتب الكاشيرين",
-                                 from_drawer=False, expense_date=d.isoformat())
+            prev = (d.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")      # رواتب الشهر الماضي من البنك
+            if d.month == 1 and d > self.start:                                   # زيادة سنوية 4%
+                for e in self.staff:
+                    emp = payroll.get_employee(e)
+                    payroll.update_employee(e, emp["name"], money(emp["salary"] * 1.04), emp["job"], emp["phone"])
+            if d > self.start:
+                for e in self.staff:
+                    payroll.pay_salary(e, prev, method=payroll.PAY_BANK)
             expenses.add_expense("إنترنت واتصالات", 150, from_drawer=False, expense_date=d.isoformat())
             if self.wallet_bal > 1:          # تحويل رصيد المحافظ للبنك مع عمولة المزوّد
                 fee = money(self.wallet_bal * 0.005)
@@ -395,6 +404,10 @@ class Shop:
         if d.weekday() == 0:                     # تاجر الجملة: طلبية أسبوعية آجلة
             self.at(d, 15, 40)
             self.one_sale(d, wholesale=True)
+        if d.day == 15 and r.random() < 0.35:   # سلفة لأحد الموظفين من الدرج تُخصم من راتبه القادم
+            self.at(d, 13, 10)
+            payroll.give_advance(r.choice(self.staff), r.choice([200, 300, 500]), payroll.PAY_DRAWER,
+                                 "سلفة", shift_id=self.sid)
         if d.day == 12:                          # إرجاع بضاعة تالفة لمورد كبير مع ضريبة مدخلاتها
             self.at(d, 9, 15)
             name, (sup, cats, _) = r.choice([(n, v) for n, v in self.sups.items() if not n.startswith(("مخابز", "سوق"))])
@@ -508,6 +521,10 @@ def finishing_touches(pids, cids):
             owed = customers.balance(cid)
         cheques.receive_cheque(cid, money(min(400, owed * 0.8)), exp(due), no, bank)
     cheques.issue_cheque(s3, 600, exp(3), "000731", "البنك العربي")
+    # خطة تقسيط لعميل مدين، أول قسط فات موعده (لتجربة التنبيه والتذكير)
+    debtor = max(cids, key=customers.balance)
+    if customers.balance(debtor) > 100 and not installments.active_plan(debtor):
+        installments.create_plan(debtor, 4, exp(-35), 30, note="تقسيط دين الشهرين الماضيين")
     suppliers.create_purchase_return(s1, [{"product_id": pids[1], "quantity": 4}], "منتهي الصلاحية")
 
 

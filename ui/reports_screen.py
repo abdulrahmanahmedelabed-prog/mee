@@ -236,12 +236,18 @@ class ReportsScreen(QWidget):
                                    colors=[("#EFF6FF" if k.startswith("=") else None) for k, _ in rows])
         elif name == "الفروع":
             from core import branches
-            self.branches_dir_lbl.setText(settings.get("branches_dir") or "لم يُحدَّد مجلد مشترك")
+            import os
+            d = settings.get("branches_dir")
+            self.branches_dir_lbl.setText(("📁 " + os.path.basename(d.rstrip("/\\"))) if d else "لم يُحدَّد مجلد مشترك")
+            self.branches_dir_lbl.setToolTip(d or "")
             rows = branches.consolidated(a, b)
             self.branch_table.set_rows([[r["branch"], r["updated"] or (r.get("error") and "تعذرت القراءة") or "",
                                          r["invoice_count"]] + [float(r[k]) for k in branches.FIELDS[1:]] for r in rows],
                                        rows, colors=[("#EFF6FF" if r["branch"] == "المجموع" else
                                                       "#FEF3F2" if r.get("error") else None) for r in rows])
+            for i, r in enumerate(rows):
+                if r.get("error"):
+                    self.branch_table.item(i, 1).setToolTip(r["error"])
         elif name == "المبيعات اليومية":
             d = reports.daily_sales(a, b)
             self.daily_chart.set_data([x["date"][5:] for x in d], [x["total"] for x in d])

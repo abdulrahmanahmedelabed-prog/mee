@@ -54,7 +54,7 @@ def sources():
     """أحدث ملف لكل فرع: {اسم الفرع: (المسار، تاريخ التعديل)} — من المجلد المشترك ومن الملفات المستوردة"""
     here = os.path.abspath(db.DB_PATH)
     own = _identity(here)
-    files = glob.glob(os.path.join(import_dir(), "*.db"))
+    files = glob.glob(os.path.join(import_dir(), "*.db"))          # (مجلد cache الفرعي لا يدخل: ليس *.db في الجذر)
     shared = settings.get("branches_dir")
     if shared and os.path.isdir(shared):
         files += glob.glob(os.path.join(shared, "**", "*.db"), recursive=True)
@@ -69,6 +69,19 @@ def sources():
         if name not in out or mtime > out[name][1]:
             out[name] = (f, mtime)
     return out
+
+
+def _readable_copy(path, mtime):
+    """نسخة محلية مرقّاة من ملف الفرع (لا نكتب أبداً في الملف الأصلي في المجلد المشترك)"""
+    cache = os.path.join(import_dir(), "cache")
+    os.makedirs(cache, exist_ok=True)
+    key = abs(hash(os.path.abspath(path))) % 10 ** 12
+    copy = os.path.join(cache, f"{key}.db")
+    if not os.path.exists(copy) or os.path.getmtime(copy) < mtime:
+        shutil.copy2(path, copy)
+        os.utime(copy, None)
+        db.upgrade_file(copy)
+    return copy
 
 
 def _summary(date_from, date_to):
@@ -87,7 +100,7 @@ def consolidated(date_from, date_to):
                  updated=datetime.now().strftime("%Y-%m-%d %H:%M"), path=None)]
     for name, (path, mtime) in sorted(sources().items()):
         try:
-            with db.reading(path):
+            with db.reading(_readable_copy(path, mtime)):
                 s = _summary(date_from, date_to)
         except sqlite3.Error as e:
             rows.append({"branch": name, "updated": "", "error": str(e), "path": path, **{k: 0 for k in FIELDS}})

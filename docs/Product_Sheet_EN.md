@@ -26,6 +26,11 @@ Works fully offline on your own computer, in **English and Arabic**. Buy once �
 - **Training copy with 3 years of data** — a complete supermarket history to train staff and explore reports without touching real data.
 - **Multi-currency cash** — accept cash in other currencies at your exchange rate.
 - **Your data stays yours** — stored on your computer with daily backups and an optional cloud copy (Google Drive / OneDrive).
+- **Built-in financial auditor** — 33 audit procedures on every transaction (not a sample): ledger reconciliations, document sequence gaps, cashier fraud indicators (cash refunds on card sales, reused wallet references, repeated shortages), debt aging with a doubtful-debt allowance, Benford's law, data-file integrity. Gives a clean/qualified/adverse opinion, a score out of 100 and a printable report.
+- **Payroll** — monthly salaries, bonuses and deductions, advances deducted automatically from the next salary, printable payslips, all flowing into expenses, profit and the cash drawer.
+- **Customer installments** — split a customer's debt into a dated schedule; payments are applied to the oldest installment, overdue ones trigger advisor alerts and WhatsApp reminders.
+- **Branches & chains** — each branch works independently; the owner sees every branch and the total in one report, read from a shared Google Drive folder.
+- **Fits any screen, any language** — modern mobile-app style interface that adapts to small laptops, and switches between Arabic and English instantly.
 
 | | |
 |---|---|

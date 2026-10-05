@@ -83,7 +83,7 @@ class SalaryDialog(QDialog):
         f = QFormLayout(self)
         self.period = QComboBox()
         t = date.today()
-        for k in range(0, 4):
+        for k in range(1, 5):                     # الشهر الماضي أولاً (الراتب يُصرف عن شهر منتهٍ)
             y, mo = (t.year, t.month - k) if t.month - k > 0 else (t.year - 1, t.month - k + 12)
             self.period.addItem(f"{y}-{mo:02d}")
         self.base = MoneySpin()
@@ -148,7 +148,7 @@ class PayrollScreen(QWidget):
         g.setSpacing(14)
         self.k_total = KpiCard("الرواتب الشهرية", "#2563EB", "👔")
         self.k_adv = KpiCard("سلف لم تُسترد", "#D97706", "💵")
-        self.k_due = KpiCard("رواتب هذا الشهر لم تُصرف", "#DC2626", "🗓")
+        self.k_due = KpiCard("رواتب الشهر الماضي لم تُصرف", "#DC2626", "🗓")
         for i, k in enumerate((self.k_total, self.k_adv, self.k_due)):
             g.addWidget(k, 0, i)
         lay.addLayout(g)
@@ -172,7 +172,8 @@ class PayrollScreen(QWidget):
 
     def refresh(self):
         rows = payroll.list_employees(active_only=not self.show_all.isChecked())
-        period = date.today().strftime("%Y-%m")
+        t = date.today()
+        period = f"{t.year - 1}-12" if t.month == 1 else f"{t.year}-{t.month - 1:02d}"   # الراتب يُصرف عن الشهر المنتهي
         self.table.set_rows([[r["name"], r["job"] or "", float(r["salary"]), float(r["advances"]),
                               r["last_period"] or "—"] for r in rows], rows)
         active = [r for r in rows if r["is_active"]]

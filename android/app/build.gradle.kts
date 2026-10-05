@@ -11,8 +11,8 @@ android {
         applicationId = "com.shopaccounting.pos"
         minSdk = 26   // أندرويد 8 فأحدث
         targetSdk = 34
-        versionCode = 10
-        versionName = "8.2"
+        versionCode = 11
+        versionName = "9.0"
     }
 
     // توقيع نسخة المتجر (Google Play): تُقرأ من متغيرات البيئة/أسرار GitHub إن وُجدت
