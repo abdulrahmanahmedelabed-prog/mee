@@ -20,7 +20,8 @@ def profit_and_loss(date_from, date_to):
     ret = db.query_one(f"""SELECT COUNT(*) AS cnt, COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax,
                                   COALESCE(SUM(cost_total),0) AS cost
                            FROM returns WHERE {_RANGE.format(col='created_at')}""", p)
-    expenses = money(db.scalar(f"SELECT SUM(amount) FROM expenses WHERE {_RANGE.format(col='expense_date')}", p))
+    payroll = money(db.scalar(f"SELECT SUM(base + bonus - deductions) FROM payroll_payments WHERE {_RANGE.format(col='created_at')}", p))
+    expenses = money(db.scalar(f"SELECT SUM(amount) FROM expenses WHERE {_RANGE.format(col='expense_date')}", p) + payroll)
     stock_loss = money(db.scalar(f"SELECT SUM(loss_value) FROM stock_movements WHERE {_RANGE.format(col='created_at')}", p))
     purchases = money(db.scalar(f"SELECT SUM(total) FROM purchases WHERE {_RANGE.format(col='created_at')}", p))
     collected = money(-db.scalar(f"""SELECT SUM(amount) FROM customer_transactions
@@ -57,6 +58,7 @@ def profit_and_loss(date_from, date_to):
         "gross_margin": round(gross_profit / net_revenue * 100, 1) if net_revenue else 0.0,
         "expenses": expenses,
         "stock_loss": stock_loss,
+        "payroll": payroll,
         "loyalty_cost": loyalty_cost,
         "cash_diff": cash_diff,
         "other_adjustments": other,
@@ -132,6 +134,8 @@ def period_summary(date_from, date_to, group="month"):
         x["cogs"] -= r["c"] or 0
     for sql, col, field, sign in (
             ("SELECT {k} AS k, SUM(amount) AS v FROM expenses WHERE {where} GROUP BY k", "expense_date", "expenses", 1),
+            ("SELECT {k} AS k, SUM(base + bonus - deductions) AS v FROM payroll_payments WHERE {where} GROUP BY k",
+             "created_at", "expenses", 1),
             ("SELECT {k} AS k, SUM(loss_value) AS v FROM stock_movements WHERE {where} GROUP BY k", "created_at",
              "stock_loss", 1),
             ("SELECT {k} AS k, SUM(difference) AS v FROM shifts WHERE status='closed' AND {where} GROUP BY k",

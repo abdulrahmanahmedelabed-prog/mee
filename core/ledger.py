@@ -23,6 +23,7 @@ BANK = "1120"            # البنك: البطاقات والتحويلات و�
 CHEQUES_IN = "1130"      # شيكات مستلمة من العملاء لم تُصرف بعد
 WALLETS = "1140"         # أرصدة المحافظ الإلكترونية (قبل تحويلها للبنك)
 RECEIVABLES = "1210"     # ديون العملاء
+EMP_ADVANCES = "1220"    # سلف الموظفين (تُسترد من الرواتب)
 INVENTORY = "1310"
 VAT_INPUT = "1410"       # ضريبة مدخلات على المشتريات قابلة للخصم
 FIXED_ASSETS = "1510"
@@ -52,6 +53,7 @@ SYSTEM_ACCOUNTS = [
     (CHEQUES_IN, "شيكات واردة برسم التحصيل", "asset"),
     (WALLETS, "المحافظ الإلكترونية", "asset"),
     (RECEIVABLES, "ذمم العملاء (الديون)", "asset"),
+    (EMP_ADVANCES, "سلف الموظفين", "asset"),
     (INVENTORY, "المخزون (البضاعة)", "asset"),
     (VAT_INPUT, "ضريبة مدخلات قابلة للخصم", "asset"),
     (FIXED_ASSETS, "أصول ثابتة (أثاث ومعدات)", "asset"),
@@ -438,6 +440,18 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
             lines = _pair(BANK, CHEQUES_IN, r["amount"]) if r["direction"] == "in" else _pair(CHEQUES_OUT, BANK, r["amount"])
             add(r["status_date"], f"CHQ-{r['cheque_number'] or r['id']}",
                 "تحصيل شيك وارد في البنك" if r["direction"] == "in" else "صرف شيك صادر من البنك", "cheque", lines)
+
+        # 11.5) الموظفون: السلف أصل على الموظف، والراتب المستحق مصروف تُخصم منه السلف
+        for r in q("""SELECT a.*, e.name FROM employee_advances a JOIN employees e ON e.id=a.employee_id
+                      WHERE 1=1 {cond}""", "a.created_at"):
+            add(r["created_at"], f"ADV-{r['id']}", f"سلفة للموظف {r['name']}", "payroll",
+                _pair(EMP_ADVANCES, SUPPLIER_METHOD_ACCOUNT.get(r["method"], CASH), r["amount"]))
+        for r in q("""SELECT p.*, e.name FROM payroll_payments p JOIN employees e ON e.id=p.employee_id
+                      WHERE 1=1 {cond}""", "p.created_at"):
+            add(r["created_at"], f"PAY-{r['id']}", f"راتب {r['name']} عن {r['period']}", "payroll",
+                [(f"{EXPENSES}:رواتب", money(r["base"] + r["bonus"] - r["deductions"]), 0.0),
+                 (EMP_ADVANCES, 0.0, money(r["advances"])),
+                 (SUPPLIER_METHOD_ACCOUNT.get(r["method"], CASH), 0.0, money(r["net"]))])
 
         # 12) نقاط الولاء: الكسب مصروف والتزام للعملاء، والاستبدال أو الإلغاء يعكسهما
         from core import loyalty

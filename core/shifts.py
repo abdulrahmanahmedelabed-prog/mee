@@ -98,12 +98,16 @@ def summary(shift_id):
                        (shift_id, PAY_DRAWER))
             + db.scalar("SELECT SUM(paid) FROM purchases WHERE shift_id=? AND supplier_id IS NULL AND payment_method=?",
                         (shift_id, PAY_DRAWER))),
+        "payroll_cash": money(
+            db.scalar("SELECT SUM(net) FROM payroll_payments WHERE shift_id=? AND method=?", (shift_id, PAY_DRAWER))
+            + db.scalar("SELECT SUM(amount) FROM employee_advances WHERE shift_id=? AND method=?", (shift_id, PAY_DRAWER))),
         "cash_in": one("SELECT SUM(amount) FROM cash_movements WHERE shift_id=? AND amount>0"),
         "cash_out": -one("SELECT SUM(amount) FROM cash_movements WHERE shift_id=? AND amount<0"),
     }
     d["opening_cash"] = money(s["opening_cash"])
     d["expected_cash"] = money(d["opening_cash"] + d["cash_sales"] - d["cash_refunds"] + d["customer_payments_cash"]
-                               + d["cash_in"] - d["cash_out"] - d["expenses_cash"] - d["supplier_payments_cash"])
+                               + d["cash_in"] - d["cash_out"] - d["expenses_cash"] - d["supplier_payments_cash"]
+                               - d["payroll_cash"])
     return d
 
 

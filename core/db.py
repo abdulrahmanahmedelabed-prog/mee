@@ -7,6 +7,8 @@
 """
 
 import os
+import threading
+import urllib.parse
 import sys
 import sqlite3
 from contextlib import contextmanager
@@ -90,7 +92,30 @@ def bulk_session(commit_every=None):
         conn.close()
 
 
+_READONLY = threading.local()     # قراءة تقارير من ملف آخر (نسخة فرع) في هذا الخيط فقط
+
+
+@contextmanager
+def reading(path):
+    """داخل هذا السياق تقرأ استعلامات هذا الخيط من ملف قاعدة بيانات آخر للقراءة فقط (تقارير الفروع).
+    الخيوط الأخرى (خادم الشبكة، الواجهة) لا تتأثر."""
+    prev = getattr(_READONLY, "path", None)
+    _READONLY.path = path
+    try:
+        yield
+    finally:
+        _READONLY.path = prev
+
+
 def get_connection():
+    ro = getattr(_READONLY, "path", None)
+    if ro:
+        path = os.path.abspath(ro).replace(os.sep, "/")
+        path = path if path.startswith("/") else "/" + path          # C:/... في ويندوز
+        uri = "file://" + urllib.parse.quote(path, safe="/:") + "?mode=ro&immutable=1"
+        conn = sqlite3.connect(uri, uri=True, timeout=15)
+        conn.row_factory = sqlite3.Row
+        return conn
     if _SHARED is not None:
         return _SHARED
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -445,6 +470,60 @@ CREATE TABLE IF NOT EXISTS loyalty_transactions (
     points REAL NOT NULL,            -- موجب = نقاط مكتسبة، سالب = مستبدلة أو ملغاة بمرتجع
     invoice_id INTEGER,
     note TEXT,
+    user_id INTEGER,
+    created_at TEXT
+);
+
+-- ===== الموظفون والرواتب =====
+CREATE TABLE IF NOT EXISTS employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT,
+    job TEXT,
+    salary REAL NOT NULL DEFAULT 0,      -- الراتب الشهري الأساسي
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS employee_advances (     -- سلف الموظفين (تُسترد من الرواتب)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL REFERENCES employees(id),
+    amount REAL NOT NULL,
+    method TEXT NOT NULL,
+    note TEXT,
+    user_id INTEGER,
+    shift_id INTEGER,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS payroll_payments (      -- صرف راتب شهر
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL REFERENCES employees(id),
+    period TEXT NOT NULL,                -- YYYY-MM
+    base REAL NOT NULL DEFAULT 0,
+    bonus REAL NOT NULL DEFAULT 0,
+    deductions REAL NOT NULL DEFAULT 0,
+    advances REAL NOT NULL DEFAULT 0,    -- ما خُصم من السلف
+    net REAL NOT NULL DEFAULT 0,         -- المدفوع فعلاً
+    method TEXT NOT NULL,
+    note TEXT,
+    user_id INTEGER,
+    shift_id INTEGER,
+    created_at TEXT
+);
+
+-- ===== أقساط الزبائن =====
+CREATE TABLE IF NOT EXISTS installment_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    total REAL NOT NULL,
+    count INTEGER NOT NULL,
+    first_due TEXT NOT NULL,
+    every_days INTEGER NOT NULL DEFAULT 30,
+    note TEXT,
+    status TEXT NOT NULL DEFAULT 'active',      -- active / done / cancelled
+    start_balance REAL NOT NULL DEFAULT 0,      -- رصيد العميل عند إنشاء الخطة (لاحتساب ما سُدد منها)
+    paid_before REAL NOT NULL DEFAULT 0,        -- مجموع تسديداته قبل الخطة
     user_id INTEGER,
     created_at TEXT
 );

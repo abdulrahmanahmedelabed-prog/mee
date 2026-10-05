@@ -7,6 +7,8 @@ DEFAULTS = {
     "shop_name": "محلي",
     "shop_address": "",
     "shop_phone": "",
+    "branch_name": "",              # اسم الفرع (تجميع الفروع)
+    "branches_dir": "",             # مجلد نسخ الفروع المشترك (تقرير الفروع)
     "tax_number": "",
     "currency_symbol": "₪",
     "currency_name": "شيكل",

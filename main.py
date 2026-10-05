@@ -117,6 +117,13 @@ def main():
         connect_as_client(app)
     else:
         db.init_db()
+        try:                                          # فحص سلامة ملف البيانات عند كل تشغيل
+            state = db.get_connection().execute("PRAGMA quick_check").fetchone()[0]
+        except Exception as e:
+            state = str(e)
+        if state != "ok":
+            QMessageBox.critical(None, "تنبيه مهم", "فحص سلامة ملف البيانات وجد مشكلة:\n" + str(state) +
+                                 "\n\nاسترجع آخر نسخة احتياطية سليمة من الإعدادات ← النسخ الاحتياطي، وتواصل مع الدعم.")
         if DEMO:
             prepare_demo()
         if mode == config.MODE_SERVER or str(config.get("owner_web")) == "1":

@@ -61,5 +61,6 @@ def invoice_text(invoice_id):
 
 
 def reminder_link(customer_id):
+    from core import installments          # من عنده خطة تقسيط يُذكَّر بقسطه
     c = customers.get_customer(customer_id)
-    return link(c["phone"], customers.reminder_message(customer_id))
+    return link(c["phone"], installments.reminder_message(customer_id))

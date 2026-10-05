@@ -83,6 +83,7 @@ class SettingsScreen(QWidget):
         # --- بيانات المحل
         f = self._form_tab("بيانات المحل")
         self._line(f, "shop_name", "اسم المحل:")
+        self._line(f, "branch_name", "اسم الفرع (للمحلات متعددة الفروع):")
         self._line(f, "shop_address", "العنوان:")
         self._line(f, "shop_phone", "الهاتف:")
         self._line(f, "tax_number", "الرقم الضريبي / المشتغل المرخص:")

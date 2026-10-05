@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
                   backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders,
-                  wallets, financial_audit)
+                  wallets, financial_audit, payroll, installments, branches)
 
 PROTOCOL_VERSION = 2
 
@@ -29,7 +29,8 @@ MODULES = {"products": products, "sales": sales, "customers": customers, "suppli
            "expenses": expenses, "shifts": shifts, "reports": reports, "audit": audit, "backup": backup,
            "settings": settings, "auth": auth, "ledger": ledger, "cheques": cheques, "promotions": promotions,
            "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights,
-           "orders": orders, "wallets": wallets, "financial_audit": financial_audit}
+           "orders": orders, "wallets": wallets, "financial_audit": financial_audit,
+           "payroll": payroll, "installments": installments, "branches": branches}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -61,6 +62,11 @@ REQUIRED_PERMISSION = {
     ("loyalty", "adjust"): "promotions",
     ("insights", "apply_price_update"): "inventory",
     ("financial_audit", "run"): "accounting", ("financial_audit", "aging"): "accounting",
+    ("payroll", "add_employee"): "expenses", ("payroll", "update_employee"): "expenses",
+    ("payroll", "give_advance"): "expenses", ("payroll", "pay_salary"): "expenses",
+    ("payroll", "list_employees"): "expenses", ("payroll", "history"): "expenses",
+    ("installments", "create_plan"): "customers", ("installments", "cancel_plan"): "customers",
+    ("branches", "consolidated"): "reports", ("branches", "add_branch_file"): "reports",
 }
 
 

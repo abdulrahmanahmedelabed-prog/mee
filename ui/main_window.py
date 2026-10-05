@@ -30,10 +30,11 @@ from ui.insights_screen import InsightsScreen
 from ui.orders_screen import OrdersScreen
 from ui.help_screen import HelpScreen
 from ui.audit_screen import AuditScreen
+from ui.payroll_screen import PayrollScreen
 
 VERSION = vendor.VERSION
 # تُخفى في الوضع المبسّط (تظهر عند إلغائه من الإعدادات)
-ADVANCED_PAGES = {"insights", "orders", "reorder", "promotions", "cheques", "accounting", "audit"}
+ADVANCED_PAGES = {"insights", "orders", "reorder", "promotions", "cheques", "accounting", "audit", "payroll"}
 
 PAGES = [
     ("dashboard", "🏠   لوحة التحكم", ("dashboard",), DashboardScreen),
@@ -48,6 +49,7 @@ PAGES = [
     ("reorder", "🧠   الطلبيات الذكية", ("suppliers",), ReorderScreen),
     ("promotions", "🎁   العروض والولاء", ("promotions",), PromotionsScreen),
     ("expenses", "💸   المصاريف", ("expenses",), ExpensesScreen),
+    ("payroll", "👔   الموظفون والرواتب", ("expenses",), PayrollScreen),
     ("cash", "💵   الصندوق والورديات", ("cash",), CashScreen),
     ("cheques", "🏦   الشيكات", ("cheques",), ChequesScreen),
     ("reports", "📊   التقارير", ("reports",), ReportsScreen),

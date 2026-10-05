@@ -5,12 +5,97 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, Q
                                QComboBox, QSplitter)
 from PySide6.QtCore import Qt
 
-from core import customers, receipts, shifts, whatsapp, loyalty
+from core import customers, receipts, shifts, whatsapp, loyalty, installments
 from core.i18n import tr
 from ui import printing
 from ui.dialogs import CustomerDialog, TextDialog
 from ui.widgets import (Table, button, page, title, hint, warn, info, ask, error, MoneySpin, ok_cancel, m, card,
                         require_permission, open_whatsapp)
+
+
+class InstallmentsDialog(QDialog):
+    """تقسيط دين العميل: إنشاء خطة، أو متابعة الأقساط القائمة"""
+
+    def __init__(self, parent, customer):
+        super().__init__(parent)
+        from PySide6.QtCore import QDate
+        from PySide6.QtWidgets import QSpinBox, QDateEdit
+        self.c = customer
+        self.setWindowTitle(f"تقسيط — {customer['name']}")
+        self.resize(640, 520)
+        lay = QVBoxLayout(self)
+        self.plan = installments.active_plan(customer["id"])
+        if self.plan:
+            s = installments.summary(self.plan)
+            head = QLabel(f"المقسط {m(self.plan['total'])} على {self.plan['count']} أقساط • المسدَّد {m(s['paid'])} • "
+                          f"المتبقي {m(s['remaining'])}" + (f" • متأخر {m(s['overdue_amount'])}" if s["overdue_count"] else ""))
+            head.setObjectName("subTitle")
+            head.setWordWrap(True)
+            lay.addWidget(head)
+            t = Table(["#", "الاستحقاق", "القسط", "المسدَّد", "الحالة"], stretch=1, sortable=False)
+            colors = {"paid": "#ECFDF3", "overdue": "#FEF3F2", "due": "#FFFAEB"}
+            t.set_rows([[r["seq"], r["due"], float(r["amount"]), float(r["paid"]), installments.STATUS[r["status"]]]
+                        for r in s["rows"]], colors=[colors.get(r["status"]) for r in s["rows"]])
+            lay.addWidget(t, 1)
+            lay.addWidget(hint("التسديد يكون بزر «تسديد دفعة» كالمعتاد، ويُوزَّع على الأقساط من الأقدم تلقائياً."))
+            row = QHBoxLayout()
+            row.addWidget(button("💬 تذكير بالقسط", "successBtn", self.remind))
+            row.addWidget(button("🖨 طباعة الجدول", "secondaryBtn",
+                                 lambda: printing.print_html(self, installments.schedule_html(self.plan["id"]),
+                                                             width_mm=210, preview=True)))
+            row.addStretch()
+            row.addWidget(button("إلغاء الخطة", "dangerBtn", self.cancel_plan))
+            row.addWidget(button("إغلاق", "secondaryBtn", self.reject))
+            lay.addLayout(row)
+            return
+        bal = customers.balance(customer["id"])
+        lay.addWidget(hint(f"دين العميل الحالي {m(bal)}. قسّمه على دفعات بمواعيد، ويتابع البرنامج المسدَّد والمتأخر ويذكّره."))
+        f = QFormLayout()
+        self.total = MoneySpin()
+        self.total.setMaximum(max(bal, 0))
+        self.total.setValue(max(bal, 0))
+        self.count = QSpinBox()
+        self.count.setRange(2, 60)
+        self.count.setValue(4)
+        self.every = QComboBox()
+        for label, days in (("شهرياً", 30), ("كل أسبوعين", 14), ("أسبوعياً", 7)):
+            self.every.addItem(label, days)
+        self.first = QDateEdit(calendarPopup=True)
+        self.first.setDisplayFormat("yyyy-MM-dd")
+        self.first.setDate(QDate.currentDate().addMonths(1))
+        self.per = QLabel()
+        self.per.setObjectName("bigNumber")
+        for w in (self.total, self.count):
+            w.valueChanged.connect(self.update_per)
+        f.addRow("المبلغ المقسط:", self.total)
+        f.addRow("عدد الأقساط:", self.count)
+        f.addRow("كل:", self.every)
+        f.addRow("أول قسط بتاريخ:", self.first)
+        f.addRow("القسط:", self.per)
+        lay.addLayout(f)
+        self.update_per()
+        ok_cancel(self, lay, "إنشاء خطة التقسيط")
+
+    def update_per(self):
+        self.per.setText(m(self.total.value() / max(1, self.count.value())))
+
+    def accept(self):
+        try:
+            installments.create_plan(self.c["id"], self.count.value(), self.first.date().toString("yyyy-MM-dd"),
+                                     self.every.currentData(), self.total.value())
+        except ValueError as e:
+            warn(self, str(e))
+            return
+        super().accept()
+
+    def remind(self):
+        open_whatsapp(self, whatsapp.link(self.c["phone"], installments.reminder_message(self.c["id"])),
+                      installments.reminder_message(self.c["id"]))
+
+    def cancel_plan(self):
+        if ask(self, "إلغاء خطة التقسيط؟ يبقى الدين كما هو على العميل."):
+            installments.cancel_plan(self.plan["id"])
+            self.reject()
 
 
 class BulkReminderDialog(QDialog):
@@ -126,7 +211,7 @@ class CustomersScreen(QWidget):
         for i, (text, obj, slot) in enumerate([("💰 تسديد دفعة", "successBtn", self.pay), ("🖨 طباعة الكشف", "secondaryBtn", self.print_statement),
                                 ("💬 تذكير واتساب", "secondaryBtn", self.reminder), ("✏ تعديل", "secondaryBtn", self.edit),
                                 ("⚖ تسوية", "secondaryBtn", self.adjust), ("📥 استلام شيك", "secondaryBtn", self.receive_cheque),
-                                ("🗑 حذف", "dangerBtn", self.delete)]):
+                                ("📅 تقسيط", "secondaryBtn", self.installments), ("🗑 حذف", "dangerBtn", self.delete)]):
             btns.addWidget(button(text, obj, slot), i // 3, i % 3)
         rl.addLayout(btns)
         self.statement = Table(["التاريخ", "البيان", "عليه (مدين)", "له (دائن)", "الرصيد"], stretch=1, sortable=False)
@@ -224,7 +309,13 @@ class CustomersScreen(QWidget):
     def reminder(self):
         c = self.need()
         if c:
-            open_whatsapp(self, whatsapp.reminder_link(c["id"]), customers.reminder_message(c["id"]))
+            open_whatsapp(self, whatsapp.reminder_link(c["id"]), installments.reminder_message(c["id"]))
+
+    def installments(self):
+        c = self.need()
+        if c:
+            InstallmentsDialog(self, c).exec()
+            self.load_statement()
 
     def bulk_reminders(self):
         BulkReminderDialog(self).exec()

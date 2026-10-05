@@ -691,11 +691,45 @@ def check_users(c):
     return out
 
 
-CHECKS = [check_books_balance, check_receivables, check_payables, check_inventory_value, check_impossible_balances,
-          check_manual_entries, check_sequences, check_invoice_integrity, check_duplicate_refs, check_shifts,
+def check_installments(c):
+    from core import installments
+    late = installments.overdue()
+    if late:
+        amt = money(sum(r["amount"] for r in late))
+        return [_f(A_DEBTS, "أقساط متأخرة", "medium" if amt > c.sales * 0.01 else "low",
+                   f"{len(late)} عميل متأخر عن أقساطه بمجموع {n(amt)}.",
+                   "ذكّرهم من العملاء ← تقسيط ← «تذكير بالقسط»، ولا تبع لهم آجلاً حتى ينتظموا.", amt, len(late),
+                   [f"{r['name']}: {n(r['amount'])} منذ {r['since']}" for r in late])]
+    return []
+
+
+def check_employee_advances(c):
+    rows = db.query("""SELECT e.name, e.salary,
+                              (SELECT COALESCE(SUM(amount),0) FROM employee_advances a WHERE a.employee_id=e.id)
+                              - (SELECT COALESCE(SUM(advances),0) FROM payroll_payments p WHERE p.employee_id=e.id) AS owed
+                       FROM employees e""")
+    big = [r for r in rows if r["owed"] > 0.009 and (not r["salary"] or r["owed"] > 2 * r["salary"])]
+    if big:
+        return [_f(A_CASH, "سلف موظفين كبيرة", "medium",
+                   "سلف تزيد عن راتب شهرين (أو لموظف بلا راتب مسجّل): قد لا تُسترد، خاصة عند ترك العمل.",
+                   "قسّط استردادها على الرواتب القادمة ولا تمنح سلفاً جديدة قبل سداد القديمة.",
+                   sum(r["owed"] for r in big), len(big), [f"{r['name']}: {n(r['owed'])}" for r in big])]
+    return []
+
+
+def check_integrity(c):
+    bad = db.get_connection().execute("PRAGMA quick_check").fetchone()[0]
+    if bad != "ok":
+        return [_f(A_CONTROL, "تلف في ملف قاعدة البيانات", "critical", f"فحص سلامة الملف أعاد: {bad}",
+                   "لا تكمل العمل: استرجع آخر نسخة احتياطية سليمة من الإعدادات ← النسخ الاحتياطي، وتواصل مع الدعم.")]
+    return [_ok(A_CONTROL, "سلامة ملف البيانات", "فحص سلامة قاعدة البيانات لم يجد أي تلف.")]
+
+
+CHECKS = [check_integrity, check_books_balance, check_receivables, check_payables, check_inventory_value, check_impossible_balances,
+          check_manual_entries, check_sequences, check_invoice_integrity, check_duplicate_refs, check_shifts, check_employee_advances,
           check_cash_refund_on_electronic, check_refunds_by_cashier, check_drawer_and_prices, check_discounts,
           check_below_cost, check_expired_stock, check_dead_stock, check_shrinkage, check_receivables_aging,
-          check_credit_balances, check_cheques, check_expense_duplicates, check_expense_spikes, check_benford,
+          check_credit_balances, check_installments, check_cheques, check_expense_duplicates, check_expense_spikes, check_benford,
           check_margin_trend, check_cash_ratio, check_vat, check_deletions, check_backups, check_users]
 
 

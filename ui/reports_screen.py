@@ -153,9 +153,51 @@ class ReportsScreen(QWidget):
         self.vat_table = Table(["البند", "المبلغ"], stretch=0, sortable=False)
         self._add_tab(self.vat_table, "ضريبة القيمة المضافة", self.vat_table)
 
+        # 9ج) الفروع: تقرير مجمّع لكل فروع المحل من نسخها الاحتياطية في مجلد مشترك
+        br = QWidget()
+        bl = QVBoxLayout(br)
+        bl.setContentsMargins(0, 10, 0, 0)
+        row = QHBoxLayout()
+        row.addWidget(button("📁 مجلد نسخ الفروع", "secondaryBtn", self.choose_branches_dir))
+        row.addWidget(button("📥 إضافة ملف فرع", "secondaryBtn", self.add_branch_file))
+        self.branches_dir_lbl = QLabel("")
+        self.branches_dir_lbl.setObjectName("hint")
+        row.addWidget(self.branches_dir_lbl, 1)
+        bl.addLayout(row)
+        self.branch_table = Table(["الفرع", "آخر تحديث", "الفواتير", "صافي المبيعات", "مجمل الربح", "المصاريف",
+                                   "صافي الربح", "قيمة المخزون", "ديون العملاء", "مستحقات الموردين"], stretch=0,
+                                  sortable=False)
+        bl.addWidget(self.branch_table, 1)
+        from ui.widgets import hint as _hint
+        bl.addWidget(_hint("في كل فرع: الإعدادات ← بيانات المحل ← «اسم الفرع»، والإعدادات ← النسخ الاحتياطي ← «نسخة ثانية» "
+                           "إلى مجلد مشترك (Google Drive مثلاً). هنا اختر نفس المجلد، فيقرأ البرنامج أحدث نسخة لكل فرع."))
+        self._add_tab(br, "الفروع", self.branch_table)
+
         # 10) سجل العمليات
         self.audit_table = Table(["الوقت", "المستخدم", "العملية", "التفاصيل"], stretch=3)
         self._add_tab(self.audit_table, "سجل العمليات", self.audit_table)
+
+    def choose_branches_dir(self):
+        from PySide6.QtWidgets import QFileDialog
+        d = QFileDialog.getExistingDirectory(self, "مجلد نسخ الفروع", settings.get("branches_dir") or "")
+        if d:
+            settings.set_many({"branches_dir": d})
+            self.load()
+
+    def add_branch_file(self):
+        from PySide6.QtWidgets import QFileDialog
+        from core import branches
+        from ui.widgets import warn, info
+        path, _ = QFileDialog.getOpenFileName(self, "ملف نسخة احتياطية من فرع", "", "Database (*.db)")
+        if not path:
+            return
+        try:
+            name = branches.add_branch_file(path)
+        except ValueError as e:
+            warn(self, str(e))
+            return
+        info(self, f"أُضيف الفرع: {name}")
+        self.load()
 
     def _add_tab(self, widget, name, table):
         idx = self.tabs.addTab(widget, name)
@@ -192,6 +234,14 @@ class ReportsScreen(QWidget):
             ]
             self.pl_table.set_rows([[k, float(v) if v is not None else ""] for k, v in rows],
                                    colors=[("#EFF6FF" if k.startswith("=") else None) for k, _ in rows])
+        elif name == "الفروع":
+            from core import branches
+            self.branches_dir_lbl.setText(settings.get("branches_dir") or "لم يُحدَّد مجلد مشترك")
+            rows = branches.consolidated(a, b)
+            self.branch_table.set_rows([[r["branch"], r["updated"] or (r.get("error") and "تعذرت القراءة") or "",
+                                         r["invoice_count"]] + [float(r[k]) for k in branches.FIELDS[1:]] for r in rows],
+                                       rows, colors=[("#EFF6FF" if r["branch"] == "المجموع" else
+                                                      "#FEF3F2" if r.get("error") else None) for r in rows])
         elif name == "المبيعات اليومية":
             d = reports.daily_sales(a, b)
             self.daily_chart.set_data([x["date"][5:] for x in d], [x["total"] for x in d])

@@ -127,6 +127,16 @@ def insights(days=30):
                          [f"{r['name']}: {money(r['bal']):,.2f} (آخر دفعة {(r['last_pay'] or 'لا يوجد')[:10]})" for r in late[:12]],
                          "customers", "العملاء والديون"))
 
+    # 6.5) أقساط متأخرة
+    from core import installments
+    late_inst = installments.overdue()
+    if late_inst:
+        out.append(_card("warning", "installments", f"{len(late_inst)} عميل متأخر عن أقساطه بقيمة "
+                         f"{sum(r['amount'] for r in late_inst):,.2f}",
+                         "ذكّرهم بزر «تذكير بالقسط» من العملاء ← تقسيط، أو «تذكير واتساب».",
+                         [f"{r['name']}: {r['amount']:,.2f} ({r['count']} قسط، منذ {r['since']})" for r in late_inst[:12]],
+                         "customers", "العملاء والديون"))
+
     # 7) خصومات الكاشير
     rows = db.query("""SELECT COALESCE(u.full_name, u.username) AS name, SUM(i.discount - i.promo_discount - i.points_value) AS disc,
                               SUM(i.subtotal) AS gross, COUNT(*) AS cnt
