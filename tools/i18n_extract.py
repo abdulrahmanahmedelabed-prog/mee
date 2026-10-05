@@ -15,6 +15,33 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ARABIC = re.compile(r"[؀-ۿ]")
 SKIP_FILES = {"license_tool.py", "i18n_extract.py", "demo_data.py"}
+# كلمات يفهم بها «اسأل محلك» الأسئلة (عامية وفصحى) — مفردات للفهم وليست نصوصاً تظهر للمستخدم
+VOCAB_NAMES = {"INTENTS", "NAV", "MONTHS", "_STOP", "PLAN_WORDS", "SALES_WORDS", "NAV_VERBS"}
+VOCAB_CALLS = {"_has", "norm"}
+
+
+def _vocab_nodes(tree, filename):
+    """عُقد النصوص التي هي مفردات فهم (في core/assistant.py فقط)"""
+    out = set()
+    if filename != "assistant.py":
+        return out
+    for node in ast.walk(tree):
+        targets = []
+        if isinstance(node, ast.Assign):
+            targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if (targets and set(targets) & VOCAB_NAMES) or (
+                isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in VOCAB_CALLS):
+            out.update(id(n) for n in ast.walk(node) if isinstance(n, ast.Constant))
+        if isinstance(node, ast.For) and isinstance(node.iter, ast.Tuple):          # (مفتاح، [كلمات]) في الحلقات
+            out.update(id(n) for n in ast.walk(node.iter) if isinstance(n, ast.Constant))
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "replace" or (
+                isinstance(node, ast.Tuple) and len(node.elts) == 2 and all(
+                    isinstance(e, ast.Constant) and isinstance(e.value, str) and len(e.value) == 1 for e in node.elts)):
+            out.update(id(n) for n in ast.walk(node) if isinstance(n, ast.Constant))
+    for node in ast.walk(tree):                     # أنماط re وجداول الحروف
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", "") in ("compile", "search", "maketrans", "sub"):
+            out.update(id(n) for n in ast.walk(node) if isinstance(n, ast.Constant))
+    return out
 
 
 def _template(node):
@@ -46,7 +73,7 @@ def extract():
         if os.path.basename(f) in SKIP_FILES:
             continue
         tree = ast.parse(open(f, encoding="utf-8").read())
-        docs = _docstrings(tree)
+        docs = _docstrings(tree) | _vocab_nodes(tree, os.path.basename(f))
         inside_fstring = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.JoinedStr):

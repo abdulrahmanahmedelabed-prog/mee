@@ -260,6 +260,7 @@ class SettingsScreen(QWidget):
         mrow.addWidget(self.machine_lbl)
         mrow.addWidget(button("📋 نسخ", "secondaryBtn", self.copy_machine))
         mrow.addWidget(button("📱 طلب التفعيل عبر واتساب", "successBtn", self.request_activation))
+        mrow.addWidget(button("💎 الباقات والمقارنة", "primaryBtn", self.show_plans))
         mrow.addStretch()
         cl.addLayout(mrow)
         cl.addWidget(hint("1) أرسل رمز الجهاز لمزوّد البرنامج.  2) يرسل لك مفتاح التفعيل.  3) الصقه هنا واضغط «تفعيل»."))
@@ -598,10 +599,10 @@ class SettingsScreen(QWidget):
     def load_license(self):
         from core import license, vendor
         st = license.status()
-        icon = {"licensed": "✅", "trial": "⏳"}.get(st["state"], "⛔")
-        extra = ""
+        icon = {"licensed": "✅", "trial": "🎁", "free": "🌱"}.get(st["state"], "⛔")
+        extra = f"\nالباقة: {st['plan_label']} — الأجهزة المسموحة: {st['terminals'] or 'غير محدود'}"
         if st["state"] == "licensed":
-            extra = f"\nالمحل: {st['shop']} — الأجهزة المسموحة: {st['terminals'] or 'غير محدود'}"
+            extra += f" — المحل: {st['shop']}"
         if st.get("key_error"):
             extra += f"\n⚠ المفتاح المحفوظ: {st['key_error']}"
         self.lic_status.setText(f"{icon} {st['message']}{extra}")
@@ -621,6 +622,10 @@ class SettingsScreen(QWidget):
         QApplication.clipboard().setText(self.machine_lbl.text())
         info(self, "تم نسخ رمز الجهاز.")
 
+    def show_plans(self):
+        from ui.plans_dialog import PlansDialog
+        PlansDialog(self).exec()
+
     def request_activation(self):
         from core import license, vendor, whatsapp
         from ui.widgets import open_whatsapp
@@ -637,6 +642,10 @@ class SettingsScreen(QWidget):
             return
         self.lic_key.clear()
         self.load_license()
+        w = self.window()
+        if hasattr(w, "refresh_nav"):
+            w.refresh_nav()                         # تُفتح ميزات الباقة الجديدة فوراً
+            w.update_header()
         info(self, f"تم التفعيل بنجاح ✓\n{st['message']}")
         w = self.window()
         if hasattr(w, "update_license"):

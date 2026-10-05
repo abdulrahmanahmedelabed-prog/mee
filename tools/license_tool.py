@@ -10,8 +10,8 @@
     - المفتاح العام يُكتب في core/license_pubkey.py ويُبنى مع البرنامج.
 
 إصدار مفتاح لزبون (يرسل لك رمز الجهاز من شاشة التفعيل):
-    python tools/license_tool.py issue --machine 4F1A-9C03-7B2E-D5A8 --shop "سوبرماركت الأمل" --plan pro --terminals 3
-    python tools/license_tool.py issue --machine ... --shop ... --plan subscription --terminals 1 --expires 2027-01-31
+    python tools/license_tool.py issue --machine 4F1A-9C03-7B2E-D5A8 --shop "سوبرماركت الأمل" --plan pro
+    python tools/license_tool.py issue --machine ... --shop ... --plan max --expires 2027-01-31   (اشتراك سنوي)
 
 التحقق من مفتاح:
     python tools/license_tool.py verify "SA1...."
@@ -181,6 +181,9 @@ def init_keys(key_dir=None, bits=2048):
 def cmd_issue(args):
     if args.plan not in lic.PLANS:
         sys.exit(f"الخطة يجب أن تكون واحدة من: {', '.join(lic.PLANS)}")
+    if args.terminals is None:
+        from core import plans
+        args.terminals = plans.TERMINALS[args.plan]
     if args.expires:
         date.fromisoformat(args.expires)
     private = load_private(args.key)
@@ -219,8 +222,8 @@ def main():
     b = sub.add_parser("issue", help="إصدار مفتاح لزبون")
     b.add_argument("--machine", required=True)
     b.add_argument("--shop", required=True)
-    b.add_argument("--plan", default="pro")
-    b.add_argument("--terminals", type=int, default=3, help="0 = غير محدود")
+    b.add_argument("--plan", default="pro", help="plus / pro / max")
+    b.add_argument("--terminals", type=int, default=None, help="0 = غير محدود (الافتراضي حسب الباقة: بلس 2، برو 5، ماكس غير محدود)")
     b.add_argument("--expires", help="YYYY-MM-DD للاشتراكات؛ اتركه فارغاً للترخيص الدائم")
     b.add_argument("--key", help="مسار المفتاح الخاص")
     b.set_defaults(fn=cmd_issue)

@@ -77,12 +77,15 @@ class LicenseManager(QWidget):
         self.plan = QComboBox()
         for k, label in lic.PLANS.items():
             self.plan.addItem(label, k)
-        self.plan.setCurrentIndex(1)
         f.addRow("الباقة:", self.plan)
         self.terminals = QSpinBox()
         self.terminals.setRange(0, 99)
-        self.terminals.setValue(3)
         self.terminals.setSpecialValueText("غير محدود")
+        from core import plans as _plans
+        self.plan.currentIndexChanged.connect(
+            lambda _: self.terminals.setValue(_plans.TERMINALS.get(self.plan.currentData(), 1)))
+        self.plan.setCurrentIndex(1)
+        self.terminals.setValue(_plans.TERMINALS["pro"])
         f.addRow("عدد أجهزة الكاشير:", self.terminals)
         exp = QHBoxLayout()
         self.has_exp = QCheckBox("اشتراك ينتهي بتاريخ:")

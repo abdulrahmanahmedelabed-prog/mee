@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
                   backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders,
-                  wallets, financial_audit, payroll, installments, branches)
+                  wallets, financial_audit, payroll, installments, branches, assistant, forecast, seasons, zakat)
 
 PROTOCOL_VERSION = 2
 
@@ -30,7 +30,8 @@ MODULES = {"products": products, "sales": sales, "customers": customers, "suppli
            "settings": settings, "auth": auth, "ledger": ledger, "cheques": cheques, "promotions": promotions,
            "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights,
            "orders": orders, "wallets": wallets, "financial_audit": financial_audit,
-           "payroll": payroll, "installments": installments, "branches": branches}
+           "payroll": payroll, "installments": installments, "branches": branches, "assistant": assistant,
+           "forecast": forecast, "seasons": seasons, "zakat": zakat}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -46,6 +47,8 @@ LOCAL_ONLY = {
     "license": {"normalize_machine", "sign", "verify_signature", "make_key", "parse_key"},
     "wallets": {"all_wallets", "get", "names", "to_json", "presets", "qr_text"},
     "financial_audit": {"report_html", "benford"},
+    "assistant": {"norm", "parse_period", "previous_period", "detect"},
+    "zakat": {"report_html"},
 }
 
 # صلاحيات يتحقق منها الخادم نفسه (لا نعتمد على الواجهة وحدها: جهاز فرعي معدّل قد يرسل أي طلب)
@@ -67,7 +70,15 @@ REQUIRED_PERMISSION = {
     ("payroll", "list_employees"): "expenses", ("payroll", "history"): "expenses",
     ("installments", "create_plan"): "customers", ("installments", "cancel_plan"): "customers",
     ("branches", "consolidated"): "reports", ("branches", "add_branch_file"): "reports",
+    ("assistant", "answer"): "reports", ("forecast", "sales_forecast"): "reports", ("forecast", "cash_forecast"): "reports",
+    ("forecast", "stockouts"): "reports", ("seasons", "plan"): "reports", ("seasons", "upcoming"): "reports",
+    ("zakat", "compute"): "accounting",
 }
+# ميزات الباقات يتحقق منها الخادم أيضاً (جهاز فرعي لا يتجاوز باقة المحل)
+PLAN_FEATURE = {("assistant", "answer"): "ask", ("forecast", "sales_forecast"): "forecast",
+                ("forecast", "cash_forecast"): "forecast", ("seasons", "plan"): "seasons", ("zakat", "compute"): "zakat",
+                ("financial_audit", "run"): "audit", ("payroll", "pay_salary"): "payroll",
+                ("installments", "create_plan"): "installments", ("branches", "consolidated"): "branches"}
 
 
 def check_permission(key, user, args, kwargs):
@@ -82,6 +93,11 @@ def check_permission(key, user, args, kwargs):
     perm = REQUIRED_PERMISSION.get(key)
     if perm and not auth.has_permission(perm, user):
         raise PermissionError(f"ليست لديك صلاحية: {auth.PERMISSIONS.get(perm, perm)}")
+    feature = PLAN_FEATURE.get(key)
+    if feature:
+        from core import plans
+        if not plans.has(feature):
+            raise PermissionError(f"هذه الميزة متاحة في باقة {plans.NAMES[plans.required(feature)]} وما فوقها")
 # دوال مسموحة قبل تسجيل الدخول
 PUBLIC = {("settings", "all_values"), ("license", "reset_admin_password"), ("license", "machine_id")}
 
@@ -216,9 +232,33 @@ class Handler(BaseHTTPRequestHandler):
         except (PermissionError, ValueError, KeyError, TypeError) as e:
             self._send(200, {"error": i18n.tr(str(e))})
 
+    def _plan_locked(self, path):
+        """الواجهات الويب حسب الباقة: الجوال (بلس)، لوحة المالك والمتجر (برو)"""
+        from core import plans
+        feature = ("owner" if path.startswith("/owner") else "online" if path.startswith("/shop")
+                   else "mobile" if path.startswith("/m") else None)
+        if not feature or plans.has(feature):
+            return False
+        from core import i18n
+        tier = plans.required(feature)
+        name, _, _ = plans.FEATURES[feature]
+        page = (f"<!doctype html><html lang='ar' dir='rtl'><head><meta charset='utf-8'>"
+                f"<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
+                f"<body style='font-family:Tahoma,sans-serif;text-align:center;padding:60px 20px;color:#0F172A'>"
+                f"<div style='font-size:48px'>🔒</div><h2>{name}</h2>"
+                f"<p>هذه الميزة متاحة في باقة {plans.NAMES[tier]} وما فوقها.</p>"
+                f"<p style='color:#64748B'>اطلب الترقية من صاحب المحل: الإعدادات ← الترخيص والتفعيل.</p></body></html>")
+        if self.command == "POST":
+            self._send(200, {"error": i18n.tr(f"هذه الميزة متاحة في باقة {plans.NAMES[tier]} وما فوقها.")})
+        else:
+            self._html(200, i18n.tr_html(page))
+        return True
+
     def do_GET(self):
         from core import owner_web
         path = self.path.split("?", 1)[0].rstrip("/")
+        if self._plan_locked(path):
+            return
         if path == "/ping":
             self._send(200, {"ok": True, "shop": settings.get("shop_name"), "protocol": PROTOCOL_VERSION})
         elif path == "/owner":
@@ -239,6 +279,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"error": {"type": "NotFound", "message": "not found"}})
 
     def do_POST(self):
+        if self._plan_locked(self.path.split("?", 1)[0]):
+            return
         if self.path.split("?", 1)[0] == "/shop/order":
             from core import i18n
             try:

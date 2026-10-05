@@ -50,6 +50,9 @@ DEFAULTS = {
     "simple_mode": "0",               # الوضع المبسّط للدكاكين الصغيرة: يخفي الشاشات المتقدمة
     "shop_logo": "",                  # شعار المحل للطابعة الحرارية (رمادي، PNG بترميز base64)
     "shop_logo_color": "",            # الشعار الملوّن للشاشات وتقارير A4
+    "zakat_gold_price": "0",          # سعر غرام الذهب عيار 24 (لنصاب الزكاة)
+    "zakat_hawl_start": "",           # بداية حَوْل الزكاة (فارغ = أول عملية بيع)
+    "hijri_adjust": "0",              # تصحيح التقويم الهجري بالأيام (±1) حسب رؤية بلدك
     "online_store_delivery": "1",
     "online_store_delivery_fee": "0",
     "online_store_min_order": "0",

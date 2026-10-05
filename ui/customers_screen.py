@@ -312,6 +312,9 @@ class CustomersScreen(QWidget):
             open_whatsapp(self, whatsapp.reminder_link(c["id"]), installments.reminder_message(c["id"]))
 
     def installments(self):
+        from ui.plans_dialog import require
+        if not require(self, "installments"):
+            return
         c = self.need()
         if c:
             InstallmentsDialog(self, c).exec()

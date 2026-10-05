@@ -164,6 +164,10 @@ QLineEdit#bigSearch {
     font-size: 18px; padding: 14px 18px; border-radius: 18px; border: 1.5px solid #E4E7EC; background: white;
 }
 QLineEdit#bigSearch:focus { border: 2px solid #2563EB; }
+QLineEdit#askBox {
+    background: white; border: 1.5px solid #DCE7FF; border-radius: 18px; padding: 8px 16px; color: #101828;
+}
+QLineEdit#askBox:focus { border: 2px solid #7C3AED; }
 QDoubleSpinBox#bigMoney { font-size: 28px; font-weight: 700; padding: 10px; border-radius: 16px; }
 QComboBox::drop-down { border: none; width: 26px; }
 QComboBox QAbstractItemView {

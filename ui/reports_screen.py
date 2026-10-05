@@ -235,8 +235,12 @@ class ReportsScreen(QWidget):
             self.pl_table.set_rows([[k, float(v) if v is not None else ""] for k, v in rows],
                                    colors=[("#EFF6FF" if k.startswith("=") else None) for k, _ in rows])
         elif name == "الفروع":
-            from core import branches
+            from core import branches, plans
             import os
+            if not plans.has("branches"):            # باقة ماكس
+                self.branches_dir_lbl.setText("🔒 تقرير الفروع الموحّد متاح في باقة 👑 ماكس — اضغط «الباقات والترقية» أعلى الشاشة")
+                self.branch_table.set_rows([])
+                return
             d = settings.get("branches_dir")
             self.branches_dir_lbl.setText(("📁 " + os.path.basename(d.rstrip("/\\"))) if d else "لم يُحدَّد مجلد مشترك")
             self.branches_dir_lbl.setToolTip(d or "")

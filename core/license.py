@@ -2,12 +2,12 @@
 """
 الترخيص والتفعيل (لبيع البرنامج):
 
-- فترة تجربة مجانية كاملة المزايا (30 يوماً) تبدأ من أول تشغيل.
-- بعدها يحتاج البرنامج "مفتاح تفعيل" خاصاً بجهاز الزبون (رمز الجهاز) يصدره المطوّر بأداة tools/license_tool.py.
+- أول 30 يوماً من التشغيل: باقة «ماكس» كاملة مجاناً (انظر core/plans.py).
+- بعدها يعمل البرنامج على الباقة المجانية (البيع والمخزون والديون والتقارير الأساسية)، والترقية إلى
+  بلس/برو/ماكس بـ"مفتاح تفعيل" خاص بجهاز الزبون (رمز الجهاز) يصدره المطوّر بأداة tools/license_tool.py.
 - المفتاح موقّع رقمياً (RSA-SHA256): البرنامج يحمل المفتاح العام فقط، فلا يمكن توليد مفاتيح مزيفة
   بدون المفتاح الخاص الموجود عند المطوّر وحده.
-- عند انتهاء التجربة أو الاشتراك: يتوقف البيع فقط. التقارير والديون والنسخ الاحتياطي تبقى متاحة؛
-  لا نحتجز بيانات الزبون أبداً.
+- عند انتهاء الاشتراك المدفوع يعود للمجانية: لا يتوقف البيع ولا نحتجز بيانات الزبون أبداً.
 
 صيغة المفتاح: SA1.<بيانات base64>.<توقيع base64>
 البيانات: shop (اسم المحل)، machine (رمز الجهاز)، plan، terminals (0 = غير محدود)، expires (فارغ = دائم)، issued، id
@@ -23,11 +23,13 @@ from datetime import date, timedelta
 
 from core import db
 
+from core import plans as _plans
+
 TRIAL_DAYS = 30
-TRIAL_TERMINALS = 3
+TRIAL_TERMINALS = 0          # التجربة = ماكس: أجهزة غير محدودة
 PREFIX = "SA1"
-PLANS = {"basic": "الأساسية (جهاز واحد)", "pro": "الاحترافية (حتى 3 أجهزة)", "enterprise": "الشاملة (أجهزة غير محدودة)",
-         "subscription": "اشتراك شهري/سنوي"}
+# الباقات التي يصدر لها المطوّر مفاتيح (والقديمة basic/subscription/enterprise تبقى مقبولة)
+PLANS = {"plus": "⚡ بلس (جهازان)", "pro": "💎 برو (حتى 5 أجهزة)", "max": "👑 ماكس (أجهزة غير محدودة)"}
 
 try:
     from core.license_pubkey import PUBLIC_KEY
@@ -173,23 +175,28 @@ def status():
     today = _effective_today()
     mid = machine_id()
     out = {"machine_id": mid, "plan": None, "plan_label": None, "shop": None, "terminals": TRIAL_TERMINALS,
-           "expires": None, "days_left": None, "key_error": None}
+           "expires": None, "days_left": None, "key_error": None, "tier": _plans.MAX}
     key = db.get_meta("license_key")
     if key:
         try:
             data = parse_key(key)
             if normalize_machine(data.get("machine")) != mid:
                 raise LicenseError("مفتاح التفعيل لجهاز آخر")
-            out.update(plan=data.get("plan"), plan_label=PLANS.get(data.get("plan"), data.get("plan")),
-                       shop=data.get("shop"), terminals=int(data.get("terminals") or 0), expires=data.get("expires") or None)
+            tier = _plans.normalize(data.get("plan"))
+            terminals = data.get("terminals")
+            out.update(plan=data.get("plan"), tier=tier, plan_label=_plans.label(tier), shop=data.get("shop"),
+                       terminals=int(terminals) if terminals not in (None, "") else _plans.TERMINALS[tier],
+                       expires=data.get("expires") or None)
             if out["expires"]:
                 left = (date.fromisoformat(out["expires"]) - today).days
                 out["days_left"] = left
                 if left < 0:
-                    out.update(state="license_expired",
-                               message=f"انتهى الاشتراك بتاريخ {out['expires']}. البيع متوقف حتى التجديد؛ بقية البرنامج تعمل.")
+                    out.update(state="license_expired", tier=_plans.FREE, terminals=_plans.TERMINALS[_plans.FREE],
+                               plan_label=_plans.label(_plans.FREE),
+                               message=f"انتهى اشتراك باقة {_plans.NAMES[tier]} بتاريخ {out['expires']}. "
+                                       f"البرنامج يعمل الآن بالباقة المجانية؛ جدّد لتعود ميزاتك.")
                     return out
-            out.update(state="licensed", message=f"نسخة مفعّلة — {out['plan_label']}" +
+            out.update(state="licensed", message=f"باقة {_plans.NAMES[tier]} مفعّلة" +
                        (f" حتى {out['expires']}" if out["expires"] else " (دائمة)"))
             return out
         except (LicenseError, ValueError, KeyError) as e:
@@ -197,21 +204,24 @@ def status():
     left = TRIAL_DAYS - (today - _install_date()).days
     out["days_left"] = left
     if left > 0:
-        out.update(state="trial", message=f"نسخة تجريبية — متبقٍ {left} يوماً")
+        out.update(state="trial", plan_label=_plans.label(_plans.MAX),
+                   message=f"🎁 تجربة باقة ماكس كاملة — متبقٍ {left} يوماً")
     else:
-        out.update(state="expired", terminals=1,
-                   message="انتهت الفترة التجريبية. البيع متوقف حتى التفعيل؛ التقارير والبيانات متاحة.")
+        out.update(state="free", tier=_plans.FREE, terminals=_plans.TERMINALS[_plans.FREE],
+                   plan_label=_plans.label(_plans.FREE),
+                   message="الباقة المجانية: البيع والمخزون والديون والتقارير الأساسية. رقِّ لتفتح المستشار الذكي "
+                           "والمحاسبة والتدقيق والقوى الخارقة.")
     return out
 
 
 def can_sell():
-    return status()["state"] in ("licensed", "trial")
+    """البيع متاح دائماً (الباقة المجانية تبيع)"""
+    return True
 
 
 def require_active():
-    st = status()
-    if st["state"] not in ("licensed", "trial"):
-        raise LicenseError(st["message"] + "\nللتفعيل: الإعدادات ← الترخيص والتفعيل.")
+    """لم يعد البيع يتوقف عند انتهاء التجربة أو الاشتراك (يعود للمجانية). تبقى للتوافق مع الاستدعاءات القديمة."""
+    return None
 
 
 def activate(key):

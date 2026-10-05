@@ -5,7 +5,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel, QPushButton,
-                               QStackedWidget, QButtonGroup, QDialog, QScrollArea)
+                               QStackedWidget, QButtonGroup, QDialog, QScrollArea, QLineEdit)
 
 from core import auth, settings, shifts, backup, config, remote, license, vendor
 from ui.widgets import button, ask
@@ -32,13 +32,15 @@ from ui.orders_screen import OrdersScreen
 from ui.help_screen import HelpScreen
 from ui.audit_screen import AuditScreen
 from ui.payroll_screen import PayrollScreen
+from ui.smart_screen import SmartScreen
 
 VERSION = vendor.VERSION
 # تُخفى في الوضع المبسّط (تظهر عند إلغائه من الإعدادات)
-ADVANCED_PAGES = {"insights", "orders", "reorder", "promotions", "cheques", "accounting", "audit", "payroll"}
+ADVANCED_PAGES = {"insights", "orders", "reorder", "promotions", "cheques", "accounting", "audit", "payroll", "smart"}
 
 PAGES = [
     ("dashboard", "🏠   لوحة التحكم", ("dashboard",), DashboardScreen),
+    ("smart", "✨   القوى الخارقة", ("reports",), SmartScreen),
     ("insights", "🤖   المستشار الذكي", ("reports",), InsightsScreen),
     ("pos", "🧾   نقطة البيع", ("pos",), POSScreen),
     ("orders", "🛵   الطلبات الأونلاين", ("pos",), OrdersScreen),
@@ -225,6 +227,16 @@ class MainWindow(QMainWindow):
         titles.addWidget(self.greeting)
         tl.addLayout(titles)
         tl.addStretch()
+        # «اسأل محلك» من أي شاشة (Ctrl+K)
+        self.ask_box = QLineEdit()
+        self.ask_box.setObjectName("askBox")
+        self.ask_box.setPlaceholderText("✨ اسأل محلك…  (Ctrl+K)")
+        self.ask_box.setMinimumWidth(60)          # يتقلص ثم يختفي على الشاشات الضيقة (لا يفرض عرضاً على النافذة)
+        self.ask_box.setMaximumWidth(320)
+        self.ask_box.returnPressed.connect(self.ask_shop)
+        tl.addWidget(self.ask_box)
+        from PySide6.QtGui import QShortcut, QKeySequence
+        QShortcut(QKeySequence("Ctrl+K"), self, activated=lambda: (self.ask_box.setFocus(), self.ask_box.selectAll()))
         self.shift_chip = QLabel()
         self.shift_chip.setCursor(Qt.PointingHandCursor)
         self.shift_chip.mousePressEvent = lambda e: self.go("cash")
@@ -244,6 +256,13 @@ class MainWindow(QMainWindow):
         _iq.set_raw_text(self.lang_btn, "🌐 English" if _i18n.is_rtl() else "🌐 العربية")
         self.lang_btn.setToolTip("تغيير لغة الواجهة فوراً")
         self.lang_btn.clicked.connect(lambda: self.switch_language())
+        self.plan_chip = QPushButton()
+        self.plan_chip.setObjectName("ghostBtn")
+        self.plan_chip.setCursor(Qt.PointingHandCursor)
+        self.plan_chip.setToolTip("باقتك — اضغط لمقارنة الباقات")
+        self.plan_chip.clicked.connect(lambda: self.open_plans())
+        self.plan_chip.setMinimumWidth(40)
+        tl.addWidget(self.plan_chip)
         tl.addWidget(self.lang_btn)
         self.theme_btn = QPushButton()
         self.theme_btn.setObjectName("secondaryBtn")
@@ -262,7 +281,7 @@ class MainWindow(QMainWindow):
         self.license_lbl.setObjectName("licenseText")
         self.license_lbl.setWordWrap(True)
         lb.addWidget(self.license_lbl, 1)
-        lb.addWidget(button("🔑 تفعيل البرنامج", "warnBtn", self.open_license))
+        lb.addWidget(button("💎 الباقات والترقية", "warnBtn", self.open_plans))
         lwrap = QHBoxLayout()
         lwrap.setContentsMargins(24, 4, 24, 4)
         lwrap.addWidget(self.license_bar)
@@ -288,6 +307,10 @@ class MainWindow(QMainWindow):
             self.page_holders[key] = holder
             self.stack.addWidget(holder)
         self.pages["orders"]                  # تراقب الطلبات الجديدة في الخلفية
+        from ui.plans_dialog import LockedPanel
+        self.locked = LockedPanel()
+        self.locked.upgrade.connect(self.open_plans)
+        self.stack.addWidget(self.locked)
         self._rail = None
         self.setMinimumSize(760, 520)
 
@@ -307,6 +330,7 @@ class MainWindow(QMainWindow):
             holder.setWidget(w)
         signals = {"pos": [("sale_completed", self.update_header)], "cash": [("shift_changed", self.update_header)],
                    "dashboard": [("navigate", self.go)], "insights": [("navigate", self.go)],
+                   "smart": [("navigate", self.go)],
                    "orders": [("load_into_pos", self.order_to_pos), ("new_orders", self.on_new_orders)]}
         for sig, slot in signals.get(key, []):
             getattr(w, sig).connect(slot)
@@ -332,14 +356,25 @@ class MainWindow(QMainWindow):
             self.go("pos" if u["role"] == "cashier" else (first or "pos"))
 
     def refresh_nav(self):
-        """إظهار الشاشات حسب الصلاحيات، وإخفاء المتقدمة في الوضع المبسّط"""
+        """إظهار الشاشات حسب الصلاحيات، وإخفاء المتقدمة في الوضع المبسّط، وقفل 🔒 لما ليس في الباقة"""
+        from core import plans
         simple = settings.get_bool("simple_mode")
+        tier = plans.current()
         first = None
+        self.locked_pages = set()
         for key, label, perms, _ in PAGES:
             allowed = any(auth.has_permission(p) for p in perms) and not (simple and key in ADVANCED_PAGES)
-            self.nav_buttons[key].setVisible(allowed)
-            if allowed and first is None:
+            b = self.nav_buttons[key]
+            b.setVisible(allowed)
+            locked = not plans.page_allowed(key, tier)
+            if locked:
+                self.locked_pages.add(key)
+            full = f"{label}  🔒" if locked else label
+            if not (key == "orders" and getattr(self, "_orders_count", 0)):
+                b.setProperty("full_label", full)
+            if allowed and not locked and first is None:
                 first = key
+        self._apply_nav_texts()
         return first
 
     def update_header(self):
@@ -420,16 +455,45 @@ class MainWindow(QMainWindow):
             st = license.status()
         except Exception:
             self.license_bar.hide()
+            self.plan_chip.hide()
             return
-        show = st["state"] != "licensed" or (st["days_left"] is not None and st["days_left"] <= 15)
+        from core import plans
+        tier = st.get("tier") or plans.FREE
+        chip = (f"{plans.label(tier)} • تجربة {st['days_left']} يوماً" if st["state"] == "trial" else plans.label(tier))
+        self.plan_chip.setText(chip)
+        self.plan_chip.setStyleSheet(f"color:{plans.COLORS[tier]}; font-weight:700;")
+        self.plan_chip.setVisible(self.width() >= 1000)
+        days = st["days_left"]
+        show = (st["state"] in ("free", "license_expired") or bool(st.get("key_error"))
+                or (days is not None and days <= (7 if st["state"] == "trial" else 15)))
         self.license_bar.setVisible(show)
-        if st["state"] in ("expired", "license_expired"):
+        if st["state"] == "license_expired":
             self.license_bar.setStyleSheet("QFrame#licenseBar { background:#FEF3F2; border:1px solid #FECDCA; }")
             self.license_lbl.setStyleSheet("color:#B42318; font-weight:700;")
+        elif st["state"] == "free":
+            self.license_bar.setStyleSheet("QFrame#licenseBar { background:#EEF4FF; border:1px solid #DCE7FF; }")
+            self.license_lbl.setStyleSheet("color:#1D4ED8; font-weight:600;")
         text = st["message"]
         if vendor.VENDOR_PHONE:
             text += f"   —   للتفعيل والدعم: {vendor.VENDOR_NAME} {vendor.VENDOR_PHONE}"
-        self.license_lbl.setText("🔑 " + text)
+        self.license_lbl.setText(("💎 " if st["state"] in ("free", "trial") else "🔑 ") + text)
+
+    def ask_shop(self):
+        text = self.ask_box.text().strip()
+        if not text:
+            return
+        self.ask_box.clear()
+        from core import plans
+        if not plans.has("ask"):
+            self.open_plans("ask")
+            return
+        self.go("smart")
+        if self.current_key == "smart":
+            self.pages["smart"].ask(text)
+
+    def open_plans(self, feature=None):
+        from ui.plans_dialog import PlansDialog
+        PlansDialog(self, feature if isinstance(feature, str) else None).exec()
 
     def open_license(self):
         if not auth.has_permission("settings"):
@@ -451,10 +515,15 @@ class MainWindow(QMainWindow):
             return
         self.current_key = key
         self.nav_buttons[key].setChecked(True)
+        b = self.nav_buttons[key]
+        self.page_title.setText(next(lbl for k, lbl, _, _ in PAGES if k == key).split("   ")[-1])
+        if key in getattr(self, "locked_pages", ()):          # ليست في الباقة: شرح الميزة وزر الترقية
+            from core import plans
+            self.locked.show_feature(plans.PAGE_FEATURE[key])
+            self.stack.setCurrentWidget(self.locked)
+            return
         w = self.pages[key]
         self.stack.setCurrentWidget(self.page_holders[key])
-        b = self.nav_buttons[key]
-        self.page_title.setText((b.property("full_label") or b.text()).split("   ")[-1].split(" (")[0])
         if hasattr(w, "refresh"):
             w.refresh()
 
@@ -485,6 +554,8 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.set_rail(self.width() < self.RAIL_WIDTH)
+        self.ask_box.setVisible(self.width() >= 1180)        # الشاشات الضيقة: من شاشة القوى الخارقة أو Ctrl+K
+        self.plan_chip.setVisible(self.width() >= 1000 and bool(self.plan_chip.text()))
 
     def set_rail(self, rail):
         if rail == self._rail:
@@ -497,13 +568,17 @@ class MainWindow(QMainWindow):
         self.role_lbl.setVisible(not rail)
         self.pw_btn.setVisible(not rail)
         self.uwrap.setContentsMargins(*((6, 8, 6, 0) if rail else (12, 8, 12, 0)))
+        self._apply_nav_texts()
+
+    def _apply_nav_texts(self):
+        rail = bool(self._rail)
         for key, label, _, _ in PAGES:
             b = self.nav_buttons[key]
             full = b.property("full_label") or label
             b.setProperty("full_label", full)
             if rail:
-                b.setText(full.split("   ")[0] + (f" {self._orders_count}" if key == "orders" and
-                                                    getattr(self, "_orders_count", 0) else ""))
+                b.setText(full.split("   ")[0] + (" 🔒" if full.endswith("🔒") else "")
+                          + (f" {self._orders_count}" if key == "orders" and getattr(self, "_orders_count", 0) else ""))
                 b.setToolTip(full)
                 b.setStyleSheet("text-align: center; padding: 11px 0; font-size: 18px;")
             else:

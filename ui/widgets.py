@@ -102,7 +102,7 @@ class Table(QTableWidget):
                     item = SortItem(str(val), val)
                     item.setTextAlignment(Qt.AlignCenter)
                 elif isinstance(val, tuple):  # (نص, قيمة ترتيب)
-                    item = SortItem(i18n.tr(val[0]), val[1])
+                    item = SortItem(i18n.tr(str(val[0])), val[1])
                     item.setTextAlignment(Qt.AlignCenter)
                 else:
                     item = SortItem("" if val is None else i18n.tr(str(val)))

@@ -216,15 +216,19 @@ def keys(monkeypatch):
 
 def test_license_trial_activation_and_expiry(keys):
     tool, private = keys
+    from core import plans
     st = license.status()
     assert st["state"] == "trial" and st["days_left"] == license.TRIAL_DAYS
+    assert st["tier"] == plans.MAX and st["terminals"] == 0           # أول شهر: ماكس كاملة
+    assert plans.has("ask") and plans.has("branches")
     pid = products.add_product("سكر", "900", "", 3, 4, 100, 0)
-    # انتهاء التجربة يوقف البيع فقط
+    # انتهاء التجربة: الباقة المجانية — البيع لا يتوقف، والميزات المتقدمة تُقفل
     db.set_meta("install_date", d(-40))
-    assert license.status()["state"] == "expired"
-    with pytest.raises(SaleError):
-        sales.create_sale([item(pid, 1, 4)])
-    assert reports.profit_and_loss(db.today(), db.today())["invoice_count"] == 0  # التقارير تعمل
+    st = license.status()
+    assert st["state"] == "free" and st["tier"] == plans.FREE and st["terminals"] == 1
+    sales.create_sale([item(pid, 1, 4)])
+    assert reports.profit_and_loss(db.today(), db.today())["invoice_count"] == 1
+    assert plans.has("pos") and not plans.has("insights") and not plans.has("accounting") and not plans.has("ask")
     # مفتاح لجهاز آخر مرفوض
     other, _ = tool.issue(private, "AAAA-BBBB-CCCC-DDDD", "محل آخر")
     with pytest.raises(license.LicenseError):
@@ -236,15 +240,23 @@ def test_license_trial_activation_and_expiry(keys):
         license.activate(body[0] + "." + body[1][:-2] + "AA." + body[2])
     st = license.activate(good)
     assert st["state"] == "licensed" and st["terminals"] == 3 and st["shop"] == "سوبرماركت الأمل"
+    assert st["tier"] == plans.PRO and plans.has("accounting") and plans.has("insights") and not plans.has("ask")
     sales.create_sale([item(pid, 1, 4)])
-    # اشتراك منتهٍ
-    sub, _ = tool.issue(private, license.machine_id(), "x", "subscription", 1, d(5))
+    # المفاتيح القديمة تبقى صالحة: basic ← بلس، enterprise ← ماكس
+    license.activate(tool.issue(private, license.machine_id(), "x", "basic", 1)[0])
+    assert license.status()["tier"] == plans.PLUS and plans.has("insights") and not plans.has("accounting")
+    license.activate(tool.issue(private, license.machine_id(), "x", "enterprise", 0)[0])
+    assert license.status()["tier"] == plans.MAX and plans.has("ask")
+    # اشتراك منتهٍ: يعود للمجانية ويستمر البيع
+    sub, _ = tool.issue(private, license.machine_id(), "x", "max", 0, d(5))
     license.activate(sub)
     assert license.status()["state"] == "licensed"
     db.set_meta("last_seen_date", d(10))   # الساعة تقدمت (أو أُرجعت للوراء بعد ذلك)
-    assert license.status()["state"] == "license_expired"
+    st = license.status()
+    assert st["state"] == "license_expired" and st["tier"] == plans.FREE and st["terminals"] == 1
+    sales.create_sale([item(pid, 1, 4)])
     with pytest.raises(license.LicenseError):
-        license.activate(tool.issue(private, license.machine_id(), "x", "subscription", 1, d(-1))[0])
+        license.activate(tool.issue(private, license.machine_id(), "x", "pro", 1, d(-1))[0])
 
 
 def test_remote_permission_checks():
