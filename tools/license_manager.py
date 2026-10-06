@@ -20,12 +20,21 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDateEdit, QF
 from core import license as lic  # noqa: E402
 from tools import license_tool as lt  # noqa: E402
 
+# ألوان فاتحة ثابتة: واضحة حتى لو كان ويندوز على الوضع المظلم
 STYLE = """
-QWidget { font-size: 14px; }
-QPushButton { padding: 8px 16px; border-radius: 8px; background: #E2E8F0; }
-QPushButton#main { background: #16A34A; color: white; font-weight: bold; }
-QLineEdit, QTextEdit, QComboBox, QSpinBox, QDateEdit { padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px; }
-QLabel#status { padding: 12px; border-radius: 10px; font-weight: bold; }
+QWidget { font-size: 14px; color: #0F172A; background: #F8FAFC; }
+QTabWidget::pane { border: 1px solid #CBD5E1; border-radius: 8px; background: #FFFFFF; }
+QTabBar::tab { padding: 8px 14px; background: #E2E8F0; color: #0F172A; border-radius: 6px; margin: 2px; }
+QTabBar::tab:selected { background: #FFFFFF; font-weight: bold; }
+QPushButton { padding: 8px 16px; border-radius: 8px; background: #E2E8F0; color: #0F172A; border: 1px solid #CBD5E1; }
+QPushButton:hover { background: #CBD5E1; }
+QPushButton#main { background: #16A34A; color: white; font-weight: bold; border: none; }
+QPushButton#main:hover { background: #15803D; }
+QLineEdit, QTextEdit, QComboBox, QSpinBox, QDateEdit { padding: 6px; border: 1px solid #CBD5E1; border-radius: 6px;
+    background: #FFFFFF; color: #0F172A; }
+QTableWidget { background: #FFFFFF; color: #0F172A; gridline-color: #E2E8F0; }
+QHeaderView::section { background: #E2E8F0; color: #0F172A; padding: 4px; border: none; }
+QLabel#status { padding: 12px; border-radius: 10px; font-weight: bold; color: #0F172A; }
 """
 
 
@@ -153,9 +162,13 @@ class LicenseManager(QWidget):
         builtin = lt.builtin_public() is not None
         if state == "none" and builtin:
             state = "import"            # البرنامج مجهّز بمفتاح: استورد ملفه الخاص بدل إنشاء مفتاح جديد
+        elif state == "mismatch" and builtin:
+            state = "wrong"             # على الجهاز مفتاح قديم لا يطابق البرنامج: الحل استيراد الملف الصحيح
         self.keys_btn.setVisible(state == "none")
-        self.import_btn.setVisible(state in ("none", "import"))
+        self.import_btn.setVisible(state in ("none", "import", "wrong"))
         texts = {
+            "wrong": ("#FEF3C7", "على هذا الكمبيوتر مفتاح قديم لا يطابق البرنامج المنشور. اضغط «📥 استيراد مفتاحي» واختر "
+                                 "ملف private_key.json الصحيح (يُحفظ القديم باسم آخر ولا يُحذف)."),
             "import": ("#FEF3C7", "الخطوة الأولى (مرة واحدة): اضغط «📥 استيراد مفتاحي» واختر ملف private_key.json الذي "
                                   "وصلك. البرنامج مجهّز بمفتاحه العام، فلا تنشئ مفتاحاً جديداً."),
             "none": ("#FEF3C7", "الخطوة الأولى (مرة واحدة في حياتك): اضغط «إنشاء مفاتيحي». بعدها ابنِ نسخة البرنامج "
@@ -169,7 +182,7 @@ class LicenseManager(QWidget):
         color, text = texts[state]
         self.status.setText(text)
         self.status.setStyleSheet(f"background:{color};")
-        if state in ("missing", "mismatch"):
+        if state in ("missing", "mismatch") and not getattr(sys, "frozen", False):
             self.keys_btn.setText("🛠 إصلاح")
             self.keys_btn.setVisible(True)
         self.load_log()
@@ -278,6 +291,15 @@ class LicenseManager(QWidget):
 
 def main():
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    from PySide6.QtGui import QPalette, QColor
+    pal = QPalette()
+    for role, color in ((QPalette.Window, "#F8FAFC"), (QPalette.WindowText, "#0F172A"), (QPalette.Base, "#FFFFFF"),
+                        (QPalette.Text, "#0F172A"), (QPalette.Button, "#E2E8F0"), (QPalette.ButtonText, "#0F172A"),
+                        (QPalette.PlaceholderText, "#64748B"), (QPalette.Highlight, "#2563EB"),
+                        (QPalette.HighlightedText, "#FFFFFF")):
+        pal.setColor(role, QColor(color))
+    app.setPalette(pal)
     app.setLayoutDirection(Qt.RightToLeft)
     f = QFont()
     f.setFamilies(["Segoe UI", "Tahoma", "Noto Sans Arabic"])

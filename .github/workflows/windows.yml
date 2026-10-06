@@ -43,6 +43,15 @@ jobs:
         run: python -m pytest tests -q
       - name: Build EXE
         run: python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --hidden-import tools.demo_data --add-data "i18n;i18n" --add-data "docs;docs" --add-data "ui/fonts;ui/fonts" main.py
+      - name: Build License Manager (vendor tool, single EXE)
+        run: python -m PyInstaller --noconfirm --onefile --windowed --name LicenseManager --paths . --hidden-import core.license_pubkey --workpath build/lm --distpath dist/lm tools/license_manager.py
+      - name: Smoke test (License Manager starts)
+        shell: pwsh
+        run: |
+          $p = Start-Process dist\lm\LicenseManager.exe -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { throw "LicenseManager.exe exited early (code $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
       - name: Smoke test (the EXE starts)
         shell: pwsh
         run: |
@@ -86,6 +95,7 @@ jobs:
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item (Get-ChildItem dist\installer\*.exe | Select-Object -First 1).FullName release\ShopAccounting-Setup.exe
           Compress-Archive -Path dist\ShopAccounting -DestinationPath release\ShopAccounting-Portable.zip
+          Copy-Item dist\lm\LicenseManager.exe release\LicenseManager.exe
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         with:
@@ -96,11 +106,13 @@ jobs:
           files: |
             release/ShopAccounting-Setup.exe
             release/ShopAccounting-Portable.zip
+            release/LicenseManager.exe
           body: |
             ## تحميل البرنامج
             - **ويندوز:** `ShopAccounting-Setup.exe` — ملف التثبيت (الموصى به).
             - **ويندوز بدون تثبيت:** `ShopAccounting-Portable.zip` — فك الضغط وشغّل `ShopAccounting.exe`.
             - **أندرويد:** `ShopPOS-android.apk` — تطبيق الجوال للموظفين وصاحب المحل.
+            - **للمزوّد فقط:** `LicenseManager.exe` — مدير التفعيل لإصدار مفاتيح الزبائن (لا يعمل إلا بملف المفتاح الخاص للمزوّد، ولا يحتاجه أصحاب المحلات).
 
             عند التثبيت قد يظهر «ويندوز حمى جهازك»: اضغط «معلومات إضافية» ← «تشغيل على أي حال».
             بعد التثبيت افتح «نسخة التدريب» من قائمة ابدأ للتجربة (الدخول admin / admin).

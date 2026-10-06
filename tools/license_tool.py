@@ -150,16 +150,21 @@ def pubkey_status(key_dir=None):
     if not os.path.exists(priv_path):
         return False, "none"
     private = json.load(open(priv_path))
-    try:
-        text = open(PUBKEY_FILE, encoding="utf-8").read()
-    except OSError:
+    builtin = builtin_public()
+    if builtin is None:
         return False, "missing"
-    ok = f"'n': {private['n']}," in text
+    ok = builtin == int(private["n"])
     return ok, "ok" if ok else "mismatch"
 
 
 def builtin_public():
-    """المفتاح العام المبني داخل البرنامج (أو None)"""
+    """المفتاح العام المبني داخل البرنامج (أو None). في نسخة exe يُقرأ من البرنامج نفسه"""
+    if getattr(sys, "frozen", False):
+        try:
+            from core.license_pubkey import PUBLIC_KEY
+            return int(PUBLIC_KEY["n"])
+        except Exception:
+            return None
     try:
         text = open(PUBKEY_FILE, encoding="utf-8").read()
     except OSError:
@@ -184,6 +189,14 @@ def import_private(src, key_dir=None):
         raise ValueError("هذا المفتاح لا يطابق المفتاح المبني داخل البرنامج")
     os.makedirs(key_dir, exist_ok=True)
     dst = os.path.join(key_dir, "private_key.json")
+    if os.path.exists(dst):                      # مفتاح قديم مختلف: لا يُحذف أبداً، يُحفظ باسم آخر
+        try:
+            old = json.load(open(dst))
+        except (OSError, ValueError):
+            old = {}
+        if int(old.get("n") or 0) != n:
+            from datetime import datetime
+            os.replace(dst, os.path.join(key_dir, f"private_key.old-{datetime.now():%Y%m%d-%H%M%S}.json"))
     with open(dst, "w") as f:
         json.dump({"n": n, "e": e, "d": d}, f)
     try:
