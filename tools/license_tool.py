@@ -158,6 +158,41 @@ def pubkey_status(key_dir=None):
     return ok, "ok" if ok else "mismatch"
 
 
+def builtin_public():
+    """المفتاح العام المبني داخل البرنامج (أو None)"""
+    try:
+        text = open(PUBKEY_FILE, encoding="utf-8").read()
+    except OSError:
+        return None
+    import re
+    m = re.search(r"'n':\s*(\d+)", text)
+    return int(m.group(1)) if m else None
+
+
+def import_private(src, key_dir=None):
+    """نسخ ملف المفتاح الخاص (من نسخة احتياطية أو أرسله لك المطوّر) إلى مجلد المفاتيح بعد التأكد أنه يطابق البرنامج"""
+    key_dir = key_dir or DEFAULT_DIR
+    try:
+        private = json.load(open(src, encoding="utf-8"))
+        n, e, d = int(private["n"]), int(private["e"]), int(private["d"])
+    except (OSError, ValueError, KeyError, TypeError):
+        raise ValueError("هذا ليس ملف مفتاح خاص صالح (private_key.json)")
+    if pow(pow(12345, e, n), d, n) != 12345:
+        raise ValueError("ملف المفتاح تالف")
+    pub = builtin_public()
+    if pub is not None and pub != n:
+        raise ValueError("هذا المفتاح لا يطابق المفتاح المبني داخل البرنامج")
+    os.makedirs(key_dir, exist_ok=True)
+    dst = os.path.join(key_dir, "private_key.json")
+    with open(dst, "w") as f:
+        json.dump({"n": n, "e": e, "d": d}, f)
+    try:
+        os.chmod(dst, 0o600)
+    except OSError:
+        pass
+    return dst
+
+
 def init_keys(key_dir=None, bits=2048):
     """ينشئ زوج المفاتيح إن لم يوجد، ويكتب المفتاح العام داخل البرنامج. يرجع True إن أنشأ مفتاحاً جديداً"""
     key_dir = key_dir or DEFAULT_DIR

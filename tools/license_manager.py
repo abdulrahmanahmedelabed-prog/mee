@@ -49,6 +49,10 @@ class LicenseManager(QWidget):
         self.keys_btn.setObjectName("main")
         self.keys_btn.clicked.connect(self.create_keys)
         row.addWidget(self.keys_btn)
+        self.import_btn = QPushButton("📥 استيراد مفتاحي (ملف private_key.json)")
+        self.import_btn.setObjectName("main")
+        self.import_btn.clicked.connect(self.import_key)
+        row.addWidget(self.import_btn)
         folder = QPushButton("📂 فتح مجلد المفاتيح (لأخذ نسخة احتياطية)")
         folder.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(self.key_dir)))
         row.addWidget(folder)
@@ -146,8 +150,14 @@ class LicenseManager(QWidget):
     # ------------------------------------------------------------------ الحالة
     def refresh(self):
         ok, state = lt.pubkey_status(self.key_dir)
+        builtin = lt.builtin_public() is not None
+        if state == "none" and builtin:
+            state = "import"            # البرنامج مجهّز بمفتاح: استورد ملفه الخاص بدل إنشاء مفتاح جديد
         self.keys_btn.setVisible(state == "none")
+        self.import_btn.setVisible(state in ("none", "import"))
         texts = {
+            "import": ("#FEF3C7", "الخطوة الأولى (مرة واحدة): اضغط «📥 استيراد مفتاحي» واختر ملف private_key.json الذي "
+                                  "وصلك. البرنامج مجهّز بمفتاحه العام، فلا تنشئ مفتاحاً جديداً."),
             "none": ("#FEF3C7", "الخطوة الأولى (مرة واحدة في حياتك): اضغط «إنشاء مفاتيحي». بعدها ابنِ نسخة البرنامج "
                                 "(build_exe.bat) لتقبل المفاتيح التي تصدرها من هنا."),
             "ok": ("#DCFCE7", f"✓ مفاتيحك جاهزة، والبرنامج مجهّز بها. النسخ التي تبنيها من هذا المجلد تقبل مفاتيحك.\n"
@@ -164,6 +174,21 @@ class LicenseManager(QWidget):
             self.keys_btn.setVisible(True)
         self.load_log()
         return ok
+
+    def import_key(self):
+        from PySide6.QtWidgets import QFileDialog
+        path, _ = QFileDialog.getOpenFileName(self, "اختر ملف المفتاح الخاص", os.path.expanduser("~"),
+                                              "private_key.json (*.json)")
+        if not path:
+            return
+        try:
+            dst = lt.import_private(path, self.key_dir)
+        except ValueError as e:
+            QMessageBox.warning(self, "المفتاح", str(e))
+            return
+        self.refresh()
+        QMessageBox.information(self, "تم", f"✓ استُورد مفتاحك إلى:\n{dst}\n\nتستطيع الآن إصدار مفاتيح التفعيل للزبائن.\n"
+                                            "احتفظ بنسخة من الملف الأصلي في مكان آمن.")
 
     def create_keys(self):
         self.keys_btn.setEnabled(False)

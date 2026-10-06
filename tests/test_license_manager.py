@@ -40,3 +40,23 @@ def test_license_manager_issues_valid_keys(tmp_path, monkeypatch):
     w.make_reset()
     r = lic.parse_key(w.reset_out.toPlainText(), {"n": pub["n"], "e": pub["e"]}, prefix=lic.RESET_PREFIX)
     assert r["type"] == "reset" and r["machine"] == "ABCD-1234-EF56-7890"
+
+
+def test_import_private_key_matches_builtin(tmp_path, monkeypatch):
+    import json
+    import pytest
+    monkeypatch.setattr(lt, "PUBKEY_FILE", str(tmp_path / "license_pubkey.py"))
+    pub, priv = lt.generate_keypair(1024)
+    lt.write_pubkey(pub)
+    src = tmp_path / "private_key.json"
+    src.write_text(json.dumps(priv))
+    dst = lt.import_private(str(src), str(tmp_path / "keys"))
+    assert lt.pubkey_status(str(tmp_path / "keys")) == (True, "ok") and os.path.exists(dst)
+    _, other = lt.generate_keypair(1024)
+    bad = tmp_path / "other.json"
+    bad.write_text(json.dumps(other))
+    with pytest.raises(ValueError):
+        lt.import_private(str(bad), str(tmp_path / "k2"))
+    bad.write_text("{}")
+    with pytest.raises(ValueError):
+        lt.import_private(str(bad), str(tmp_path / "k3"))
