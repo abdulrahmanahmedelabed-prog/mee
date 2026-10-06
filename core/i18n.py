@@ -8,7 +8,8 @@
 - نصوص ثابتة: تطابق تام من i18n/en.json
 - نصوص f-string: قوالب مثل "الرصيد: {0}" ← "Balance: {0}" (والقيم داخلها تُترجم أيضاً إن كانت نصوصاً معروفة)
 - نص من عدة أسطر: كل سطر على حدة
-- ما لا يُعرف (أسماء أصناف وعملاء): يبقى كما هو
+- ما لا يُعرف من البيانات (أسماء أصناف وفئات وعملاء قصيرة): الاسم الإنجليزي الذي كتبه صاحب المحل،
+  وإلا ترجمة تلقائية بالقاموس (core/product_names.py)
 """
 
 import json
@@ -115,7 +116,17 @@ def _translate(text):
     runs = re.findall(_RUN, text)
     if runs and all(r.strip() in _EXACT for r in runs):
         return re.sub(_RUN, lambda mm: mm.group(0).replace(mm.group(0).strip(), _EXACT[mm.group(0).strip()]), text)
-    return text
+    try:
+        from core import product_names
+        out = product_names.english(text)
+    except Exception:
+        out = None
+    return out or text
+
+
+def clear_cache():
+    """بعد تغيير اسم إنجليزي لصنف"""
+    _CACHE.clear()
 
 
 _RUN = r"[؀-ۿ][؀-ۿً-ٟ0-9% ()/،\-]*[؀-ۿ)]|[؀-ۿ]"

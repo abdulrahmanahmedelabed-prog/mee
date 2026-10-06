@@ -17,7 +17,7 @@ def _clean_barcode(barcode):
 
 def add_product(name, barcode=None, category="", cost_price=0, sale_price=0, quantity=0, min_quantity=0,
                 unit="قطعة", plu_code=None, is_weighted=False, is_favorite=False, opening_expiry=None,
-                wholesale_price=0):
+                wholesale_price=0, name_en=None):
     name = (name or "").strip()
     if not name:
         raise ValueError("اسم المنتج مطلوب")
@@ -35,6 +35,8 @@ def add_product(name, barcode=None, category="", cost_price=0, sale_price=0, qua
               unit or "قطعة", plu_code, 1 if is_weighted else 0, 1 if is_favorite else 0, db.now(), db.now(),
               money(wholesale_price or 0)))
         pid = cur.lastrowid
+        if name_en is not None:
+            conn.execute("UPDATE products SET name_en=? WHERE id=?", ((name_en or "").strip() or None, pid))
         if quantity:
             _move_stock(conn, pid, quantity, "رصيد افتتاحي", expiry_date=opening_expiry)
     return pid
@@ -58,7 +60,7 @@ def _check_unique(conn, barcode, plu_code, exclude_id=None):
 
 
 def update_product(product_id, name, barcode, category, cost_price, sale_price, min_quantity, unit,
-                   plu_code=None, is_weighted=False, is_favorite=False, wholesale_price=None):
+                   plu_code=None, is_weighted=False, is_favorite=False, wholesale_price=None, name_en=None):
     name = (name or "").strip()
     if not name:
         raise ValueError("اسم المنتج مطلوب")
@@ -75,6 +77,8 @@ def update_product(product_id, name, barcode, category, cost_price, sale_price, 
               unit or "قطعة", plu_code, 1 if is_weighted else 0, 1 if is_favorite else 0, db.now(), product_id))
         if wholesale_price is not None:
             conn.execute("UPDATE products SET wholesale_price=? WHERE id=?", (money(wholesale_price), product_id))
+        if name_en is not None:
+            conn.execute("UPDATE products SET name_en=? WHERE id=?", ((name_en or "").strip() or None, product_id))
         if old and unit_cost(old["cost_price"]) != unit_cost(cost_price) and old["quantity"] > 0:
             # إعادة تقييم البضاعة الموجودة بالتكلفة الجديدة: الفرق خسارة (أو مكسب) حتى تبقى قيمة المخزون في الدفاتر
             # مطابقة لقيمته الفعلية
@@ -192,8 +196,9 @@ def get_all_products(active_only=True, search=None, category=None, low_only=Fals
     if search:
         words = search.split()
         for w in words:
-            cond.append("(name LIKE ? OR barcode LIKE ? OR plu_code = ? OR id IN (SELECT product_id FROM product_units WHERE barcode LIKE ?))")
-            params += [f"%{w}%", f"{w}%", w.lstrip("0"), f"{w}%"]
+            cond.append("(name LIKE ? OR name_en LIKE ? OR barcode LIKE ? OR plu_code = ? "
+                        "OR id IN (SELECT product_id FROM product_units WHERE barcode LIKE ?))")
+            params += [f"%{w}%", f"%{w}%", f"{w}%", w.lstrip("0"), f"{w}%"]
     if category:
         cond.append("category = ?")
         params.append(category)
@@ -205,6 +210,23 @@ def get_all_products(active_only=True, search=None, category=None, low_only=Fals
         sql += " WHERE " + " AND ".join(cond)
     sql += " ORDER BY name COLLATE NOCASE"
     return db.query(sql, params)
+
+
+def english_names():
+    """{الاسم العربي: الاسم الإنجليزي} للأصناف التي كتب لها صاحب المحل اسماً إنجليزياً"""
+    return {r[0]: r[1] for r in db.query(
+        "SELECT name, name_en FROM products WHERE name_en IS NOT NULL AND name_en != ''")}
+
+
+def fill_english_names(overwrite=False):
+    """يملأ الاسم الإنجليزي الفارغ لكل الأصناف بالترجمة التلقائية (لمراجعتها وتعديلها). يرجع عدد الأصناف"""
+    from core import product_names
+    rows = db.query("SELECT id, name, name_en FROM products WHERE is_active=1")
+    todo = [(product_names.auto_translate(r["name"]), r["id"]) for r in rows
+            if overwrite or not (r["name_en"] or "").strip()]
+    with db.tx() as conn:
+        conn.executemany("UPDATE products SET name_en=? WHERE id=?", todo)
+    return len(todo)
 
 
 def get_categories():

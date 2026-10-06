@@ -577,6 +577,22 @@ CREATE TABLE IF NOT EXISTS online_orders (
     updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS fixed_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    cost REAL NOT NULL,
+    salvage REAL NOT NULL DEFAULT 0,
+    purchase_date TEXT NOT NULL,
+    life_months INTEGER NOT NULL,
+    paid_from TEXT,                  -- حساب الدفع (NULL = مسجّل مسبقاً في الدفاتر، بلا قيد شراء)
+    disposed_at TEXT,
+    disposal_proceeds REAL NOT NULL DEFAULT 0,
+    disposal_account TEXT,
+    note TEXT,
+    user_id INTEGER,
+    created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -588,6 +604,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 # أعمدة أُضيفت في النسخة الثانية (تُضاف تلقائياً لقواعد بيانات النسخة الأولى)
 ADDED_COLUMNS = {
+    "audit_log": [("chain", "TEXT")],                # ختم كل سطر في سجل العمليات (core/integrity.py)
     "products": [
         ("is_service", "INTEGER NOT NULL DEFAULT 0"),  # خدمة بلا مخزون (رسوم توصيل، تغليف...)
         ("plu_code", "TEXT"),                       # رمز الميزان للمنتجات الموزونة
@@ -595,6 +612,7 @@ ADDED_COLUMNS = {
         ("is_favorite", "INTEGER NOT NULL DEFAULT 0"),  # يظهر كزر سريع في نقطة البيع
         ("updated_at", "TEXT"),
         ("wholesale_price", "REAL NOT NULL DEFAULT 0"),   # سعر الجملة (0 = لا يوجد)
+        ("name_en", "TEXT"),                        # الاسم بالإنجليزية (اختياري؛ وإلا ترجمة تلقائية)
     ],
     "customers": [
         ("address", "TEXT"),
@@ -628,6 +646,7 @@ ADDED_COLUMNS = {
         ("points_redeemed", "REAL NOT NULL DEFAULT 0"),  # نقاط ولاء مستبدلة
         ("points_value", "REAL NOT NULL DEFAULT 0"),     # قيمتها (جزء من discount)
         ("points_earned", "REAL NOT NULL DEFAULT 0"),
+        ("seal", "TEXT"),                           # ختم ضد العبث (core/integrity.py)
     ],
     "invoice_items": [
         ("returned_qty", "REAL NOT NULL DEFAULT 0"),

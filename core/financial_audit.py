@@ -725,12 +725,85 @@ def check_integrity(c):
     return [_ok(A_CONTROL, "سلامة ملف البيانات", "فحص سلامة قاعدة البيانات لم يجد أي تلف.")]
 
 
+# ---------------------------------------------------------------------------
+# 10) المحاسب الآلي: الختم ضد العبث، قفل الفترات، الإقفال الشهري، الأصول الثابتة
+# ---------------------------------------------------------------------------
+
+def check_tamper(c):
+    """سلسلة بصمات الفواتير وسجل العمليات: تكشف أي تعديل أو حذف مباشر في ملف البيانات"""
+    from core import integrity
+    n_inv, bad_inv = integrity.verify_invoices()
+    n_log, bad_log = integrity.verify_audit_log()
+    out = []
+    if bad_inv:
+        out.append(_f(A_CONTROL, "عبث في الفواتير من خارج البرنامج", "critical",
+                      f"{len(bad_inv)} فاتورة لا يطابق ختمها بياناتها: عُدّلت أو حُذفت مباشرة في ملف البيانات.",
+                      "قارن بآخر نسخة احتياطية سليمة، وراجع من يملك الوصول إلى جهاز المحل.", count=len(bad_inv),
+                      samples=[f"{num}: {why}" for num, why in bad_inv]))
+    if bad_log:
+        out.append(_f(A_CONTROL, "عبث في سجل العمليات", "critical",
+                      f"{len(bad_log)} سطراً في سجل العمليات لا يطابق ختمه: حُذف أو عُدّل لإخفاء عملية.",
+                      "قارن بآخر نسخة احتياطية سليمة، وراجع من يملك الوصول إلى جهاز المحل.", count=len(bad_log),
+                      samples=[f"#{i}: {why}" for i, why in bad_log]))
+    if not out:
+        out.append(_ok(A_CONTROL, "ختم البيانات ضد العبث",
+                       f"{n_inv} فاتورة و{n_log} سطراً في سجل العمليات مختومة بسلسلة بصمات سليمة."))
+    return out
+
+
+def check_locked_period(c):
+    """قيود أو مصاريف بتاريخ داخل فترة مقفلة أُضيفت بعد القفل (تجاوز للقفل من خارج البرنامج)"""
+    from core import accountant
+    lock = accountant.locked_until()
+    if not lock:
+        return []
+    when = db.scalar("SELECT MAX(created_at) FROM audit_log WHERE action='قفل الدفاتر'")
+    if not when:
+        return []
+    rows = db.query("""SELECT entry_number AS ref, entry_date AS d FROM journal_entries
+                       WHERE entry_date <= ? AND created_at > ?
+                       UNION ALL SELECT 'EXP-' || id, expense_date FROM expenses WHERE expense_date <= ? AND created_at > ?""",
+                    (lock, when, lock, when))
+    if rows:
+        return [_f(A_BOOKS, "تسجيلات داخل فترة مقفلة", "high",
+                   f"{len(rows)} قيداً/مصروفاً بتاريخ قبل {lock} أُضيف بعد قفل الدفاتر.",
+                   "الفترة المقفلة لا تُعدَّل؛ سجّل التصحيح بتاريخ اليوم.", count=len(rows),
+                   samples=[f"{r['ref']} بتاريخ {r['d']}" for r in rows])]
+    return [_ok(A_BOOKS, "قفل الفترات", f"الدفاتر مقفلة حتى {lock} ولم يُسجَّل شيء داخلها بعد القفل.")]
+
+
+def check_month_close(c):
+    from core import accountant
+    st = accountant.status()
+    pending = st["pending"]
+    if len(pending) >= 2:
+        return [_f(A_BOOKS, "أشهر منتهية لم تُقفل", "low",
+                   f"{len(pending)} شهراً انتهى ولم يُقفل. الإقفال يثبّت أرقامه ويمنع تعديلها لاحقاً.",
+                   "المحاسبة ← ✅ إقفال الشهر (ضغطة واحدة لكل شهر).", count=len(pending),
+                   samples=[f"{y}-{m:02d}" for y, m in pending])]
+    return []
+
+
+def check_fixed_assets(c):
+    book = c.balance(ledger.FIXED_ASSETS)
+    registered = db.scalar("SELECT COUNT(*) FROM fixed_assets WHERE disposed_at IS NULL") or 0
+    if book > 0.5 and not registered:
+        return [_f(A_BOOKS, "أصول ثابتة بلا إهلاك", "medium",
+                   f"في الدفاتر أصول ثابتة بقيمة {n(book)} بدون سجل أصول، فلا يُحسب إهلاكها وتظهر الأرباح أعلى من حقيقتها.",
+                   "المحاسبة ← الأصول الثابتة ← أضف كل أصل واختر «مسجّل مسبقاً في الدفاتر»؛ يُحسب إهلاكه شهرياً وحده.",
+                   amount=book)]
+    if registered:
+        return [_ok(A_BOOKS, "الأصول الثابتة", f"{registered} أصلاً مسجلاً ويُحسب إهلاكها شهرياً تلقائياً.")]
+    return []
+
+
 CHECKS = [check_integrity, check_books_balance, check_receivables, check_payables, check_inventory_value, check_impossible_balances,
           check_manual_entries, check_sequences, check_invoice_integrity, check_duplicate_refs, check_shifts, check_employee_advances,
           check_cash_refund_on_electronic, check_refunds_by_cashier, check_drawer_and_prices, check_discounts,
           check_below_cost, check_expired_stock, check_dead_stock, check_shrinkage, check_receivables_aging,
           check_credit_balances, check_installments, check_cheques, check_expense_duplicates, check_expense_spikes, check_benford,
-          check_margin_trend, check_cash_ratio, check_vat, check_deletions, check_backups, check_users]
+          check_margin_trend, check_cash_ratio, check_vat, check_deletions, check_backups, check_users,
+          check_tamper, check_locked_period, check_month_close, check_fixed_assets]
 
 
 def run(date_from, date_to, progress=None):

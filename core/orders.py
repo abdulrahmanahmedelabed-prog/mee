@@ -160,6 +160,8 @@ def store_page():
     t = i18n.tr
     cur = settings.get("currency_symbol") or ""
     products = catalog()
+    if not rtl:                         # أسماء الأصناف والفئات بالإنجليزية في واجهة المتجر الإنجليزية
+        products = [dict(p, name=t(p["name"]), category=t(p["category"] or "")) for p in products]
     cats = sorted({p["category"] for p in products if p["category"]})
     data = json.dumps(products, ensure_ascii=False).replace("</", "<\\/")
     delivery = settings.get_bool("online_store_delivery")

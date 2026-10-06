@@ -168,6 +168,161 @@ class AccountDialog(QDialog):
         super().accept()
 
 
+class AssetDialog(QDialog):
+    """إضافة أصل ثابت: يُحسب إهلاكه شهرياً وحده"""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        from core import accountant
+        self.setWindowTitle("أصل ثابت جديد")
+        lay = QFormLayout(self)
+        self.name = QLineEdit()
+        self.name.setPlaceholderText("مثل: ثلاجة عرض، جهاز كاشير، رفوف، سيارة توصيل")
+        self.cost = MoneySpin()
+        self.date = QDateEdit(calendarPopup=True)
+        self.date.setDisplayFormat("yyyy-MM-dd")
+        self.date.setDate(QDate.currentDate())
+        from PySide6.QtWidgets import QDoubleSpinBox
+        self.life = QDoubleSpinBox()
+        self.life.setRange(0.5, 50)
+        self.life.setDecimals(1)
+        self.life.setValue(5)
+        self.life.setSuffix(" سنة")
+        self.salvage = MoneySpin()
+        self.paid = QComboBox()
+        for code, label in accountant.PAY_SOURCES.items():
+            self.paid.addItem(label, code)
+        lay.addRow("الأصل:", self.name)
+        lay.addRow("التكلفة:", self.cost)
+        lay.addRow("تاريخ الشراء:", self.date)
+        lay.addRow("العمر الإنتاجي:", self.life)
+        lay.addRow("قيمته في النهاية (خردة):", self.salvage)
+        lay.addRow("طريقة الدفع:", self.paid)
+        lay.addRow("", hint("يُحسب الإهلاك شهرياً بالقسط الثابت ويُسجَّل في الدفاتر تلقائياً.\n"
+                            "أثاث ورفوف: 5-10 سنوات • أجهزة وكمبيوتر: 3-5 • ثلاجات: 5-8 • سيارات: 5"))
+        ok_cancel(self, lay)
+
+    def accept(self):
+        from core import accountant
+        try:
+            accountant.add_asset(self.name.text(), self.cost.value(), self.date.date().toString("yyyy-MM-dd"),
+                                 self.life.value(), self.salvage.value(), self.paid.currentData())
+        except ValueError as e:
+            warn(self, str(e))
+            return
+        super().accept()
+
+
+class DisposeDialog(QDialog):
+    def __init__(self, parent, asset):
+        super().__init__(parent)
+        self.asset = asset
+        self.setWindowTitle("بيع أو استبعاد أصل")
+        lay = QFormLayout(self)
+        self.date = QDateEdit(calendarPopup=True)
+        self.date.setDisplayFormat("yyyy-MM-dd")
+        self.date.setDate(QDate.currentDate())
+        self.proceeds = MoneySpin()
+        self.into = QComboBox()
+        for code, label in (("1110", "نقداً في الصندوق"), ("1120", "في البنك"), ("3120", "أخذها المالك")):
+            self.into.addItem(label, code)
+        lay.addRow("الأصل:", QLabel(asset["name"]))
+        lay.addRow("التاريخ:", self.date)
+        lay.addRow("ثمن البيع (0 إن تَلِف):", self.proceeds)
+        lay.addRow("استُلم الثمن:", self.into)
+        lay.addRow("", hint("الفرق بين ثمن البيع وقيمته الدفترية يُسجَّل ربحاً أو خسارة تلقائياً."))
+        ok_cancel(self, lay)
+
+    def accept(self):
+        from core import accountant
+        try:
+            accountant.dispose_asset(self.asset["id"], self.date.date().toString("yyyy-MM-dd"), self.proceeds.value(),
+                                     self.into.currentData())
+        except ValueError as e:
+            warn(self, str(e))
+            return
+        super().accept()
+
+
+class CloseMonthDialog(QDialog):
+    """إقفال الشهر: تدقيق كامل، حزمة القوائم المالية، ثم قفل الدفاتر"""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        from core import accountant
+        self.setWindowTitle("إقفال الشهر")
+        self.setMinimumWidth(560)
+        lay = QVBoxLayout(self)
+        st = accountant.status()
+        lay.addWidget(title("✅ إقفال الشهر", "subTitle"))
+        lay.addWidget(hint("ما يفعله المحاسب والمدقق في نهاية كل شهر، بضغطة واحدة:\n"
+                           "1) تدقيق كامل لكل عمليات الشهر  2) قائمة الدخل والميزانية والتدفقات النقدية وإقرار الضريبة "
+                           "للطباعة  3) قفل الدفاتر حتى نهاية الشهر فلا يُضاف أو يُحذف شيء بتاريخ قديم."))
+        row = QHBoxLayout()
+        row.addWidget(QLabel("الشهر:"))
+        self.month = QComboBox()
+        for y, mth in reversed(st["pending"]):            # الأحدث أولاً؛ اختيار شهر يُقفل كل ما قبله أيضاً
+            self.month.addItem(f"{y}-{mth:02d}", (y, mth))
+        row.addWidget(self.month, 1)
+        lay.addLayout(row)
+        if len(st["pending"]) > 1:
+            lay.addWidget(hint(f"{len(st['pending'])} شهراً بانتظار الإقفال: اختيار شهر يُقفل كل الأشهر التي قبله معه."))
+        self.state = QLabel(f"الدفاتر مقفلة حتى: {st['locked_until'] or 'لم تُقفل بعد'}")
+        self.state.setObjectName("hint")
+        lay.addWidget(self.state)
+        self.result = QLabel("")
+        self.result.setWordWrap(True)
+        lay.addWidget(self.result)
+        btns = QHBoxLayout()
+        self.go = button("🔎 دقّق وأقفل", "successBtn", self.run)
+        self.go.setEnabled(self.month.count() > 0)
+        btns.addWidget(self.go)
+        if st["locked_until"]:
+            btns.addWidget(button("🔓 فتح آخر شهر مقفل", "secondaryBtn", self.reopen))
+        btns.addStretch()
+        btns.addWidget(button("إغلاق", "secondaryBtn", self.reject))
+        lay.addLayout(btns)
+        if not self.month.count():
+            self.result.setText("لا توجد أشهر منتهية تنتظر الإقفال. 👍")
+
+    def run(self):
+        from core import accountant
+        y, mth = self.month.currentData()
+        from PySide6.QtWidgets import QApplication
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            res = accountant.close_month(y, mth)
+        except ValueError as e:
+            QApplication.restoreOverrideCursor()
+            warn(self, str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        r = res["audit"]
+        if not res["closed"]:
+            crit = [f for f in r["findings"] if f["severity"] == "critical"]
+            msg = "المدقق وجد ملاحظات حرجة في هذا الشهر:\n" + "\n".join(f"• {f['title']}" for f in crit[:6]) + \
+                  "\n\nالأفضل معالجتها أولاً (التدقيق المالي يشرح كل واحدة). هل تريد الإقفال رغم ذلك؟"
+            if not ask(self, msg):
+                return
+            res = accountant.close_month(y, mth, force=True)
+        a, b = res["date_from"], res["date_to"]
+        self.result.setText(f"✓ أُقفلت الدفاتر حتى {b}. رأي المدقق: {r['opinion']} — الدرجة {r['score']}/100.")
+        html = accountant.package_html(a, b, r, settings.get("shop_name"))
+        printing.print_html(self, html, width_mm=210, preview=True)
+        self.accept()
+
+    def reopen(self):
+        from core import accountant, auth
+        lock = accountant.locked_until()
+        if not lock or not ask(self, f"فتح الشهر المقفل الأخير (حتى {lock})؟ يُسجَّل ذلك في سجل العمليات."):
+            return
+        d = QDate.fromString(lock, "yyyy-MM-dd")
+        prev_end = QDate(d.year(), d.month(), 1).addDays(-1).toString("yyyy-MM-dd")
+        accountant.unlock_books(prev_end if prev_end >= "2000" else None)
+        info(self, "فُتح الشهر. أقفله من جديد بعد التصحيح.")
+        self.reject()
+
+
 class AccountingScreen(QWidget):
     KEEP_ON_THEME = True          # تبديل السمة يعيد تلوينها دون إعادة الحساب
     def __init__(self):
@@ -191,6 +346,14 @@ class AccountingScreen(QWidget):
         head.addWidget(button("📤 تصدير", "secondaryBtn", self.export_current))
         head.addWidget(button("🖨 طباعة", "secondaryBtn", self.print_current))
         lay.addLayout(head)
+        row2 = QHBoxLayout()
+        self.lock_lbl = QLabel("")
+        self.lock_lbl.setObjectName("hint")
+        row2.addWidget(self.lock_lbl)
+        row2.addStretch()
+        row2.addWidget(button("✅ إقفال الشهر", "secondaryBtn", self.close_month,
+                              "تدقيق الشهر كاملاً، طباعة القوائم المالية، وقفل الدفاتر حتى نهايته"))
+        lay.addLayout(row2)
 
         self.tabs = QTabWidget()
         self.tabs.currentChanged.connect(lambda _: self.load())
@@ -217,6 +380,16 @@ class AccountingScreen(QWidget):
         # 2) قائمة الدخل
         self.is_table = Table(["البند", "المبلغ"], stretch=0, sortable=False)
         self._add_tab(self.is_table, "قائمة الدخل", self.is_table)
+
+        # 2.5) قائمة التدفقات النقدية
+        cfw = QWidget()
+        cfl = QVBoxLayout(cfw)
+        cfl.setContentsMargins(0, 10, 0, 0)
+        self.cf_table = Table(["البند", "المبلغ"], stretch=0, sortable=False)
+        cfl.addWidget(self.cf_table, 1)
+        self.cf_note = hint("")
+        cfl.addWidget(self.cf_note)
+        self._add_tab(cfw, "التدفقات النقدية", self.cf_table)
 
         # 3) ميزان المراجعة
         tb = QWidget()
@@ -269,6 +442,21 @@ class AccountingScreen(QWidget):
         ml.addWidget(self.mj_table, 1)
         self._add_tab(mj, "القيود اليدوية", self.mj_table)
 
+        # 6.5) الأصول الثابتة والإهلاك التلقائي
+        fa = QWidget()
+        fl = QVBoxLayout(fa)
+        fl.setContentsMargins(0, 10, 0, 0)
+        row = QHBoxLayout()
+        row.addWidget(button("+ أصل ثابت", "successBtn", self.add_asset))
+        row.addWidget(button("💲 بيع/استبعاد الأصل المحدد", "secondaryBtn", self.dispose_asset))
+        row.addStretch()
+        fl.addLayout(row)
+        self.fa_table = Table(["الأصل", "تاريخ الشراء", "التكلفة", "العمر (شهر)", "القسط الشهري", "مجمع الإهلاك",
+                               "القيمة الدفترية", "الحالة"], stretch=0)
+        fl.addWidget(self.fa_table, 1)
+        fl.addWidget(hint("الإهلاك يُحسب ويُسجَّل في الدفاتر تلقائياً آخر كل شهر — لا تحتاج قيداً يدوياً."))
+        self._add_tab(fa, "الأصول الثابتة", self.fa_table)
+
         # 7) دليل الحسابات
         ca = QWidget()
         cl = QVBoxLayout(ca)
@@ -303,6 +491,14 @@ class AccountingScreen(QWidget):
     def load(self):
         a, b = self.range.range()
         name = self.tabs.tabText(self.tabs.currentIndex())
+        from core import accountant
+        try:
+            st = accountant.status()
+            lock = st["locked_until"]
+            self.lock_lbl.setText(("🔒 " + f"مقفلة حتى {lock}" if lock else "🔓 الدفاتر مفتوحة") +
+                                  (f" • {len(st['pending'])} شهر بانتظار الإقفال" if st["pending"] else ""))
+        except Exception:
+            self.lock_lbl.setText("")
         if name == "الميزانية العمومية":
             bs = ledger.balance_sheet(b)
             self.k_assets.set(m(bs["total_assets"]), f"في {b}")
@@ -340,6 +536,35 @@ class AccountingScreen(QWidget):
             rows += [("= مجموع المصروفات", s["total_expenses"]), ("", None), ("= صافي الربح (الدخل)", s["net_income"])]
             self.is_table.set_rows([[k, float(v) if v is not None else ""] for k, v in rows],
                                    colors=[("#EFF6FF" if k.startswith("=") else None) for k, _ in rows])
+        elif name == "التدفقات النقدية":
+            from core import accountant
+            cf = accountant.cash_flow(a, b)
+            rows, colors = [], []
+            for key, label, total_label in (
+                    ("operating", "التدفقات من التشغيل (البيع والشراء والمصاريف)", "= صافي التدفق من التشغيل"),
+                    ("investing", "التدفقات من الاستثمار (شراء وبيع الأصول)", "= صافي التدفق من الاستثمار"),
+                    ("financing", "التدفقات من التمويل (المالك والقروض)", "= صافي التدفق من التمويل")):
+                rows.append([label, ""])
+                colors.append("#E2E8F0")
+                for x in cf["sections"][key]:
+                    rows.append([f"    {x['name']}", float(x["amount"])])
+                    colors.append(None)
+                rows.append([total_label, float(cf["totals"][key])])
+                colors.append("#EFF6FF")
+            rows += [["النقد أول الفترة (الصندوق والبنك والمحافظ)", float(cf["cash_open"])],
+                     ["= صافي التغير في النقد", float(cf["net_change"])],
+                     ["النقد آخر الفترة", float(cf["cash_close"])]]
+            colors += [None, "#EFF6FF", "#DCFCE7" if cf["reconciled"] else "#FEE2E2"]
+            self.cf_table.set_rows(rows, colors=colors)
+            self.cf_note.setText("✓ التدفقات تطابق رصيد النقد الفعلي." if cf["reconciled"] else
+                                 "✗ التدفقات لا تطابق رصيد النقد — شغّل التدقيق المالي.")
+        elif name == "الأصول الثابتة":
+            from core import accountant
+            rows = accountant.list_assets()
+            self.fa_table.set_rows([[r["name"], r["purchase_date"], float(r["cost"]), r["life_months"],
+                                     float(r["monthly"]), float(r["accumulated"]), float(r["book_value"]),
+                                     (f"بيع في {r['disposed_at']}" if r["disposed_at"] else "قيد الاستخدام")]
+                                    for r in rows], rows)
         elif name == "ميزان المراجعة":
             tb = ledger.trial_balance(a, b)
             self.tb_table.set_rows([[r["code"], r["name"], float(r["opening"]), float(r["debit"]), float(r["credit"]),
@@ -392,6 +617,22 @@ class AccountingScreen(QWidget):
         for i in range(self.tabs.count()):
             if self.tabs.tabText(i) == "كشف حساب":
                 self.tabs.setCurrentIndex(i)
+
+    def close_month(self):
+        if require_permission(self, "accounting"):
+            CloseMonthDialog(self).exec()
+            self.load()
+
+    def add_asset(self):
+        if require_permission(self, "accounting") and AssetDialog(self).exec() == QDialog.Accepted:
+            info(self, "أُضيف الأصل، وسيُحسب إهلاكه شهرياً تلقائياً.")
+            self.load()
+
+    def dispose_asset(self):
+        r = self.fa_table.selected_data()
+        if r and not r["disposed_at"] and require_permission(self, "accounting") and \
+                DisposeDialog(self, r).exec() == QDialog.Accepted:
+            self.load()
 
     def template_entry(self):
         if require_permission(self, "accounting") and TemplateEntryDialog(self).exec() == QDialog.Accepted:

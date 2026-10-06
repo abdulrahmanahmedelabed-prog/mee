@@ -21,7 +21,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
                   backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders,
-                  wallets, financial_audit, payroll, installments, branches, assistant, forecast, seasons, zakat)
+                  wallets, financial_audit, payroll, installments, branches, assistant, forecast, seasons, zakat,
+                  accountant)
 
 PROTOCOL_VERSION = 2
 MAX_BODY = 20 * 1024 * 1024     # أكبر طلب مقبول من جهاز فرعي
@@ -32,7 +33,7 @@ MODULES = {"products": products, "sales": sales, "customers": customers, "suppli
            "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights,
            "orders": orders, "wallets": wallets, "financial_audit": financial_audit,
            "payroll": payroll, "installments": installments, "branches": branches, "assistant": assistant,
-           "forecast": forecast, "seasons": seasons, "zakat": zakat}
+           "forecast": forecast, "seasons": seasons, "zakat": zakat, "accountant": accountant}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -79,13 +80,15 @@ REQUIRED_PERMISSION = {
 PLAN_FEATURE = {("assistant", "answer"): "ask", ("forecast", "sales_forecast"): "forecast",
                 ("forecast", "cash_forecast"): "forecast", ("seasons", "plan"): "seasons", ("zakat", "compute"): "zakat",
                 ("financial_audit", "run"): "audit", ("payroll", "pay_salary"): "payroll",
-                ("installments", "create_plan"): "installments", ("branches", "consolidated"): "branches"}
+                ("installments", "create_plan"): "installments", ("branches", "consolidated"): "branches",
+                ("accountant", "close_month"): "accounting", ("accountant", "add_asset"): "accounting",
+                ("accountant", "daily_audit"): "audit"}
 
 
 # صلاحيات بقية الوظائف (يكفي أي واحدة منها). كل وحدة لها صلاحية افتراضية، والاستثناءات بالاسم.
 # الهدف: جهاز فرعي معدّل أو مستخدم يعرف رمز الربط لا يستطيع تنفيذ ما لا تسمح به صلاحياته.
 MODULE_PERMISSION = {
-    "ledger": ("accounting",), "financial_audit": ("accounting",), "zakat": ("accounting",),
+    "ledger": ("accounting",), "financial_audit": ("accounting",), "zakat": ("accounting",), "accountant": ("accounting",),
     "reports": ("reports",), "insights": ("reports",), "branches": ("reports",), "assistant": ("reports",),
     "forecast": ("reports",), "seasons": ("reports",),
     "cheques": ("cheques",), "expenses": ("expenses",), "payroll": ("expenses",),
@@ -99,7 +102,8 @@ FUNCTION_PERMISSION = {
     # المخزون
     **{("products", f): ("inventory",) for f in (
         "add_product", "update_product", "delete_product", "adjust_stock", "set_stock_count", "set_units",
-        "assign_internal_barcode", "next_internal_barcode", "write_off_batch", "stock_movements", "get_batches")},
+        "assign_internal_barcode", "next_internal_barcode", "write_off_batch", "stock_movements", "get_batches",
+        "fill_english_names")},
     ("products", "inventory_value"): ("inventory", "reports"),
     ("products", "expiring_batches"): ("inventory", "reports", "dashboard"),
     ("products", "get_low_stock_products"): ("inventory", "reports", "dashboard", "suppliers"),

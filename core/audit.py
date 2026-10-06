@@ -5,14 +5,18 @@ from core import db
 
 
 def log(action, details="", conn=None):
-    from core import auth
-    params = (auth.current_user_id(), action, details, db.now())
-    sql = "INSERT INTO audit_log(user_id, action, details, created_at) VALUES (?, ?, ?, ?)"
+    """كل سطر مختوم ببصمة تشمل السطر الذي قبله: حذفه أو تعديله من خارج البرنامج يكشفه المدقق"""
+    from core import auth, integrity
+    uid, now = auth.current_user_id(), db.now()
+    sql = "INSERT INTO audit_log(user_id, action, details, created_at, chain) VALUES (?, ?, ?, ?, ?)"
+
+    def write(c):
+        c.execute(sql, (uid, action, details, now, integrity.next_audit_chain(c, uid, action, details, now)))
     if conn is not None:
-        conn.execute(sql, params)
+        write(conn)
     else:
         with db.tx() as c:
-            c.execute(sql, params)
+            write(c)
 
 
 def recent(limit=300, date_from=None, date_to=None):

@@ -57,6 +57,18 @@ class PlanCard(QFrame):
         per = QLabel(period)
         per.setObjectName("hint")
         lay.addWidget(per)
+        eq = plans.GLOBAL_EQUIVALENT.get(tier)
+        if eq:
+            cap = QLabel("بدل سعر مثيله العالمي:")
+            cap.setObjectName("hint")
+            lay.addWidget(cap)
+            vs = QLabel(f"{eq[0]}  {eq[1]}")
+            vs.setObjectName("hint")
+            vs.setLayoutDirection(Qt.LeftToRight)
+            vs.setAlignment((Qt.AlignRight if self.layoutDirection() == Qt.RightToLeft else Qt.AlignLeft) | Qt.AlignVCenter)
+            vs.setStyleSheet("text-decoration: line-through;")
+            vs.setToolTip("أقل من نصف سعر المنتج العالمي المماثل في القوة")
+            lay.addWidget(vs)
         n = plans.TERMINALS[tier]
         dev = QLabel("🖥 " + ("أجهزة غير محدودة" if n == 0 else "جهاز واحد" if n == 1 else f"حتى {n} أجهزة"))
         dev.setStyleSheet("font-weight:600;")

@@ -159,6 +159,8 @@ class InventoryScreen(QWidget):
 
         head = QHBoxLayout()
         head.addStretch()
+        head.addWidget(button("🌐 الأسماء الإنجليزية", "secondaryBtn", self.english_names,
+                              "يكتب لكل صنف اسماً إنجليزياً تلقائياً (للواجهة والفواتير الإنجليزية) لتراجعه وتعدّله"))
         head.addWidget(button("📥 استيراد من Excel", "secondaryBtn", self.import_csv))
         head.addWidget(button("📤 تصدير إلى Excel", "secondaryBtn", self.export_csv))
         head.addWidget(button("+ منتج جديد", "successBtn", self.add_product))
@@ -289,6 +291,16 @@ class InventoryScreen(QWidget):
         if path:
             n = products.export_csv(path if path.endswith(".csv") else path + ".csv")
             info(self, f"تم تصدير {n} منتج. يمكنك فتح الملف في Excel وتعديله ثم استيراده مجدداً.")
+
+    def english_names(self):
+        if not ask(self, "كتابة اسم إنجليزي تلقائي لكل صنف ليس له اسم إنجليزي؟\n"
+                         "(يمكنك تعديل أي اسم من «تعديل» الصنف. الأسماء العربية لا تتغير)"):
+            return
+        from core import product_names
+        n = products.fill_english_names()
+        product_names.invalidate()
+        self.load()
+        info(self, f"تمت كتابة الاسم الإنجليزي لـ {n} صنف.")
 
     def import_csv(self):
         path, _ = QFileDialog.getOpenFileName(self, "استيراد منتجات", "", "CSV (*.csv)")

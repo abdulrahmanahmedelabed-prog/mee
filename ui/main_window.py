@@ -320,6 +320,14 @@ class MainWindow(QMainWindow):
         from core import updates
         threading.Thread(target=lambda: setattr(self, "_update_info", updates.check()), daemon=True).start()
         QTimer.singleShot(8000, self.show_update)
+        # المدقق اليومي التلقائي (على جهاز المحل الرئيسي): مرة في اليوم، في الخلفية، وتنبيه عند ملاحظة مهمة
+        self._auto_audit = None
+        self._audit_tries = 0
+        import sys
+        from core import remote
+        if not remote.is_client() and "pytest" not in sys.modules:
+            threading.Thread(target=self._run_auto_audit, daemon=True).start()
+            QTimer.singleShot(60000, self.show_audit_alert)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.tick)
         self._timer.start(15000)
@@ -503,6 +511,31 @@ class MainWindow(QMainWindow):
             return
         self.go("settings")
         self.pages["settings"].show_license_tab()
+
+    def _run_auto_audit(self):
+        import time
+        time.sleep(40)                     # بعد اكتمال فتح البرنامج
+        try:
+            from core import plans, accountant
+            if plans.has("audit"):
+                self._auto_audit = accountant.daily_audit()
+        except Exception:
+            pass
+
+    def show_audit_alert(self):
+        r = self._auto_audit
+        if r is None:
+            self._audit_tries += 1
+            if self._audit_tries < 10:
+                QTimer.singleShot(30000, self.show_audit_alert)
+            return
+        if not (r.get("critical") or r.get("high")) or not auth.has_permission("accounting"):
+            return
+        n = r.get("critical", 0) + r.get("high", 0)
+        b = button(f"🔎 المدقق اليومي: {n} ملاحظة مهمة", "dangerBtn" if r.get("critical") else "secondaryBtn",
+                   lambda: self.go("audit"), "\n".join(x["title"] for x in r.get("top", [])))
+        self.license_bar.layout().insertWidget(1, b)
+        self.license_bar.show()
 
     def tick(self):
         days = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]

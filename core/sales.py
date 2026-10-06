@@ -237,6 +237,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
             conn.execute("UPDATE invoices SET offline_ref=? WHERE id=?", (ref, invoice_id))
         if card_ref:
             conn.execute("UPDATE invoices SET card_ref=? WHERE id=?", (str(card_ref)[:120], invoice_id))
+        from core import integrity
+        integrity.seal_invoice(conn, invoice_id)          # ختم ضد العبث (سلسلة بصمات)
         if points_redeemed:
             loyalty._record(conn, customer_id, -points_redeemed, invoice_id, f"استبدال في الفاتورة {number}", user_id,
                             value=-disc["points_value"])

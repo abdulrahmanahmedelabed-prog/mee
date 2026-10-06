@@ -277,6 +277,9 @@ An expense paid from the drawer of a closed shift can't be deleted (its cash cou
 - **Journal and account statement:** sales appear as one entry per day (clearer). Tick "Show every invoice" to see each invoice.
 - **➕ Financial transaction:** capital, bank deposit, bank withdrawal, buying equipment, a loan and loan repayment, **offsetting input VAT and paying VAT due**, **depreciation of equipment and furniture**, and **bank fees**.
 - **Manual entries** are for the accountant only, and an entry can be voided (it stays visible as voided).
+- **Cash flow:** where cash came from and where it went (operations, assets, owner and loans); it always reconciles with the cash drawer, bank and wallets.
+- **Fixed assets:** **+ Fixed asset** → name, cost, purchase date, useful life (furniture 5–10 years, devices 3–5, fridges 5–8) and how it was paid. **Depreciation is calculated monthly and posted automatically.** If the asset was already recorded with a "Buy equipment" transaction, choose "Already in the books". When you sell it: **💲 Sell/dispose** and the gain or loss is calculated for you.
+- **✅ Close month** (at the start of each month): choose the month → **🔎 Audit and close**. The program audits the whole month, opens the **closing pack** to print (income statement, balance sheet, cash flow, VAT return, trial balance, the auditor's opinion), then **locks the books** up to the end of the month: no entry or expense dated inside it can be added or deleted. If there are critical findings it asks before closing. To reopen the last closed month for a correction: **🔓 Reopen last closed month** (recorded in the activity log).
 > Read "Accounting Made Simple" to understand the terms in plain language.
 
 ### 5.13.1 The financial audit (instead of an outside auditor)
@@ -285,7 +288,8 @@ An expense paid from the drawer of a closed shift can't be deleted (its cash cou
 - **Findings are ordered by severity:** critical → high → medium → low. Click any finding to see the details, examples and the suggested action.
 - Start with critical and high: for example a cash refund for an invoice paid by card, a transfer number used twice, or missing invoice numbers.
 - **🖨 Audit report:** a formal report to print or save as PDF, for a partner, the bank or your auditor.
-- **When?** At the end of every month, after every stock count, and before closing the year.
+- **When?** It runs **by itself every day** in the background on the last 30 days, and a red "🔎 Daily auditor" button appears at the top if it finds something important. Run it manually after every stock count and before closing the year.
+- **Tamper seal:** every invoice and every line of the activity log is sealed with a chained digital fingerprint. If anyone edits or deletes an invoice directly in the data file (outside the program), it shows up as a critical finding with the invoice number.
 > The audit sees everything recorded in the program, but not what was never recorded; physical stock counts and cash counts are still essential.
 
 ### 5.13.2 Superpowers ✨ (Max plan; zakat in Pro)
@@ -334,6 +338,7 @@ Each branch runs its own copy, and the owner sees all branches in one report:
 ### 5.16.1 Appearance and logo
 - **🌙 / ☀ at the top:** switches between dark and light mode instantly, on the same screen, without losing your cart or your work. In Settings → Shop details → **Appearance** you can also choose **Auto** to follow Windows. Each computer keeps its own look.
 - **🌐 العربية / English:** switches the language instantly; a "Switching…" message appears, then the same screen opens in the other language with your cart as it was.
+- **English item names:** in the English interface, item and category names are translated automatically ("حليب طازج 1 لتر" → Fresh Milk 1 L). To write a name yourself: edit the item → **English name**. To write names for all items at once for review: Inventory → **🌐 English names**. Search works with both names.
 - **Shop logo:** Settings → Shop details → **🖼 Choose logo**. It appears at once in the sidebar, on the login screen and the customer display, on the receipt (black and white), A4 reports, statements, payslips, installment schedules, the audit and zakat reports, and in the owner dashboard and the online store. A square PNG with a transparent or white background works best.
 
 ### 5.17 Settings that suit your shop

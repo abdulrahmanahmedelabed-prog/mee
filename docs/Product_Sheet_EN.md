@@ -33,7 +33,7 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 - **Training copy with 3 years of data** — a complete supermarket history to train staff and explore reports without touching real data.
 - **Multi-currency cash** — accept cash in other currencies at your exchange rate.
 - **Your data stays yours** — stored on your computer with daily backups and an optional cloud copy (Google Drive / OneDrive).
-- **Built-in financial auditor** — 33 audit procedures on every transaction (not a sample): ledger reconciliations, document sequence gaps, cashier fraud indicators (cash refunds on card sales, reused wallet references, repeated shortages), debt aging with a doubtful-debt allowance, Benford's law, data-file integrity. Gives a clean/qualified/adverse opinion, a score out of 100 and a printable report.
+- **Built-in financial auditor** — 37 audit procedures on every transaction (not a sample): ledger reconciliations, document sequence gaps, cashier fraud indicators (cash refunds on card sales, reused wallet references, repeated shortages), debt aging with a doubtful-debt allowance, Benford's law, data-file integrity. Gives a clean/qualified/adverse opinion, a score out of 100 and a printable report.
 - **Payroll** — monthly salaries, bonuses and deductions, advances deducted automatically from the next salary, printable payslips, all flowing into expenses, profit and the cash drawer.
 - **Customer installments** — split a customer's debt into a dated schedule; payments are applied to the oldest installment, overdue ones trigger advisor alerts and WhatsApp reminders.
 - **Branches & chains** — each branch works independently; the owner sees every branch and the total in one report, read from a shared Google Drive folder.
@@ -44,13 +44,13 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 | ![Dashboard](en_dashboard.png) | ![Accounting](en_accounting.png) |
 | ![Smart advisor](en_insights.png) | ![Owner phone dashboard](owner_mobile.png) |
 
-## Plans (suggested)
-| Plan | Tills | Monthly | Yearly | Perpetual | Adds |
-|---|---|---|---|---|---|
-| 🌱 Free | 1 | **$0 forever** | — | — | POS, inventory & expiry, customer/supplier debts, cards & e-wallets, shifts, reports & VAT, mobile price-check app |
-| ⚡ Plus | 2 | $15 | $149 | $299 | Smart advisor, smart reorder, offers & loyalty, cheques, installments, stock counting from phone |
-| 💎 Pro | 5 | $29 | $290 | $599 | Accounting & balance sheet, financial audit, payroll, online store, owner dashboard, zakat |
-| 👑 Max | unlimited | $49 | $490 | $999 | Ask your shop, forecasting, seasons planner, branches |
+## Plans (yearly, USD) — less than half the price of the matching global product
+| Plan | Tills | Per year | Matching global product (per year) | Adds |
+|---|---|---|---|---|
+| 🌱 Free | 1 | **$0 forever** | — | POS, inventory & expiry, customer/supplier debts, cards & e-wallets, shifts, reports & VAT, mobile price-check app |
+| ⚡ Plus | 2 | **$290** (≈ $24/mo) | Square Plus $588 | Smart advisor, smart reorder, offers & loyalty, cheques, installments, stock counting from phone |
+| 💎 Pro | 5 | **$890** (≈ $74/mo) | Lightspeed Retail Core $1,788 | Accounting & balance sheet, accountant autopilot, financial audit, payroll, online store, owner dashboard, zakat |
+| 👑 Max | unlimited | **$1,730** (≈ $144/mo) | Lightspeed Retail Plus $3,468 | Ask your shop, forecasting, seasons planner, branches |
 
 **First 30 days: the full Max plan, free.** Afterwards the program moves to Free — **selling never stops** and your data is never locked. See [how we compare](en/Competitor_Comparison.md) with 11 Arab and global products.
 

@@ -48,7 +48,8 @@ def logout(cookie_header):
 
 def _product_json(p):
     exp = products.expiry_status(p["id"])
-    return {"id": p["id"], "name": p["name"], "barcode": p["barcode"] or "", "price": p["sale_price"],
+    from core import i18n
+    return {"id": p["id"], "name": i18n.tr(p["name"]), "barcode": p["barcode"] or "", "price": p["sale_price"],
             "wholesale": p["wholesale_price"] or 0, "qty": p["quantity"], "unit": p["unit"] or "",
             "min": p["min_quantity"], "expiry": exp[0] if exp else ""}
 

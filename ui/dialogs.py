@@ -328,6 +328,9 @@ class ProductDialog(QDialog):
         side = QVBoxLayout()
         outer.addLayout(side, 1)
         self.name = QLineEdit()
+        self.name_en = QLineEdit()
+        self.name_en.setToolTip("يظهر في الواجهة الإنجليزية وفواتيرها. اتركه فارغاً لترجمة تلقائية")
+        self.name.textChanged.connect(self._suggest_en)
         self.barcode = QLineEdit(barcode_text)
         self.barcode.setPlaceholderText("امسح الباركود هنا أو اتركه فارغاً")
         bc_row = QHBoxLayout()
@@ -353,6 +356,7 @@ class ProductDialog(QDialog):
         self.fav = QCheckBox("زر سريع في شاشة البيع (للخبز والخضار وما لا باركود له)")
 
         lay.addRow("اسم المنتج:", self.name)
+        lay.addRow("الاسم بالإنجليزية:", self.name_en)
         lay.addRow("الباركود:", bc_row)
         lay.addRow("الفئة:", self.category)
         lay.addRow("الوحدة:", self.unit)
@@ -405,6 +409,7 @@ class ProductDialog(QDialog):
 
         if product:
             self.name.setText(product["name"])
+            self.name_en.setText(product["name_en"] if "name_en" in product.keys() and product["name_en"] else "")
             self.barcode.setText(product["barcode"] or "")
             self.category.setCurrentText(product["category"] or "")
             self.unit.setCurrentText(product["unit"] or "قطعة")
@@ -419,6 +424,11 @@ class ProductDialog(QDialog):
         self.saved_id = None
         (self.name if barcode_text or product else self.barcode).setFocus()
         self.update_margin()
+
+    def _suggest_en(self, text):
+        from core import product_names
+        auto = product_names.auto_translate(text.strip()) if text.strip() else ""
+        self.name_en.setPlaceholderText(f"تلقائي: {auto}" if auto else "اختياري — يُترجم تلقائياً")
 
     def update_margin(self):
         c, p = self.cost.value(), self.price.value()
@@ -465,7 +475,7 @@ class ProductDialog(QDialog):
                         cost_price=self.cost.value(), sale_price=self.price.value(), min_quantity=self.min_qty.value(),
                         unit=self.unit.currentText(), plu_code=self.plu.text() if self.weighted.isChecked() else None,
                         is_weighted=self.weighted.isChecked(), is_favorite=self.fav.isChecked(),
-                        wholesale_price=self.wholesale.value())
+                        wholesale_price=self.wholesale.value(), name_en=self.name_en.text())
             if self.product:
                 products.update_product(self.product["id"], **args)
                 self.saved_id = self.product["id"]
@@ -474,6 +484,8 @@ class ProductDialog(QDialog):
                 self.saved_id = products.add_product(quantity=self.qty.value(), opening_expiry=expiry, **args)
                 self.product = products.get_product(self.saved_id)  # حتى لا يُكرَّر المنتج إذا فشل حفظ الوحدات
             products.set_units(self.saved_id, self.units_data())
+            from core import product_names
+            product_names.invalidate()
         except ValueError as e:
             warn(self, str(e))
             return

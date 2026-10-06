@@ -11,11 +11,11 @@
 
 ---
 
-## 2. Monthly prices for a shop with one till
+## 2. Prices for a shop with one till (ours are yearly in USD; competitors as they advertise monthly)
 
 | Product | Type | Cheapest paid plan | Advanced plan | Free? |
 |---|---|---|---|---|
-| **Our program** | Desktop + local network, offline | **Plus ₪49 (~$13)** | Pro ₪99 (~$27) • Max ₪179 (~$48) | ✅ **Free forever** (sales, inventory, debts, reports) + **first month on full Max** |
+| **Our program** | Desktop + local network, offline | **Plus $290/year (≈ $24/mo)** | Pro $890/year (≈ $74) • Max $1,730/year (≈ $144) | ✅ **Free forever** (sales, inventory, debts, reports) + **first month on full Max** |
 | Loyverse | Cloud | App is free; add-ons: sales history $9, advanced inventory $25/store, employees $5/employee | — | ✅ Basic POS |
 | Square | Cloud | Plus $49/location + card fees | Premium $149/location | ✅ with 2.6% + 15¢ on every card |
 | Shopify POS | Cloud | Requires a Shopify plan + POS Pro $89/location | — | ❌ |
@@ -28,7 +28,15 @@
 | Foodics | Cloud (restaurants) | From ~$54 | Bundles from AED 392/month | ❌ |
 | Wafeq | Cloud accounting | Starter SAR 119 | Plus • Premium | ❌ |
 
-**Bottom line:** our **Pro** plan (accounting + audit + payroll + online store + zakat) costs less than the **cheapest** plan of most competitors, and our free plan does more than Loyverse's or Square's free tiers because it includes debts, expiry, reports and VAT with no commission on sales.
+### 2.1 Every plan at less than half the price of its global match
+
+| Our plan | Our yearly price | Matching global product | Its yearly price | Saving |
+|---|---|---|---|---|
+| ⚡ Plus (2 tills) | **$290** | Square for Retail Plus ($49 × 12) | $588 per location + card fees | **51%** |
+| 💎 Pro (5 tills) | **$890** | Lightspeed Retail Core ($149 × 12) | $1,788 — full accounting needs QuickBooks on top | **50%** or more |
+| 👑 Max (unlimited) | **$1,730** | Lightspeed Retail Plus ($289 × 12) | $3,468 | **50%** |
+
+**Bottom line:** every plan costs less than **half** of the matching global product and includes what none of them offer (the automated financial auditor, Ask your shop in Arabic dialect, Ramadan and zakat, fully offline). Our free plan does more than Loyverse's or Square's free tiers because it includes debts, expiry, reports and VAT with no commission on sales.
 
 ---
 
@@ -47,7 +55,7 @@
 | Local e-wallets and banking apps | ✅ | ❌ | ❌ | ❌ | ➖ | ➖ | ➖ | ➖ |
 | Expiry tracking by batch | ✅ | ❌ | ❌ | ➖ | ✅ | ➖ | ❌ | ✅ |
 | Double-entry accounting + balance sheet | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ➖ |
-| **Automated financial auditor** (33 procedures on every transaction) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Automated financial auditor** (37 procedures on every transaction) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Ask your shop** in plain language, offline (incl. Arabic dialect) | ✅ | ❌ | ➖ English, cloud | ➖ | ➖ | ❌ | ❌ | ❌ |
 | **Sales and cash-flow forecast** day by day | ✅ | ❌ | ❌ | ➖ | ➖ | ❌ | ❌ | ❌ |
 | **Ramadan and Eid planner** on the Hijri calendar | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -68,7 +76,7 @@
 1. **Selling never stops:** no internet? It works. Subscription ended? It returns to Free and keeps selling. Cloud competitors stop or restrict access when the subscription lapses.
 2. **No one else has the superpowers together:** Ask your shop in everyday language, cash-flow forecasting, the Hijri Ramadan planner, zakat, and the automated financial auditor.
 3. **Built for shops in the region:** debts, installments, post-dated cheques, local wallets, the Hijri calendar and zakat are part of the program, not "add-ons".
-4. **Price:** the full Pro plan costs less than most competitors' simplest plan, and Free takes no cut of your sales.
+4. **Price:** every plan costs less than half of the matching global product, and Free takes no cut of your sales.
 5. **Privacy:** your figures stay on your computer; no one else sees your sales or profit.
 
 ## 5. Where competitors lead (honestly)

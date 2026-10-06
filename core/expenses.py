@@ -11,6 +11,8 @@ def add_expense(category, amount, note="", from_drawer=True, expense_date=None, 
         raise ValueError("المبلغ يجب أن يكون أكبر من صفر")
     if not (category or "").strip():
         raise ValueError("اختر نوع المصروف")
+    from core import accountant
+    accountant.assert_open(expense_date or db.today(), "مصروف")
     if from_drawer:
         from core import shifts
         shift_id = shifts.cash_shift(shift_id)
@@ -25,6 +27,9 @@ def add_expense(category, amount, note="", from_drawer=True, expense_date=None, 
 def delete_expense(expense_id):
     with db.tx() as conn:
         e = conn.execute("SELECT * FROM expenses WHERE id=?", (expense_id,)).fetchone()
+        if e:
+            from core import accountant
+            accountant.assert_open(e["expense_date"], "حذف مصروف")
         if e and e["from_drawer"] and e["shift_id"]:
             s = conn.execute("SELECT status FROM shifts WHERE id=?", (e["shift_id"],)).fetchone()
             if s and s["status"] == "closed":

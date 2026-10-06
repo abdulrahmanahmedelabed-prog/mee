@@ -57,6 +57,7 @@ SYSTEM_ACCOUNTS = [
     (INVENTORY, "المخزون (البضاعة)", "asset"),
     (VAT_INPUT, "ضريبة مدخلات قابلة للخصم", "asset"),
     (FIXED_ASSETS, "أصول ثابتة (أثاث ومعدات)", "asset"),
+    ("1590", "مجمع إهلاك الأصول الثابتة (يُطرح من الأصول)", "asset"),
     (PAYABLES, "ذمم الموردين", "liability"),
     (CHEQUES_OUT, "شيكات صادرة مؤجلة", "liability"),
     (VAT, "ضريبة القيمة المضافة المستحقة", "liability"),
@@ -177,6 +178,8 @@ def add_manual_entry(entry_date, description, lines):
         clean.append((ln["account"], d, c, ln.get("note") or ""))
     if len(clean) < 2:
         raise ValueError("القيد يحتاج سطرين على الأقل (مدين ودائن)")
+    from core import accountant
+    accountant.assert_open(entry_date or db.today(), "قيد")
     td, tc = money(sum(x[1] for x in clean)), money(sum(x[2] for x in clean))
     if abs(td - tc) > 0.009:
         raise ValueError(f"القيد غير متوازن: المدين {td} والدائن {tc}")
@@ -200,6 +203,8 @@ def void_entry(entry_id):
         e = conn.execute("SELECT * FROM journal_entries WHERE id=?", (entry_id,)).fetchone()
         if not e:
             raise ValueError("القيد غير موجود")
+        from core import accountant
+        accountant.assert_open(e["entry_date"], "إلغاء قيد")
         conn.execute("UPDATE journal_entries SET is_void=1 WHERE id=?", (entry_id,))
         audit.log("إلغاء قيد يدوي", e["entry_number"], conn)
 
@@ -461,6 +466,10 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
             add(r["created_at"], f"L-{r['id']}", f"نقاط ولاء {r['name']}: {r['note'] or ''}".strip(), "loyalty",
                 _pair(LOYALTY_COST, LOYALTY, r["v"]))
 
+        # 12.5) الأصول الثابتة: الشراء والإهلاك الشهري التلقائي والبيع (المحاسب الآلي)
+        from core import accountant
+        out.extend(accountant.ledger_entries(date_from, date_to))
+
         # 13) القيود اليدوية
         for e in q("""SELECT * FROM journal_entries WHERE is_void=0 {cond}""", "entry_date"):
             lines = [(l["account_code"], money(l["debit"]), money(l["credit"]))
@@ -541,7 +550,7 @@ def _balances(date_from, date_to):
     تُحفظ النتيجة مؤقتاً حتى يتغير شيء في البيانات: فتح الميزانية وميزان المراجعة وقائمة الدخل
     للفترة نفسها (أو العودة لشاشة المحاسبة) يصبح فورياً مع سنوات من البيانات."""
     stamp = _data_stamp()
-    key = (date_from, date_to, db.today() if not date_to else None)
+    key = (date_from, date_to, db.today())          # الإهلاك الشهري يتبع التاريخ
     if stamp is not None:
         hit = _BAL_CACHE.get(key)
         if hit and hit[0] == stamp:
