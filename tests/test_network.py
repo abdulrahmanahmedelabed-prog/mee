@@ -141,6 +141,20 @@ def test_owner_page_and_server_side_permissions(server):
     res = json.loads(m.open(urllib.request.Request(base + "/m/api/count", data=json.dumps(
         {"product_id": pid, "counted": 7}).encode(), headers={"Content-Type": "application/json"})).read())
     assert res == {"diff": -3, "qty": 7}
+    # تبويبات التطبيق: الرئيسية، النواقص، الزبائن، الطلبات (وتجهيز الطلب من الجوال)
+    home = json.loads(m.open(base + "/m/api/home").read())
+    assert any(c["label"] == "مبيعات اليوم" for c in home["cards"])
+    assert isinstance(json.loads(m.open(base + "/m/api/low").read()), list)
+    assert isinstance(json.loads(m.open(base + "/m/api/customers?q=").read()), list)
+    olist = json.loads(m.open(base + "/m/api/orders").read())
+    assert olist[0]["customer"] == "Sam" and olist[0]["wa"].startswith("https://wa.me/")
+    res = json.loads(m.open(urllib.request.Request(base + "/m/api/order", data=json.dumps(
+        {"id": olist[0]["id"], "status": "ready"}).encode(), headers={"Content-Type": "application/json"})).read())
+    assert res["ok"] and orders.get_order(olist[0]["id"])["status"] == "ready"
+    res = json.loads(m.open(urllib.request.Request(base + "/m/api/order", data=json.dumps(
+        {"id": olist[0]["id"], "status": "done"}).encode(), headers={"Content-Type": "application/json"})).read())
+    assert "error" in res                                   # الإكمال بفاتورة من نقطة البيع فقط
+    assert "nav" in m.open(base + "/m").read().decode("utf-8")
     import urllib.error
     with pytest.raises(urllib.error.HTTPError):          # بدون تسجيل دخول
         urllib.request.urlopen(base + "/m/api/find?q=t77")

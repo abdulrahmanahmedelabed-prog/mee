@@ -94,7 +94,11 @@ def invoice_html(invoice_id, copy=False):
     body = _header() + "<hr>"
     if copy:
         body += "<div class='c'><b>*** نسخة ***</b></div>"
-    if settings.get_bool("einvoice_qr") and inv["tax"]:
+    einv_qr = None
+    if settings.get("einv_system"):
+        from core import einvoicing
+        einv_qr = einvoicing.receipt_qr_text(inv["id"])
+    if (settings.get_bool("einvoice_qr") or settings.get("einv_system")) and inv["tax"]:
         body += "<div class='c'><b>فاتورة ضريبية مبسطة</b></div>"
     body += (f"<div>فاتورة: <b>{inv['invoice_number']}</b></div><div>التاريخ: {inv['created_at']}</div>"
              f"<div>الكاشير: {escape(inv['cashier_name'] or inv['cashier'] or '-')}</div>")
@@ -106,7 +110,12 @@ def invoice_html(invoice_id, copy=False):
         body += f"<div class='c'>{escape(inv['note'].split('عروض:', 1)[1].strip())}</div><hr>"
     body += f"<div class='c'>{escape(settings.get('receipt_footer') or '')}</div>"
     body += f"<div class='c'>عدد الأصناف: {len(items)}</div>"
-    if settings.get_bool("einvoice_qr"):
+    if einv_qr:                                   # QR المرحلة الثانية (موقّع) أو QR منظومة JoFotara
+        from core import einvoice
+        uri = einvoice.qr_data_uri(einv_qr)
+        if uri:
+            body += f"<div class='c'><img src='{uri}' width='140' height='140'></div>"
+    elif settings.get_bool("einvoice_qr") or settings.get("einv_system") == "zatca":
         from core import einvoice
         uri = einvoice.invoice_qr(inv)
         if uri:

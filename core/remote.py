@@ -296,20 +296,21 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/m/logout":
             mobile_web.logout(self.headers.get("Cookie"))
             self._redirect("/m", f"{mobile_web.COOKIE}=; Max-Age=0; Path=/m; HttpOnly; SameSite=Strict")
-        elif path == "/m/api/find":
+        elif path.startswith("/m/api/"):
             if not user:
                 self._send(401, {"error": "login"})
                 return
-            q = parse_qs(urlparse(self.path).query).get("q", [""])[0]
-            with context.request(user, "جوال"):
-                self._send(200, to_json(mobile_web.find(q)))
-        elif path == "/m/api/ask":
-            if not user:
-                self._send(401, {"error": "login"})
+            fn = mobile_web.API_GET.get(path[len("/m/api/"):])
+            if not fn:
+                self._send(404, {"error": "not found"})
                 return
-            q = parse_qs(urlparse(self.path).query).get("q", [""])[0]
-            with context.request(user, "جوال"):
-                self._send(200, to_json(mobile_web.ask(user, q)))
+            q = parse_qs(urlparse(self.path).query).get("q", [""])[0][:200]
+            from core import i18n
+            try:
+                with context.request(user, "جوال"):
+                    self._send(200, to_json(fn(user, q)))
+            except (PermissionError, ValueError) as e:
+                self._send(200, {"error": i18n.tr(str(e))})
         elif user:
             self._html(200, mobile_web.app_page(user))
         else:
@@ -334,6 +335,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             data = json.loads(body or b"{}")
+            if path == "/m/api/order":
+                self._send(200, mobile_web.order_status(user, data["id"], data["status"]))
+                return
             self._send(200, mobile_web.count(user, data["product_id"], data["counted"]))
         except (PermissionError, ValueError, KeyError, TypeError) as e:
             self._send(200, {"error": i18n.tr(str(e))})
@@ -343,7 +347,9 @@ class Handler(BaseHTTPRequestHandler):
         from core import plans
         # تطبيق الجوال يفتح في كل الباقات (الأسعار والكميات)؛ الجرد منه في بلس، والسؤال في ماكس
         feature = ("owner" if path.startswith("/owner") else "online" if path.startswith("/shop")
-                   else "mobile" if path == "/m/api/count" else "ask" if path == "/m/api/ask" else None)
+                   else "mobile" if path in ("/m/api/count", "/m/api/low", "/m/api/customers")
+                   else "online" if path in ("/m/api/orders", "/m/api/order")
+                   else "ask" if path == "/m/api/ask" else None)
         if not feature or plans.has(feature):
             return False
         from core import i18n
@@ -398,7 +404,7 @@ class Handler(BaseHTTPRequestHandler):
             except (orders.OrderError, ValueError) as e:
                 self._send(200, {"error": i18n.tr(str(e))})
             return
-        if self.path.split("?", 1)[0] in ("/m/login", "/m/api/count"):
+        if self.path.split("?", 1)[0] in ("/m/login", "/m/api/count", "/m/api/order"):
             self._mobile_post(self.path.split("?", 1)[0])
             return
         if self.path.split("?", 1)[0] == "/owner/login":

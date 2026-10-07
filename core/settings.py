@@ -60,6 +60,20 @@ DEFAULTS = {
     "online_store_message": "اطلب من محلنا واستلم أو نوصلك 🛵",
     # الفاتورة الإلكترونية (رمز QR بصيغة الفوترة السعودية المبسطة)
     "einvoice_qr": "0",
+    # الربط مع منصة الضريبة (core/einvoicing.py): "" معطّل / zatca / jofotara
+    "einv_system": "",
+    "einv_env": "sandbox",
+    "einv_legal_name": "",
+    "einv_crn": "",
+    "einv_street": "",
+    "einv_building": "",
+    "einv_district": "",
+    "einv_city": "",
+    "einv_postal": "",
+    "einv_industry": "Retail",
+    "jof_client_id": "",
+    "jof_source_id": "",
+    "jof_kind": "sales",
     # عملات إضافية للدفع النقدي: رمز=سعر الصرف، مثل USD=3.65,JOD=5.15
     "extra_currencies": "",
     # المحافظ الإلكترونية وتطبيقات البنوك: JSON [{name, account, dest, qr}] (انظر core/wallets.py)

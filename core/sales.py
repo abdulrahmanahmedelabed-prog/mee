@@ -88,6 +88,13 @@ def cart_discounts(cart, manual_discount=0.0, points=0.0):
             "total": money(manual + promo["total"] + points_value)}
 
 
+def _einvoice(kind, ref_id):
+    """الفوترة الإلكترونية المرتبطة بالمنصة (إن فُعّلت): تُجهَّز بعد الحفظ ولا توقف البيع أبداً"""
+    if settings.get("einv_system"):
+        from core import einvoicing
+        einvoicing.register(kind, ref_id)
+
+
 def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
                 cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0,
                 offline=None, card_ref="", wallet_amount=0.0, wallet_name="", wallet_ref="", sale_ref=None,
@@ -282,6 +289,7 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
                             VALUES (?, 'sale', ?, ?, ?, ?, ?, ?)""",
                          (customer_id, credit_amount, invoice_id, f"فاتورة {number}", user_id, shift_id, created))
 
+    _einvoice("invoice", invoice_id)
     return {"invoice_id": invoice_id, "invoice_number": number, "change": change, **t,
             "cash_amount": cash_amount, "card_amount": card_amount, "credit_amount": credit_amount,
             "wallet_amount": wallet_amount, "wallet_name": wallet_name,
@@ -429,6 +437,7 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
                             value=-money(lost * per_point) if per_point is not None else None)
         audit.log("مرتجع", f"{number} من {inv['invoice_number']} بقيمة {total} ({refund_method})", conn)
 
+    _einvoice("credit", ret_id)
     return {"return_id": ret_id, "return_number": number, "total": total}
 
 

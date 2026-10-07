@@ -1011,6 +1011,34 @@ def check_bank_reconciliation(c):
     return out
 
 
+def check_einvoicing(c):
+    """الفوترة الإلكترونية المرتبطة بالمنصة: لا فاتورة متأخرة عن 24 ساعة ولا مرفوضة دون معالجة"""
+    from core import einvoicing
+    if not einvoicing.enabled():
+        return []
+    s = einvoicing.summary()
+    out = []
+    if s["late"]:
+        out.append(_f(A_TAX, "فواتير إلكترونية لم تُبلَّغ خلال 24 ساعة", "high",
+                      f"{s['late']} فاتورة لم تصل منصة الضريبة بعد مرور 24 ساعة على إصدارها (المهلة النظامية).",
+                      "تأكد من اتصال الإنترنت ومن ربط الجهاز، ثم «📤 أرسل الآن» من الإعدادات ← الفوترة الإلكترونية.",
+                      count=s["late"]))
+    if s["rejected"]:
+        rows = einvoicing.recent(12, "rejected")
+        out.append(_f(A_TAX, "فواتير إلكترونية مرفوضة من المنصة", "high",
+                      f"{s['rejected']} مستند رفضته المنصة؛ الفاتورة صحيحة عند الزبون لكنها غير مسجّلة لدى الضريبة.",
+                      "افتح الإعدادات ← الفوترة الإلكترونية، اقرأ سبب الرفض، صحّح البيانات ثم «أعد الإرسال».",
+                      count=s["rejected"], samples=[f"{r['number']}: {(r['message'] or '')[:120]}" for r in rows]))
+    if s["error"]:
+        out.append(_f(A_TAX, "فواتير إلكترونية تعذّر تجهيزها", "medium",
+                      f"{s['error']} مستند لم يُجهَّز (غالباً بيانات المنشأة ناقصة).",
+                      "أكمل بيانات المنشأة في الإعدادات ← الفوترة الإلكترونية.", count=s["error"]))
+    if not out:
+        out.append(_ok(A_TAX, "الفوترة الإلكترونية", f"كل الفواتير أُبلغت للمنصة ({s['reported'] + s['warning']}) "
+                                                      f"والمعلّق حالياً {s['pending']} ضمن المهلة."))
+    return out
+
+
 CHECKS = [check_integrity, check_books_balance, check_receivables, check_payables, check_inventory_value, check_impossible_balances,
           check_manual_entries, check_sequences, check_invoice_integrity, check_duplicate_refs, check_shifts, check_employee_advances,
           check_cash_refund_on_electronic, check_refunds_by_cashier, check_drawer_and_prices, check_discounts,
@@ -1020,7 +1048,7 @@ CHECKS = [check_integrity, check_books_balance, check_receivables, check_payable
           check_tamper, check_locked_period, check_month_close, check_fixed_assets,
           check_price_overrides, check_rounding, check_shelf_labels,
           check_after_hours, check_quick_returns, check_purchase_price_jumps, check_duplicate_customers,
-          check_payroll_anomalies, check_bank_reconciliation]
+          check_payroll_anomalies, check_bank_reconciliation, check_einvoicing]
 
 
 def run(date_from, date_to, progress=None):

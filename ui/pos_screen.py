@@ -1384,6 +1384,12 @@ class POSScreen(QWidget):
             pass
         self.clear_cart()
         if print_it:
+            if settings.get("einv_system") == "jofotara":       # رمز QR الرسمي يأتي من المنظومة
+                try:
+                    from core import einvoicing
+                    einvoicing.quick_send(res["invoice_id"])
+                except Exception:
+                    pass
             try:
                 printing.print_html(self, receipts.invoice_html(res["invoice_id"]))
             except Exception as e:

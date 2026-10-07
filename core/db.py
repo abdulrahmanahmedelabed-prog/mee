@@ -577,6 +577,30 @@ CREATE TABLE IF NOT EXISTS online_orders (
     updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS einvoices (         -- الفوترة الإلكترونية المرتبطة بالمنصة الضريبية (فاتورة / JoFotara)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    system TEXT NOT NULL,                -- zatca / jofotara
+    doc_type TEXT NOT NULL,              -- invoice / credit
+    invoice_id INTEGER,
+    return_id INTEGER,
+    number TEXT,
+    uuid TEXT,
+    icv INTEGER,                         -- عدّاد الفواتير
+    pih TEXT,                            -- بصمة الفاتورة السابقة
+    hash TEXT,
+    xml BLOB,                            -- مضغوط
+    qr TEXT,
+    signed INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    message TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    info TEXT,
+    created_at TEXT,
+    sent_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_einv_status ON einvoices(system, status);
+CREATE INDEX IF NOT EXISTS idx_einv_invoice ON einvoices(invoice_id);
+
 CREATE TABLE IF NOT EXISTS fixed_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

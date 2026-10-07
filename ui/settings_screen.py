@@ -138,6 +138,10 @@ class SettingsScreen(QWidget):
         self._check(f, "einvoice_qr", "طباعة رمز QR للفاتورة الإلكترونية (صيغة الفوترة المبسطة المعتمدة في السعودية)")
         self._line(f, "extra_currencies", "عملات إضافية للدفع النقدي (مثل USD=3.65,JOD=5.15):")
 
+        # --- الفوترة الإلكترونية المرتبطة بمنصة الضريبة (فاتورة / JoFotara)
+        from ui import einvoicing_ui
+        einvoicing_ui.build_tab(self, self._form_tab("الفوترة الإلكترونية"))
+
         # --- الدفع الإلكتروني
         f = self._form_tab("الدفع الإلكتروني")
         f.addRow(hint("المحافظ الإلكترونية وتطبيقات البنوك التي يدفع بها زبائنك. لكل واحدة يظهر زر في نافذة الدفع، "
@@ -412,6 +416,8 @@ class SettingsScreen(QWidget):
         self.load_network()
         self.load_license()
         self.load_logo()
+        from ui import einvoicing_ui
+        einvoicing_ui.load(self)
         from core import wallets
         self.wallet_table.set_items(wallets.all_wallets())
         port = config.get("server_port") or 8765
@@ -455,6 +461,9 @@ class SettingsScreen(QWidget):
         from core import i18n
         new_lang = values.get("language")
         settings.set_many(values)
+        from ui import einvoicing_ui
+        einvoicing_ui.save(self)
+        einvoicing_ui.load(self)
         w = self.window()
         from core import config
         new_theme = self.theme_combo.currentData()

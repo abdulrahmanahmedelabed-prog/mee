@@ -328,6 +328,10 @@ class MainWindow(QMainWindow):
         if not remote.is_client() and "pytest" not in sys.modules:
             threading.Thread(target=self._run_auto_audit, daemon=True).start()
             QTimer.singleShot(60000, self.show_audit_alert)
+            # الفوترة الإلكترونية: إرسال المعلّق للمنصة في الخلفية كل دقيقة
+            self._einv_timer = QTimer(self)
+            self._einv_timer.timeout.connect(self._send_einvoices)
+            self._einv_timer.start(60000)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.tick)
         self._timer.start(15000)
@@ -337,7 +341,7 @@ class MainWindow(QMainWindow):
         holder = self.page_holders.get(key)
         if isinstance(holder, QScrollArea):
             holder.setWidget(w)
-        signals = {"pos": [("sale_completed", self.update_header)], "cash": [("shift_changed", self.update_header)],
+        signals = {"pos": [("sale_completed", self.update_header), ("sale_completed", self._send_einvoices)], "cash": [("shift_changed", self.update_header)],
                    "dashboard": [("navigate", self.go)], "insights": [("navigate", self.go)],
                    "smart": [("navigate", self.go)],
                    "orders": [("load_into_pos", self.order_to_pos), ("new_orders", self.on_new_orders)]}
@@ -511,6 +515,20 @@ class MainWindow(QMainWindow):
             return
         self.go("settings")
         self.pages["settings"].show_license_tab()
+
+    def _send_einvoices(self):
+        from core import settings as _s
+        if not _s.get("einv_system"):
+            return
+        import threading
+
+        def work():
+            try:
+                from core import einvoicing
+                einvoicing.send_pending()
+            except Exception:
+                pass
+        threading.Thread(target=work, daemon=True).start()
 
     def _run_auto_audit(self):
         import time
