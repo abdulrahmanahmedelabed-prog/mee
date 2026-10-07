@@ -84,3 +84,62 @@ def test_label_queue_follows_price_changes():
         "key" in insights.insights()[0] else True
     products.mark_labels_printed([pid])
     assert products.pending_labels_count() == 0 or not any(p["id"] == pid for p in products.pending_labels())
+
+
+from core import accountant, customers, payroll, suppliers  # noqa: E402
+
+
+def _titles(r):
+    return {x["title"]: x for x in r["findings"]}
+
+
+def test_ratios_comparative_and_bank_reconciliation():
+    pid = products.add_product("شاي", "rt1", "", 6, 10, 100, 0)
+    sales.create_sale([_item(pid, 3, 10, "شاي")], card_amount=30, cash_amount=0)
+    t = db.today()
+    r = accountant.ratios(t, t)
+    keys = {x["key"] for x in r["items"]}
+    assert {"gross_margin", "net_margin", "current_ratio", "dio", "ccc", "break_even"} <= keys
+    assert all(x["verdict"] in ("good", "watch", "bad", "na") and x["explain"] for x in r["items"])
+    ci = accountant.comparative_income(t, t)
+    assert ci["current"]["net_sales"] >= 30 and "previous" in ci
+    # البطاقة لم تصل للبنك بعد: في الطريق
+    rec = accountant.bank_reconciliation(t, 0)
+    assert rec["in_transit"] >= 30 and abs(rec["difference"]) < 0.01
+    rec = accountant.bank_reconciliation(t, -5)                      # البنك خصم 5 عمولة لم تُسجَّل
+    assert abs(rec["difference"] + 5) < 0.01
+    accountant.save_bank_reconciliation(t, -5, record_fees=True)
+    assert abs(accountant.bank_reconciliation(t, -5)["difference"]) < 0.01
+    assert ledger.balance_sheet()["balanced"] and accountant.bank_reconciliations()
+
+
+def test_new_fraud_procedures():
+    t = db.today()
+    pid = products.add_product("زيت", "fr1", "", 10, 15, 100, 0)
+    res = sales.create_sale([_item(pid, 1, 15, "زيت")])
+    it = sales.returnable_items(res["invoice_id"])[0]
+    sales.create_return(res["invoice_id"], [{"invoice_item_id": it["id"], "quantity": 1}])
+    f = _titles(financial_audit.run(t, t))
+    assert "بيع ثم إرجاع نقدي خلال 30 دقيقة من نفس الكاشير" in f
+    # قفزة في تكلفة الشراء، مع احتساب الكرتونة بالحبة
+    sup = suppliers.add_supplier("مورد الزيت")
+    suppliers.create_purchase(sup, [{"product_id": pid, "quantity": 12, "unit_cost": 10}])
+    with db.tx() as c:
+        c.execute("UPDATE purchases SET created_at = datetime(created_at, '-1 day')")
+    suppliers.create_purchase(sup, [{"product_id": pid, "quantity": 1, "unit_cost": 120, "factor": 12,
+                                     "unit_name": "كرتونة"}])                        # 10 للحبة: طبيعي
+    assert "ارتفاع مفاجئ في تكلفة الشراء (أكثر من 30%)" not in _titles(financial_audit.run(t, t))
+    suppliers.create_purchase(sup, [{"product_id": pid, "quantity": 1, "unit_cost": 16}])
+    assert "ارتفاع مفاجئ في تكلفة الشراء (أكثر من 30%)" in _titles(financial_audit.run(t, t))
+    # زبون مكرر بنفس الهاتف
+    customers.add_customer("أبو سامي", "0599 111 222")
+    customers.add_customer("ابو سامي", "+970599111222")
+    assert "زبائن مكررون بنفس رقم الهاتف" in _titles(financial_audit.run(t, t))
+    # رواتب: أعلى بكثير من الراتب المعتمد، ولشهر لم يأتِ
+    e = payroll.add_employee("مازن", 1000)
+    payroll.pay_salary(e, t[:7], bonus=900, method=payroll.PAY_BANK)
+    nxt = f"{int(t[:4]) + (t[5:7] == '12')}-{(int(t[5:7]) % 12) + 1:02d}"
+    payroll.pay_salary(e, nxt, method=payroll.PAY_BANK)
+    f = _titles(financial_audit.run(t, t))
+    assert "راتب أعلى بكثير من الراتب المعتمد" in f and "راتب مصروف لشهر لم يبدأ بعد" in f
+    assert financial_audit.run(t, t)["procedures"] == len(financial_audit.CHECKS) >= 46

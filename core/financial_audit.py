@@ -870,6 +870,147 @@ def check_shelf_labels(c):
                samples=[f"{r['name']}: الملصق {n(r['label_price'])} والسعر {n(r['sale_price'])}" for r in rows])]
 
 
+# ---------------------------------------------------------------------------
+# إجراءات إضافية: أنماط الاحتيال الشائعة في محلات التجزئة
+# ---------------------------------------------------------------------------
+
+def check_after_hours(c):
+    """مبيعات في ساعات لا يبيع فيها المحل عادة (قد تكون بيعاً خارج الدوام أو تعديلاً لاحقاً)"""
+    hours = {r["h"]: r["n"] for r in db.query(f"""SELECT CAST(strftime('%H', created_at) AS INTEGER) AS h, COUNT(*) AS n
+                                                  FROM invoices WHERE {_in('created_at')} GROUP BY h""", c.p)}
+    total = sum(hours.values())
+    if total < 200:
+        return []
+    rare = [h for h, k in hours.items() if k / total < 0.002]
+    if not rare:
+        return [_ok(A_CASH, "توقيت المبيعات", "كل المبيعات ضمن ساعات العمل المعتادة للمحل.")]
+    rows = db.query(f"""SELECT invoice_number, created_at, total, user_id FROM invoices WHERE {_in('created_at')}
+                        AND CAST(strftime('%H', created_at) AS INTEGER) IN ({",".join("?" * len(rare))})
+                        ORDER BY created_at""", (*c.p, *rare))
+    amt = sum(r["total"] for r in rows)
+    return [_f(A_CASH, "مبيعات خارج ساعات العمل المعتادة", "low",
+               f"{len(rows)} فاتورة في ساعات نادراً ما يبيع فيها المحل (أقل من 0.2% من الفواتير).",
+               "تأكد أن المحل كان مفتوحاً فعلاً وأن الكاشير المسجّل هو من باع.", amt, len(rows),
+               [f"{r['invoice_number']} {r['created_at'][:16]}: {n(r['total'])} — {c.user(r['user_id'])}" for r in rows])]
+
+
+def check_quick_returns(c):
+    """بيع ثم إرجاع نقدي سريع من نفس الكاشير: من أشهر طرق إخراج النقد من الدرج"""
+    rows = db.query(f"""SELECT r.return_number, i.invoice_number, r.total, r.user_id,
+                               (julianday(r.created_at) - julianday(i.created_at)) * 1440 AS mins
+                        FROM returns r JOIN invoices i ON i.id = r.invoice_id
+                        WHERE {_in('r.created_at')} AND r.user_id = i.user_id AND r.refund_method = 'نقدي'
+                          AND (julianday(r.created_at) - julianday(i.created_at)) * 1440 BETWEEN 0 AND 30""", c.p)
+    if not rows:
+        return [_ok(A_CASH, "البيع والإرجاع السريع", "لا توجد مرتجعات نقدية سريعة من نفس الكاشير الذي باع.")]
+    by = defaultdict(int)
+    for r in rows:
+        by[r["user_id"]] += 1
+    sev = "high" if max(by.values()) >= 5 else "medium" if len(rows) >= 3 else "low"
+    return [_f(A_CASH, "بيع ثم إرجاع نقدي خلال 30 دقيقة من نفس الكاشير", sev,
+               f"{len(rows)} مرتجعاً نقدياً تمّ بعد البيع بدقائق وبنفس المستخدم. أحياناً خطأ عادي، "
+               "وأحياناً بيع حقيقي ثم «إرجاع» وهمي لأخذ المبلغ.",
+               "اجعل المرتجع بإذن مدير، وقارن المرتجعات مع كاميرا المحل أو وجود البضاعة على الرف.",
+               sum(r["total"] for r in rows), len(rows),
+               [f"{r['return_number']} من {r['invoice_number']} بعد {int(r['mins'])} دقيقة: {n(r['total'])} — {c.user(r['user_id'])}"
+                for r in rows])]
+
+
+def check_purchase_price_jumps(c):
+    """ارتفاع مفاجئ في تكلفة الشراء عن آخر شراء لنفس الصنف (خطأ إدخال أو تواطؤ مع مورد)"""
+    # المقارنة بتكلفة الوحدة الأساسية: كرتونة 12 حبة بـ 50 = 4.17 للحبة
+    rows = db.query(f"""SELECT p.purchase_number, pi.product_name, pi.unit_cost / COALESCE(NULLIF(pi.factor, 0), 1) AS unit_cost,
+                               (SELECT x.unit_cost / COALESCE(NULLIF(x.factor, 0), 1)
+                                FROM purchase_items x JOIN purchases y ON y.id = x.purchase_id
+                                WHERE x.product_id = pi.product_id AND y.created_at < p.created_at
+                                ORDER BY y.created_at DESC LIMIT 1) AS prev
+                        FROM purchase_items pi JOIN purchases p ON p.id = pi.purchase_id
+                        WHERE {_in('p.created_at')}""", c.p)
+    jumps = [r for r in rows if r["prev"] and r["prev"] > 0 and r["unit_cost"] > r["prev"] * 1.3]
+    if not jumps:
+        return [_ok(A_EXP, "أسعار الشراء", "لا توجد قفزات غير طبيعية في تكلفة الأصناف مقارنة بالشراء السابق.")]
+    jumps.sort(key=lambda r: -r["unit_cost"] / r["prev"])
+    return [_f(A_EXP, "ارتفاع مفاجئ في تكلفة الشراء (أكثر من 30%)", "medium" if len(jumps) >= 5 else "low",
+               f"{len(jumps)} سطر شراء بتكلفة أعلى بأكثر من 30% من آخر مرة لنفس الصنف.",
+               "تأكد من فاتورة المورد الأصلية: خطأ في الوحدة (كرتونة بدل حبة) أو سعر مضخّم؟ وراجع سعر البيع.",
+               count=len(jumps),
+               samples=[f"{r['purchase_number']}: {r['product_name']} {n(r['prev'])} ← {n(r['unit_cost'])} "
+                        f"(+{(r['unit_cost'] / r['prev'] - 1) * 100:.0f}%)" for r in jumps])]
+
+
+def check_duplicate_customers(c):
+    """زبون مسجّل أكثر من مرة بنفس الهاتف: يشتت الديون ويسمح بتجاوز سقف الدين"""
+    groups = defaultdict(list)
+    for r in db.query("SELECT id, name, phone, balance FROM customers WHERE phone IS NOT NULL AND TRIM(phone) <> ''"):
+        digits = "".join(ch for ch in r["phone"] if ch.isdigit())[-9:]
+        if len(digits) >= 7:
+            groups[digits].append(r)
+    dup = [g for g in groups.values() if len(g) > 1]
+    if not dup:
+        return [_ok(A_DEBTS, "تكرار الزبائن", "لا يوجد زبون مسجّل مرتين بنفس رقم الهاتف.")]
+    debt = sum(r["balance"] for g in dup for r in g if r["balance"] > 0)
+    return [_f(A_DEBTS, "زبائن مكررون بنفس رقم الهاتف", "medium" if debt > 0 else "low",
+               f"{len(dup)} رقم هاتف مسجّل لأكثر من زبون. الدين المتفرق يُخفي حجم الدين الحقيقي ويتجاوز سقف الدين.",
+               "ادمج الحسابات المكررة أو صحّح الأرقام من شاشة العملاء.", debt, len(dup),
+               [" / ".join(f"{r['name']} ({n(r['balance'])})" for r in g) for g in dup])]
+
+
+def check_payroll_anomalies(c):
+    """رواتب غير طبيعية: صرف مكرر لنفس الشهر، راتب لشهر لم يأتِ، أو صافي أعلى بكثير من الراتب الأساسي"""
+    rows = db.query(f"""SELECT p.*, e.name, e.salary, e.is_active FROM payroll_payments p
+                        JOIN employees e ON e.id = p.employee_id WHERE {_in('p.created_at')}""", c.p)
+    if not rows:
+        return []
+    out = []
+    dups = db.query("""SELECT e.name, p.period, COUNT(*) AS k, SUM(p.net) AS t FROM payroll_payments p
+                       JOIN employees e ON e.id = p.employee_id GROUP BY p.employee_id, p.period HAVING k > 1""")
+    if dups:
+        out.append(_f(A_EXP, "راتب مصروف مرتين لنفس الشهر", "critical",
+                      "البرنامج يمنع ذلك؛ وجوده يعني تعديلاً مباشراً على ملف البيانات.", "راجع كشف الموظف واسترد الزائد.",
+                      sum(r["t"] for r in dups), len(dups), [f"{r['name']} — {r['period']}: {r['k']} مرات" for r in dups]))
+    this_month = db.today()[:7]
+    future = [r for r in rows if r["period"] > this_month]
+    if future:
+        out.append(_f(A_EXP, "راتب مصروف لشهر لم يبدأ بعد", "medium",
+                      "صرف الراتب مقدماً يُعامل محاسبياً كسلفة؛ تأكد أنه بقرار من المالك.", "سجّله سلفة بدل راتب إن لم يكن مقصوداً.",
+                      sum(r["net"] for r in future), len(future), [f"{r['name']} — {r['period']}: {n(r['net'])}" for r in future]))
+    high = [r for r in rows if r["salary"] > 0 and r["base"] + r["bonus"] - r["deductions"] > r["salary"] * 1.5]
+    if high:
+        out.append(_f(A_EXP, "راتب أعلى بكثير من الراتب المعتمد", "medium",
+                      "المستحق في هذه القسائم أكثر من 1.5 ضعف الراتب الأساسي المسجّل للموظف.",
+                      "تأكد من سبب المكافأة أو الإضافي وأنها معتمدة.", count=len(high),
+                      samples=[f"{r['name']} — {r['period']}: {n(r['base'] + r['bonus'] - r['deductions'])} "
+                               f"والراتب {n(r['salary'])}" for r in high]))
+    if not out:
+        out.append(_ok(A_EXP, "الرواتب", f"{len(rows)} صرف راتب في الفترة، بلا تكرار أو مبالغ غير طبيعية."))
+    return out
+
+
+def check_bank_reconciliation(c):
+    """مطابقة رصيد البنك في الدفاتر مع كشف البنك: إجراء شهري أساسي عند أي مدقق"""
+    if abs(c.balance(ledger.BANK)) < 1:
+        return []
+    from core import accountant
+    recs = accountant.bank_reconciliations()
+    if not recs:
+        return [_f(A_BOOKS, "لم تُطابَق الدفاتر مع كشف البنك", "low",
+                   f"رصيد البنك في الدفاتر {n(c.balance(ledger.BANK))} ولم تُسجَّل أي مطابقة مع كشف البنك.",
+                   "المحاسبة ← «مطابقة البنك»: اكتب رصيد الكشف مرة كل شهر.")]
+    last = recs[0]
+    age = (date.fromisoformat(c.b[:10]) - date.fromisoformat(last["as_of"][:10])).days
+    out = []
+    if abs(last["difference"]) > 1:
+        out.append(_f(A_BOOKS, "فرق غير مسوّى في آخر مطابقة بنكية", "medium" if abs(last["difference"]) > 50 else "low",
+                      f"آخر مطابقة ({last['as_of']}) فيها فرق {n(last['difference'])} بين كشف البنك والدفاتر.",
+                      "حدد سبب الفرق: عمولات لم تُسجَّل، تحويل غير مسجّل، أو بيع ببطاقة لم يصل.", last["difference"]))
+    if age > 45:
+        out.append(_f(A_BOOKS, "مطابقة البنك قديمة", "low", f"آخر مطابقة قبل {age} يوماً.",
+                      "طابق الدفاتر مع كشف البنك شهرياً."))
+    if not out:
+        out.append(_ok(A_BOOKS, "مطابقة البنك", f"آخر مطابقة {last['as_of']} بلا فروق."))
+    return out
+
+
 CHECKS = [check_integrity, check_books_balance, check_receivables, check_payables, check_inventory_value, check_impossible_balances,
           check_manual_entries, check_sequences, check_invoice_integrity, check_duplicate_refs, check_shifts, check_employee_advances,
           check_cash_refund_on_electronic, check_refunds_by_cashier, check_drawer_and_prices, check_discounts,
@@ -877,7 +1018,9 @@ CHECKS = [check_integrity, check_books_balance, check_receivables, check_payable
           check_credit_balances, check_installments, check_cheques, check_expense_duplicates, check_expense_spikes, check_benford,
           check_margin_trend, check_cash_ratio, check_vat, check_deletions, check_backups, check_users,
           check_tamper, check_locked_period, check_month_close, check_fixed_assets,
-          check_price_overrides, check_rounding, check_shelf_labels]
+          check_price_overrides, check_rounding, check_shelf_labels,
+          check_after_hours, check_quick_returns, check_purchase_price_jumps, check_duplicate_customers,
+          check_payroll_anomalies, check_bank_reconciliation]
 
 
 def run(date_from, date_to, progress=None):

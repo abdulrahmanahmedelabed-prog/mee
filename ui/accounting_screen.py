@@ -377,9 +377,22 @@ class AccountingScreen(QWidget):
         bl.addWidget(self.bs_note)
         self._add_tab(bs, "الميزانية العمومية", self.bs_table)
 
-        # 2) قائمة الدخل
-        self.is_table = Table(["البند", "المبلغ"], stretch=0, sortable=False)
+        # 2) قائمة الدخل (مع المقارنة بالفترة السابقة)
+        self.is_table = Table(["البند", "المبلغ", "الفترة السابقة", "التغير"], stretch=0, sortable=False)
         self._add_tab(self.is_table, "قائمة الدخل", self.is_table)
+
+        # 2.2) المؤشرات المالية
+        rw = QWidget()
+        rl = QVBoxLayout(rw)
+        rl.setContentsMargins(0, 10, 0, 0)
+        self.ratio_sum = QLabel("")
+        self.ratio_sum.setObjectName("subTitle")
+        rl.addWidget(self.ratio_sum)
+        self.ratio_table = Table(["", "المؤشر", "القيمة", "ماذا يعني"], stretch=3, sortable=False)
+        self.ratio_table.setWordWrap(True)
+        rl.addWidget(self.ratio_table, 1)
+        rl.addWidget(hint("المؤشرات تُحسب للفترة المختارة أعلاه من الدفاتر نفسها. 🟢 جيد • 🟡 انتبه • 🔴 يحتاج معالجة."))
+        self._add_tab(rw, "المؤشرات المالية", self.ratio_table)
 
         # 2.5) قائمة التدفقات النقدية
         cfw = QWidget()
@@ -441,6 +454,40 @@ class AccountingScreen(QWidget):
         self.mj_table = Table(["الرقم", "التاريخ", "البيان", "المبلغ", "الحالة", "المستخدم"], stretch=2)
         ml.addWidget(self.mj_table, 1)
         self._add_tab(mj, "القيود اليدوية", self.mj_table)
+
+        # 6.2) مطابقة البنك
+        bw = QWidget()
+        bl2 = QVBoxLayout(bw)
+        bl2.setContentsMargins(0, 10, 0, 0)
+        bl2.addWidget(hint("اكتب رصيد البنك كما في كشف البنك أو تطبيقه في تاريخ معيّن. يقارنه البرنامج برصيد البنك في الدفاتر، "
+                           "ويطرح مبالغ البطاقات والمحافظ التي لم تصل للبنك بعد (تُسوّى عادة في اليوم التالي)، ويبيّن الفرق."))
+        frm = QHBoxLayout()
+        frm.addWidget(QLabel("التاريخ:"))
+        self.rec_date = QDateEdit(calendarPopup=True)
+        self.rec_date.setDisplayFormat("yyyy-MM-dd")
+        self.rec_date.setDate(QDate.currentDate())
+        frm.addWidget(self.rec_date)
+        frm.addWidget(QLabel("رصيد كشف البنك:"))
+        self.rec_amount = MoneySpin()
+        self.rec_amount.setRange(-99999999, 99999999)
+        frm.addWidget(self.rec_amount)
+        frm.addWidget(button("⚖ طابق", "primaryBtn", self.reconcile))
+        frm.addStretch()
+        bl2.addLayout(frm)
+        self.rec_result = QLabel("")
+        self.rec_result.setWordWrap(True)
+        self.rec_result.setObjectName("subTitle")
+        bl2.addWidget(self.rec_result)
+        rb = QHBoxLayout()
+        self.rec_save = button("💾 حفظ المطابقة", "secondaryBtn", lambda: self.save_reconcile(False))
+        self.rec_fees = button("🏦 تسجيل الفرق عمولات بنكية وحفظ", "secondaryBtn", lambda: self.save_reconcile(True))
+        rb.addWidget(self.rec_save)
+        rb.addWidget(self.rec_fees)
+        rb.addStretch()
+        bl2.addLayout(rb)
+        self.rec_table = Table(["التاريخ", "الكشف", "الدفاتر", "في الطريق", "الفرق", "حُفظت في"], stretch=0)
+        bl2.addWidget(self.rec_table, 1)
+        self._add_tab(bw, "مطابقة البنك", self.rec_table)
 
         # 6.5) الأصول الثابتة والإهلاك التلقائي
         fa = QWidget()
@@ -532,14 +579,41 @@ class AccountingScreen(QWidget):
                                   f"{m(bs['inventory_book'])} (الفرق من تعديلات التكلفة أو البيع بمخزون سالب).")
             self.bs_note.setText(note)
         elif name == "قائمة الدخل":
-            s = ledger.income_statement(a, b)
-            rows = [("المبيعات", s["sales"]), ("− مردودات المبيعات", s["returns"]), ("= صافي المبيعات", s["net_sales"]),
-                    ("− تكلفة البضاعة المباعة", s["cogs"]), ("= مجمل الربح", s["gross_profit"]),
-                    ("+ إيرادات أخرى", s["other_income"]), ("", None)]
-            rows += [(f"− {e['name']}", e["amount"]) for e in s["expenses"]]
-            rows += [("= مجموع المصروفات", s["total_expenses"]), ("", None), ("= صافي الربح (الدخل)", s["net_income"])]
-            self.is_table.set_rows([[k, float(v) if v is not None else ""] for k, v in rows],
-                                   colors=[("#EFF6FF" if k.startswith("=") else None) for k, _ in rows])
+            from core import accountant
+            cmp_ = accountant.comparative_income(a, b)
+            s, p = cmp_["current"], cmp_["previous"]
+            pexp = {e["code"]: e["amount"] for e in p["expenses"]}
+            rows = [("المبيعات", s["sales"], p["sales"]), ("− مردودات المبيعات", s["returns"], p["returns"]),
+                    ("= صافي المبيعات", s["net_sales"], p["net_sales"]), ("− تكلفة البضاعة المباعة", s["cogs"], p["cogs"]),
+                    ("= مجمل الربح", s["gross_profit"], p["gross_profit"]),
+                    ("+ إيرادات أخرى", s["other_income"], p["other_income"]), ("", None, None)]
+            rows += [(f"− {e['name']}", e["amount"], pexp.get(e["code"], 0.0)) for e in s["expenses"]]
+            rows += [("= مجموع المصروفات", s["total_expenses"], p["total_expenses"]), ("", None, None),
+                     ("= صافي الربح (الدخل)", s["net_income"], p["net_income"])]
+
+            def change(c, v):
+                if c is None or v is None or not v:
+                    return ""
+                return f"{(c / v - 1) * 100:+.1f}%" if v > 0 else ""
+            self.is_table.set_rows([[k, float(c) if c is not None else "", float(v) if v is not None else "", change(c, v)]
+                                    for k, c, v in rows],
+                                   colors=[("#EFF6FF" if k.startswith("=") else None) for k, _, _ in rows])
+            self.is_table.setHorizontalHeaderItem(2, QTableWidgetItem(f"{cmp_['prev_from']} → {cmp_['prev_to']}"))
+        elif name == "المؤشرات المالية":
+            from core import accountant
+            r = accountant.ratios(a, b)
+            icon = {"good": "🟢", "watch": "🟡", "bad": "🔴"}
+            self.ratio_table.set_rows([[icon[x["verdict"]], x["name"], x["display"], x["explain"]] for x in r["items"]],
+                                      r["items"])
+            self.ratio_table.resizeRowsToContents()
+            sm = r["summary"]
+            self.ratio_sum.setText(f"🟢 {sm['good']} جيد   🟡 {sm['watch']} انتبه   🔴 {sm['bad']} يحتاج معالجة   — "
+                                   f"الفترة {r['days']} يوماً")
+        elif name == "مطابقة البنك":
+            from core import accountant
+            self.rec_table.set_rows([[x["as_of"], float(x["statement"]), float(x["adjusted_book"]), float(x["in_transit"]),
+                                      float(x["difference"]), x.get("saved_at", "")[:16]]
+                                     for x in accountant.bank_reconciliations()])
         elif name == "التدفقات النقدية":
             from core import accountant
             cf = accountant.cash_flow(a, b)
@@ -621,6 +695,33 @@ class AccountingScreen(QWidget):
         for i in range(self.tabs.count()):
             if self.tabs.tabText(i) == "كشف حساب":
                 self.tabs.setCurrentIndex(i)
+
+    def reconcile(self):
+        from core import accountant
+        r = accountant.bank_reconciliation(self.rec_date.date().toString("yyyy-MM-dd"), self.rec_amount.value())
+        self._rec = r
+        if r["matched"]:
+            msg = f"✓ مطابق: رصيد البنك في الدفاتر {m(r['adjusted_book'])} يساوي الكشف."
+        else:
+            kind = ("على الأغلب عمولات أو رسوم بنكية لم تُسجَّل" if r["difference"] < 0 else
+                    "إيداع أو تحويل وصل للبنك ولم يُسجَّل في البرنامج")
+            msg = (f"الدفاتر: {m(r['book'])} − مبالغ في الطريق {m(r['in_transit'])} = {m(r['adjusted_book'])} • "
+                   f"الكشف: {m(r['statement'])} • الفرق: {m(r['difference'])} — {kind}.")
+        self.rec_result.setText(msg)
+        self.rec_fees.setEnabled(r["difference"] < -0.009)
+
+    def save_reconcile(self, fees):
+        from core import accountant
+        if not require_permission(self, "accounting"):
+            return
+        try:
+            accountant.save_bank_reconciliation(self.rec_date.date().toString("yyyy-MM-dd"), self.rec_amount.value(),
+                                                record_fees=fees)
+        except ValueError as e:
+            warn(self, str(e))
+            return
+        self.reconcile()
+        self.load()
 
     def close_month(self):
         if require_permission(self, "accounting"):

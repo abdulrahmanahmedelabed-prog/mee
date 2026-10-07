@@ -396,3 +396,143 @@ def daily_audit(days=30, force=False):
            "high": r["counts"]["high"], "top": top}
     db.set_meta("auto_audit", json.dumps(out, ensure_ascii=False))
     return out
+
+
+# ---------------------------------------------------------------------------
+# المؤشرات المالية (ما يحسبه المحاسب ويشرحه لصاحب المحل)
+# ---------------------------------------------------------------------------
+
+def _bal_at(bal, prefixes):
+    tot = 0.0
+    for code, (opening, d, c) in bal.items():
+        if any(code.startswith(p) for p in prefixes):
+            tot += opening + d - c
+    return money(tot)
+
+
+def ratios(date_from, date_to):
+    """مؤشرات الأداء والسيولة مع حكم (جيد/انتبه/خطر) وشرح بسيط لكل مؤشر"""
+    from core import ledger
+    a, b = date.fromisoformat(date_from[:10]), date.fromisoformat(date_to[:10])
+    n = max(1, (b - a).days + 1)
+    pl = ledger.income_statement(date_from, date_to)
+    bal = ledger._balances(None, date_to)
+    sales = pl["net_sales"] or 0.0
+    cogs = pl["cogs"] or 0.0
+    cash = _bal_at(bal, ("1110", "1120", "1140"))
+    inventory = _bal_at(bal, ("13",))
+    receivables = _bal_at(bal, ("1210", "1130"))
+    current_assets = _bal_at(bal, ("11", "12", "13", "14"))
+    current_liab = -_bal_at(bal, ("21", "22"))
+    payables = -_bal_at(bal, ("2110", "2120"))
+    equity = -_bal_at(bal, ("3",)) + money(-sum(v[0] + v[1] - v[2] for k, v in bal.items()
+                                                if ledger.account_type(k) in ("revenue", "expense")))
+    opex = pl["total_expenses"] or 0.0
+    out = []
+
+    def add(key, name, value, fmt, verdict, explain):
+        out.append({"key": key, "name": name, "value": value, "display": fmt, "verdict": verdict, "explain": explain})
+
+    def pct(x):
+        return f"{x:.1f}%"
+    gm = pl["gross_profit"] / sales * 100 if sales else 0.0
+    add("gross_margin", "هامش الربح الإجمالي", gm, pct(gm), "good" if gm >= 18 else "watch" if gm >= 12 else "bad",
+        "من كل 100 تبيعها، كم يبقى بعد تكلفة البضاعة. البقالات والسوبرماركت عادة 15–25%.")
+    nm = pl["net_income"] / sales * 100 if sales else 0.0
+    add("net_margin", "هامش صافي الربح", nm, pct(nm), "good" if nm >= 4 else "watch" if nm >= 1 else "bad",
+        "ما يبقى لك فعلاً بعد كل المصاريف. أقل من 1% يعني أن المحل بالكاد يغطي نفسه.")
+    er = opex / sales * 100 if sales else 0.0
+    add("expense_ratio", "نسبة المصاريف إلى المبيعات", er, pct(er), "good" if er <= 14 else "watch" if er <= 20 else "bad",
+        "إيجار ورواتب وكهرباء... كنسبة من المبيعات. كلما قلّت زاد ربحك.")
+    cr = current_assets / current_liab if current_liab > 0.01 else None
+    add("current_ratio", "نسبة السيولة (الأصول المتداولة ÷ الالتزامات القصيرة)", cr,
+        f"{cr:.2f}" if cr is not None else "لا التزامات", "good" if cr is None or cr >= 1.5 else "watch" if cr >= 1 else "bad",
+        "هل يكفي ما عندك (نقد وبضاعة وديون لك) لسداد ما عليك قريباً؟ أقل من 1 خطر.")
+    qr = (current_assets - inventory) / current_liab if current_liab > 0.01 else None
+    add("quick_ratio", "السيولة السريعة (بدون البضاعة)", qr, f"{qr:.2f}" if qr is not None else "لا التزامات",
+        "good" if qr is None or qr >= 0.8 else "watch" if qr >= 0.4 else "bad",
+        "نفس السابق لكن بدون البضاعة: كم تستطيع أن تسدد فوراً لو طولبت.")
+    dio = inventory / cogs * n if cogs > 0 else None
+    add("dio", "أيام بقاء البضاعة على الرف", dio, f"{dio:.0f} يوماً" if dio is not None else "—",
+        "good" if dio is not None and dio <= 30 else "watch" if dio is not None and dio <= 60 else "bad",
+        "كم يوماً تبقى البضاعة حتى تُباع. أقل = رأس مال يدور أسرع وتلف أقل.")
+    dso = receivables / sales * n if sales > 0 else None
+    add("dso", "أيام تحصيل ديون الزبائن", dso, f"{dso:.0f} يوماً" if dso is not None else "—",
+        "good" if dso is not None and dso <= 7 else "watch" if dso is not None and dso <= 20 else "bad",
+        "متوسط الأيام حتى يدفع الزبائن ما عليهم. ارتفاعها يعني أن مالك عالق عند الناس.")
+    dpo = payables / cogs * n if cogs > 0 else None
+    add("dpo", "أيام السداد للموردين", dpo, f"{dpo:.0f} يوماً" if dpo is not None else "—",
+        "good" if dpo is not None and 7 <= dpo <= 45 else "watch",
+        "كم يوماً تأخذ حتى تدفع للمورد. مهلة معقولة تموّل البضاعة دون إضرار بعلاقتك به.")
+    if dio is not None and dso is not None and dpo is not None:
+        ccc = dio + dso - dpo
+        add("ccc", "دورة النقد", ccc, f"{ccc:.0f} يوماً", "good" if ccc <= 20 else "watch" if ccc <= 45 else "bad",
+            "من دفع ثمن البضاعة حتى عودة المال إليك. كلما قصرت احتجت رأس مال أقل.")
+    be = opex / (gm / 100) if gm > 0 else None
+    add("break_even", "مبيعات التعادل للفترة", be, f"{money(be):,.2f}" if be is not None else "—",
+        "good" if be is not None and sales >= be * 1.1 else "watch" if be is not None and sales >= be else "bad",
+        f"أقل مبيعات تغطي كل المصاريف دون ربح ولا خسارة. مبيعاتك في الفترة {money(sales):,.2f}.")
+    daily_out = (opex + cogs) / n
+    runway = cash / daily_out if daily_out > 0 else None
+    add("runway", "النقد يكفي لتغطية", runway, f"{runway:.0f} يوماً" if runway is not None else "—",
+        "good" if runway is not None and runway >= 30 else "watch" if runway is not None and runway >= 10 else "bad",
+        "لو توقفت المبيعات، كم يوماً يكفي النقد في الصندوق والبنك والمحافظ لتغطية المصاريف والمشتريات.")
+    roe = pl["net_income"] / equity * 100 * 365 / n if equity > 0 else None
+    add("roe", "العائد السنوي على رأس المال", roe, pct(roe) if roe is not None else "—",
+        "good" if roe is not None and roe >= 15 else "watch" if roe is not None and roe >= 5 else "bad",
+        "كم يكسب مالك المستثمر في المحل سنوياً، قارنه بعائد البنك أو أي استثمار آخر.")
+    return {"date_from": date_from, "date_to": date_to, "days": n, "items": out,
+            "summary": {"good": sum(1 for x in out if x["verdict"] == "good"),
+                        "watch": sum(1 for x in out if x["verdict"] == "watch"),
+                        "bad": sum(1 for x in out if x["verdict"] == "bad")}}
+
+
+def comparative_income(date_from, date_to):
+    """قائمة الدخل للفترة مقابل الفترة السابقة المماثلة مع نسبة التغير"""
+    from core import ledger, assistant
+    a, b = date.fromisoformat(date_from[:10]), date.fromisoformat(date_to[:10])
+    pa, pb = assistant.previous_period(a, b)
+    cur = ledger.income_statement(a.isoformat(), b.isoformat())
+    prev = ledger.income_statement(pa.isoformat(), pb.isoformat())
+    return {"current": cur, "previous": prev, "prev_from": pa.isoformat(), "prev_to": pb.isoformat()}
+
+
+# ---------------------------------------------------------------------------
+# مطابقة البنك
+# ---------------------------------------------------------------------------
+
+def bank_reconciliation(as_of, statement_balance):
+    """رصيد البنك في الدفاتر مقابل كشف البنك: المبالغ في الطريق (بطاقات ومحافظ تُسوّى في اليوم التالي) والفرق المتبقي"""
+    from core import ledger
+    as_of = str(as_of)[:10]
+    bal = ledger._balances(None, as_of)
+    book = _bal_at(bal, (ledger.BANK,))
+    since = (date.fromisoformat(as_of) - timedelta(days=1)).isoformat()
+    transit = money(db.scalar("""SELECT SUM(card_amount + CASE WHEN wallet_bank=1 THEN wallet_amount ELSE 0 END)
+                                 FROM invoices WHERE date(created_at) BETWEEN date(?) AND date(?)""", (since, as_of)) or 0)
+    adjusted = money(book - transit)
+    diff = money(float(statement_balance) - adjusted)
+    return {"as_of": as_of, "statement": money(statement_balance), "book": book, "in_transit": transit,
+            "adjusted_book": adjusted, "difference": diff, "matched": abs(diff) < 0.01}
+
+
+def save_bank_reconciliation(as_of, statement_balance, record_fees=False):
+    """حفظ المطابقة؛ والفرق السالب الصغير (عمولات بنكية غير مسجلة) يُسجَّل قيداً إن طُلب"""
+    import json
+    from core import ledger
+    r = bank_reconciliation(as_of, statement_balance)
+    if record_fees and r["difference"] < -0.009:
+        ledger.add_manual_entry(r["as_of"], "عمولات ومصاريف بنكية من مطابقة كشف البنك",
+                                [{"account": ledger.BANK_FEES, "debit": -r["difference"]},
+                                 {"account": ledger.BANK, "credit": -r["difference"]}])
+        r = bank_reconciliation(as_of, statement_balance)
+    hist = json.loads(db.get_meta("bank_recs") or "[]")
+    hist.append(dict(r, saved_at=db.now()))
+    db.set_meta("bank_recs", json.dumps(hist[-60:], ensure_ascii=False))
+    audit.log("مطابقة البنك", f"{r['as_of']}: الكشف {r['statement']} والدفاتر المعدّلة {r['adjusted_book']} والفرق {r['difference']}")
+    return r
+
+
+def bank_reconciliations():
+    import json
+    return list(reversed(json.loads(db.get_meta("bank_recs") or "[]")))

@@ -153,6 +153,8 @@ class Shop:
         r = self.rnd
         self.at(self.start, 7)
         settings.set_many({"shop_name": "سوبرماركت النور", "shop_address": "الخليل - شارع السلام",
+                           "branch_name": "الفرع الرئيسي — الخليل", "online_store_enabled": "1",
+                           "online_store_delivery": "1", "online_store_delivery_fee": "5",
                            "shop_phone": "02-2220000", "loyalty_enabled": "1", "vat_enabled": "1", "vat_rate": "16",
                            "prices_include_vat": "1",
                            "wallets": wallets.to_json([
@@ -181,7 +183,12 @@ class Shop:
         self.today_sold = {pid: 0.0 for pid in self.pids}
         self.staff = [payroll.add_employee("سامي", 2400, "كاشير", "0599100100"),
                       payroll.add_employee("أحمد", 2400, "كاشير", "0599100200"),
-                      payroll.add_employee("يوسف", 1800, "مخزن وتوصيل", "0599100300")]
+                      payroll.add_employee("يوسف", 1800, "مخزن وتوصيل", "0599100300"),
+                      payroll.add_employee("خالد", 1500, "عامل نظافة", "0599100400"),
+                      payroll.add_employee("ريم", 1200, "محاسبة بدوام جزئي", "0599100500")]
+        # موظفان سابقان (لتجربة «إظهار الموظفين السابقين» وقسائمهم القديمة)
+        self.leaving = {self.staff[3]: self.start + timedelta(days=240), self.staff[4]: self.start + timedelta(days=560)}
+        self.order_n = 0
         self.custs = [customers.add_customer(n, p, credit_limit=l) for n, p, l in CUSTOMERS]
         self.wholesale = customers.add_customer("بقالة الحي (جملة)", "0599887766", credit_limit=3000,
                                                 price_level="wholesale")
@@ -282,9 +289,14 @@ class Shop:
             method = pay.get("wallet_name") if pay.get("wallet_amount") else \
                 (sales.REFUND_CARD if pay.get("card_amount") else sales.REFUND_CASH)
             it = sales.returnable_items(res["invoice_id"])[0]
+            sold_at = _CLOCK[0]                  # الزبون يعود بعد ساعات (لا يُرجع لحظة الشراء)
+            later = sold_at + timedelta(minutes=self.rnd.randint(90, 300))
+            if later.date() == sold_at.date() and later.hour < 23 and later < datetime.now():
+                _CLOCK[0] = later
             sales.create_return(res["invoice_id"], [{"invoice_item_id": it["id"], "quantity": min(1, it["remaining"])}],
                                 refund_method=method, reason=self.rnd.choice(["تالف", "غير مطابق", "غيّر رأيه"]),
                                 shift_id=self.sid)
+            _CLOCK[0] = sold_at
 
     def restock(self, d):
         infl = 1.035 ** self.year_index(d)       # غلاء الأسعار عند الموردين
@@ -314,6 +326,10 @@ class Shop:
                 continue
             total = money(sum(money(x["quantity"] * x["unit_cost"]) for x in items))
             daily = name.startswith(("مخابز", "سوق"))
+            if daily:                         # الدرج لا يكفي صباحاً: المالك يضع نقداً لدفع الموردين اليوميين
+                have = shifts.summary(self.sid)["expected_cash"]
+                if have < total + 50:
+                    shifts.cash_movement(money(total + 100 - have), "نقد من المالك لدفع الموردين")
             suppliers.create_purchase(sup, items, paid=total if daily else 0,
                                       payment_method=suppliers.PAY_DRAWER if daily else suppliers.PAY_BANK,
                                       shift_id=self.sid if daily else None, update_sale_prices=False,
@@ -340,8 +356,12 @@ class Shop:
                     emp = payroll.get_employee(e)
                     payroll.update_employee(e, emp["name"], money(emp["salary"] * 1.04), emp["job"], emp["phone"])
             if d > self.start:
-                for e in self.staff:
+                for e in list(self.staff):
                     payroll.pay_salary(e, prev, method=payroll.PAY_BANK)
+                    if e in self.leaving and d >= self.leaving[e]:           # ترك العمل بعد آخر راتب
+                        emp = payroll.get_employee(e)
+                        payroll.update_employee(e, emp["name"], emp["salary"], emp["job"], emp["phone"], is_active=False)
+                        self.staff.remove(e)
             expenses.add_expense("إنترنت واتصالات", 150, from_drawer=False, expense_date=d.isoformat())
             if self.wallet_bal > 1:          # تحويل رصيد المحافظ للبنك مع عمولة المزوّد
                 fee = money(self.wallet_bal * 0.005)
@@ -462,6 +482,9 @@ class Shop:
             else:
                 self.money_matters(d)
             self.sell(d, half)
+            if (half == 1 or is_today) and (self.today - d).days <= 60 and getattr(self, "_orders_day", None) != d:
+                self._orders_day = d
+                self.online_orders(d, is_today)          # الوردية ما زالت مفتوحة: الطلبات المكتملة تدخل فيها
             if is_today and (half == 1 or now.hour < 15):
                 break                            # وردية اليوم تبقى مفتوحة
             self.at(d, 14 if half == 0 else 22, 55 if half == 0 else 0)
@@ -480,6 +503,58 @@ class Shop:
             ledger.add_manual_entry(d.isoformat(), "إيداع مال من المالك في البنك (من جاري المالك)",
                                     [{"account": ledger.BANK, "debit": dep}, {"account": ledger.OWNER, "credit": dep}])
             self.week_cash = 0.0
+
+    def online_orders(self, d, is_today):
+        """طلبات المتجر الأونلاين: الأقدم مكتملة (تحولت لفواتير) أو ملغاة، واليوم جديدة وقيد التجهيز وجاهزة"""
+        from core import orders
+        import json as _json
+        r = self.rnd
+        names = ["أم محمد", "أبو خليل", "سارة", "محمود الشريف", "رنا", "أبو أنس", "هدى", "عمر", "ليلى", "مازن"]
+        for k in range(r.randint(1, 4)):
+            self.order_n += 1
+            last_hour = max(8, datetime.now().hour - 1) if is_today else 20
+            self.at(d, r.randint(8, last_hour), r.randint(0, 59))
+            picks = r.sample([p for p in self.pids if products.get_product(p)["quantity"] > 5], k=r.randint(2, 5))
+            delivery = r.random() < 0.6
+            try:
+                o = orders.create_order({"name": r.choice(names), "phone": f"0599{r.randint(100000, 999999)}",
+                                         "fulfilment": "delivery" if delivery else "pickup",
+                                         "address": "الخليل - " + r.choice(["عين سارة", "رأس الجورة", "الحاووز", "باب الزاوية"])
+                                         if delivery else "",
+                                         "note": r.choice(["", "", "الرجاء الاتصال قبل الوصول", "بدون أكياس بلاستيك"]),
+                                         "items": [{"product_id": p, "quantity": r.choice([1, 1, 2, 3])} for p in picks]},
+                                        f"10.{self.order_n // 60000}.{self.order_n // 250 % 240}.{self.order_n % 250}")
+            except orders.OrderError:
+                continue
+            oid = o.get("id") or o.get("order_id") or db.scalar("SELECT MAX(id) FROM online_orders")
+            if is_today:
+                st = r.choice(["new", "new", "preparing", "ready"])
+                if st != "new":
+                    orders.set_status(oid, st)
+                continue
+            if r.random() < 0.1:
+                orders.set_status(oid, "cancelled")
+                continue
+            row = db.query_one("SELECT * FROM online_orders WHERE id=?", (oid,))
+            cart = []
+            for it in _json.loads(row["items"]):
+                p = products.get_product(it["product_id"])
+                if p and p["quantity"] >= it["quantity"]:
+                    cart.append({"product_id": p["id"], "product_name": p["name"], "quantity": it["quantity"],
+                                 "unit_price": it["unit_price"], "list_price": it["unit_price"]})
+            if not cart:
+                orders.set_status(oid, "cancelled")
+                continue
+            if row["fulfilment"] == "delivery":
+                fee_id = products.service_product("رسوم توصيل", 5)
+                cart.append({"product_id": fee_id, "product_name": "رسوم توصيل", "quantity": 1, "unit_price": 5,
+                             "list_price": 5})
+            self.at(d, 21, r.randint(0, 50))
+            try:
+                res = sales.create_sale(cart, shift_id=self.sid, round_up=r.random() < 0.3)
+                orders.set_status(oid, "done", res["invoice_id"])
+            except sales.SaleError:
+                orders.set_status(oid, "cancelled")
 
     def history(self):
         total_days = (self.today - self.start).days + 1
@@ -528,6 +603,43 @@ def finishing_touches(pids, cids):
     suppliers.create_purchase_return(s1, [{"product_id": pids[1], "quantity": 4}], "منتهي الصلاحية")
 
 
+def make_branches():
+    """فرعان تجريبيان (الخليل ورام الله) من نسخة المحل لآخر سنة، ليظهر تقرير الفروع مجمّعاً من أول فتح"""
+    import random as _random
+    import shutil
+    import sqlite3
+    from core import branches
+    rnd = _random.Random(7)
+    for name, keep in (("فرع رام الله", 0.55), ("فرع نابلس", 0.4)):
+        dest = os.path.join(branches.import_dir(), f"demo_{abs(hash(name)) % 10000}.db")
+        src = sqlite3.connect(db.DB_PATH)
+        out = sqlite3.connect(dest)
+        src.backup(out)                                   # نسخة متسقة حتى مع وضع WAL
+        src.close()
+        cut = (date.today() - timedelta(days=365)).isoformat()
+        out.execute("PRAGMA foreign_keys = OFF")          # نسخة للقراءة في تقرير الفروع فقط
+        ids = [r[0] for r in out.execute("SELECT id FROM invoices WHERE date(created_at) >= ?", (cut,))]
+        drop = [i for i in ids if rnd.random() > keep]
+        out.execute("DELETE FROM returns WHERE invoice_id IN (SELECT id FROM invoices WHERE date(created_at) < ?)", (cut,))
+        out.execute("DELETE FROM invoices WHERE date(created_at) < ?", (cut,))
+        for k in range(0, len(drop), 500):
+            part = drop[k:k + 500]
+            q = ",".join("?" * len(part))
+            out.execute(f"DELETE FROM return_items WHERE return_id IN (SELECT id FROM returns WHERE invoice_id IN ({q}))", part)
+            out.execute(f"DELETE FROM returns WHERE invoice_id IN ({q})", part)
+            out.execute(f"DELETE FROM invoice_items WHERE invoice_id IN ({q})", part)
+            out.execute(f"DELETE FROM invoices WHERE id IN ({q})", part)
+        f = keep * 0.9                                     # فرع أصغر: مصاريف ورواتب أقل بنسبة حجمه
+        out.execute("UPDATE expenses SET amount = ROUND(amount * ?, 2)", (f,))
+        out.execute("""UPDATE payroll_payments SET base = ROUND(base * ?, 2), bonus = ROUND(bonus * ?, 2),
+                       deductions = ROUND(deductions * ?, 2), advances = ROUND(advances * ?, 2),
+                       net = ROUND(net * ?, 2)""", (f, f, f, f, f))
+        out.execute("INSERT OR REPLACE INTO settings(key, value) VALUES ('branch_name', ?)", (name,))
+        out.commit()
+        out.execute("VACUUM")
+        out.close()
+
+
 def main(progress=None):
     days = int(os.environ.get("SHOP_DEMO_DAYS") or DEFAULT_DAYS)
     db.init_db()
@@ -545,6 +657,7 @@ def main(progress=None):
         db.now, db.today = orig_clock
         license.require_active = orig_license
     finishing_touches(shop.pids, shop.custs)
+    make_branches()
     db.refresh_statistics()                 # إحصاءات الجداول: التقارير والمستشار سريعة من أول فتح
     if progress:
         progress(1.0, "")
