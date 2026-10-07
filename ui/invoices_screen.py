@@ -19,12 +19,15 @@ class ReturnDialog(QDialog):
         self.setWindowTitle(f"مرتجع من الفاتورة {invoice['invoice_number']}")
         self.resize(720, 460)
         lay = QVBoxLayout(self)
-        lay.addWidget(hint("حدد الكمية المرتجعة لكل صنف. يُحسب المبلغ بنفس نسبة الخصم في الفاتورة الأصلية، وتعود الكمية للمخزون."))
+        lay.addWidget(hint("حدد الكمية المرتجعة لكل صنف. يُرد المبلغ بسعر البيع الأصلي في هذه الفاتورة (حتى لو تغيّر سعر الصنف بعدها) "
+                           "وبنفس نسبة الخصم، وتعود الكمية للمخزون بتكلفتها الأصلية."))
         self.items = [i for i in sales.returnable_items(invoice["id"]) if i["remaining"] > 1e-9]
         self.table = QTableWidget(len(self.items), 4)
         self.table.setHorizontalHeaderLabels(["الصنف", "المتبقي", "السعر", "الكمية المرتجعة"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(42)
+        self.table.setColumnWidth(3, 130)
         self.spins = []
         for r, it in enumerate(self.items):
             self.table.setItem(r, 0, QTableWidgetItem(it["product_name"]))
@@ -34,6 +37,8 @@ class ReturnDialog(QDialog):
             s.setDecimals(3)
             s.setMaximum(it["remaining"])
             s.valueChanged.connect(self.update_total)
+            s.setButtonSymbols(QDoubleSpinBox.NoButtons)
+            s.setAlignment(Qt.AlignCenter)
             self.table.setCellWidget(r, 3, s)
             self.spins.append(s)
         lay.addWidget(self.table)
@@ -66,8 +71,12 @@ class ReturnDialog(QDialog):
             s.setValue(it["remaining"])
 
     def update_total(self):
-        ratio = self.inv["total"] / self.inv["subtotal"] if self.inv["subtotal"] else 0
+        rnd = (self.inv["rounding"] if "rounding" in self.inv.keys() else 0) or 0
+        ratio = (self.inv["total"] - rnd) / self.inv["subtotal"] if self.inv["subtotal"] else 0
         t = sum(s.value() * it["unit_price"] * ratio for s, it in zip(self.spins, self.items))
+        if rnd and all(abs(s.value() - it["remaining"]) < 1e-9 for s, it in zip(self.spins, self.items)) and \
+                len(self.items) == len(sales.returnable_items(self.inv["id"])):
+            t += rnd                                  # إرجاع كامل: يُرد التقريب أيضاً
         self.total_lbl.setText(m(t))
 
     def accept(self):

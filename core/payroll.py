@@ -158,3 +158,30 @@ def payslip_html(payment_id):
             f"<table width='100%' border='1' cellspacing='0' cellpadding='6' style='border-collapse:collapse'>{body}</table>"
             f"<p style='margin-top:40px'>توقيع الموظف: ____________ &nbsp;&nbsp;&nbsp; توقيع المدير: ____________</p>",
             f"قسيمة راتب — {p['period']}", size_pt=11)
+
+
+def statement_html(employee_id):
+    """كشف الموظف الكامل للطباعة: كل الرواتب والسلف والرصيد"""
+    from html import escape
+    from core import branding
+    e = db.query_one("SELECT * FROM employees WHERE id=?", (employee_id,))
+    if not e:
+        return ""
+    rows, total_net, total_adv = [], 0.0, 0.0
+    for h in reversed(history(employee_id)):
+        if h["kind"] == "advance":
+            total_adv += h["amount"]
+            rows.append((h["created_at"][:10], f"سلفة ({h['method']})", "", f"{h['amount']:,.2f}", ""))
+        else:
+            gross = money(h["base"] + h["bonus"] - h["deductions"])
+            total_net += h["net"]
+            rows.append((h["created_at"][:10], f"راتب {h['period']}", f"{gross:,.2f}", f"{h['advances']:,.2f}",
+                         f"{h['net']:,.2f}"))
+    body = "".join("<tr>" + "".join(f"<td>{escape(str(c))}</td>" for c in r) + "</tr>" for r in rows)
+    return branding.document(
+        f"<p>الموظف: <b>{escape(e['name'])}</b>{(' — ' + escape(e['job'])) if e['job'] else ''} • "
+        f"الراتب الحالي: {e['salary']:,.2f} • السلف المتبقية: {advances_balance(employee_id):,.2f}</p>"
+        f"<table width='100%' border='1' cellspacing='0' cellpadding='5' style='border-collapse:collapse'>"
+        f"<tr style='background:#eee'><th>التاريخ</th><th>البيان</th><th>المستحق</th><th>سلف</th><th>المدفوع</th></tr>"
+        f"{body}</table><p>مجموع ما دُفع رواتب: <b>{total_net:,.2f}</b> • مجموع السلف: <b>{total_adv:,.2f}</b></p>",
+        "كشف حساب موظف", e["name"])

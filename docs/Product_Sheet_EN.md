@@ -5,7 +5,7 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 
 ![Point of sale](en_pos.png)
 
-## Superpowers
+## Shop assistant
 - **Ask your shop** — type a question the way you'd ask your accountant (English, Arabic or Arabic dialect): “sales yesterday?”, “who owes me money?”, “how much milk is left?”, “compare this month with last month”, “what should I prepare for Ramadan?”. Instant answers from your own data, offline. Ctrl+K from any screen.
 - **Sales & cash-flow forecast** — next 30 days day by day with a confidence band; expected cash including salaries, cheques, purchases and collections, with a warning before cash runs short.
 - **Seasons & Ramadan planner** — Hijri calendar: Ramadan, both Eids, back to school and summer, with last season's uplift per item, a first-order quantity and an order-by date.

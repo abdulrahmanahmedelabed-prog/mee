@@ -34,7 +34,7 @@
 
 الإنفوجرافيك جاهز بثلاثة مقاسات: [منشور](marketing/infographic/post.png) • [قصة / حالة واتساب](marketing/infographic/story.png) • [ورقة A4 للطباعة](marketing/infographic/flyer_a4.png)
 
-## ✨ القوى الخارقة
+## 🧭 مساعد المحل
 
 | | |
 |---|---|

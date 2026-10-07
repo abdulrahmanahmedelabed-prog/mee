@@ -63,6 +63,9 @@ def invoice_html(invoice_id, copy=False):
     if inv["tax"]:
         label = "منها ضريبة" if settings.get_bool("prices_include_vat") else "الضريبة"
         lines.append(f"<tr><td>{label} ({settings.get('vat_rate')}%)</td><td class='l'>{_m(inv['tax'])}</td></tr>")
+    rnd = inv["rounding"] if "rounding" in inv.keys() else 0
+    if rnd:
+        lines.append(f"<tr><td>تقريب لرقم صحيح</td><td class='l'>+{_m(rnd)}</td></tr>")
     lines.append(f"<tr class='tot'><td>الإجمالي</td><td class='l'>{_m(inv['total'])} {sym}</td></tr>")
     if inv["cash_amount"]:
         lines.append(f"<tr><td>نقداً</td><td class='l'>{_m(inv['cash_amount'])}</td></tr>")
@@ -123,6 +126,8 @@ def offline_receipt_html(p):
         lines.append(f"<tr><td>الخصم</td><td class='l'>-{_m(p['discount'])}</td></tr>")
     if p["promo_discount"]:
         lines.append(f"<tr><td>خصم العروض 🎁</td><td class='l'>-{_m(p['promo_discount'])}</td></tr>")
+    if p.get("rounding"):
+        lines.append(f"<tr><td>تقريب لرقم صحيح</td><td class='l'>+{_m(p['rounding'])}</td></tr>")
     lines.append(f"<tr class='tot'><td>الإجمالي</td><td class='l'>{_m(p['total'])} {sym}</td></tr>")
     if p["cash_amount"]:
         lines.append(f"<tr><td>نقداً</td><td class='l'>{_m(p['cash_amount'])}</td></tr>")

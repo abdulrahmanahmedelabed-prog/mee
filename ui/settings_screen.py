@@ -192,6 +192,7 @@ class SettingsScreen(QWidget):
         self._num(f, "cashier_max_discount_percent", "أقصى خصم للكاشير بدون إذن مدير %:", 0, 100)
         self._num(f, "expiry_alert_days", "التنبيه قبل انتهاء الصلاحية بـ (يوم):", 1, 365, decimals=0)
         self._check(f, "block_expired_sale", "منع البيع إذا وُجدت دفعة منتهية من الصنف لم تُتلف")
+        self._check(f, "round_total_up", "تقريب إجمالي كل فاتورة لأعلى رقم صحيح (بلا كسور) — يمكن إلغاؤه من زر «⬆ رقم صحيح» في نقطة البيع")
         self._line(f, "whatsapp_country_code", "رمز الدولة لأرقام واتساب (970 فلسطين، 972، 962 الأردن):")
         cats = QTextEdit()
         cats.setMaximumHeight(80)

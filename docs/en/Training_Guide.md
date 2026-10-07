@@ -83,7 +83,7 @@ In this order:
 For the **first 30 days you get the full 👑 Max plan free** (every feature, unlimited tills). After that the program runs on the **🌱 Free plan**: selling, inventory, debts and basic reports **never stop**, and advanced features show a 🔒 lock. To upgrade to ⚡ Plus, 💎 Pro or 👑 Max you need an "activation key" for your computer, sent by your program provider.
 
 - **To see your plan and compare plans:** click the plan badge at the top (for example "👑 Max • 23-day trial") or the **💎 Plans & upgrade** button.
-- **What each plan includes:** Free covers selling, inventory, debts and reports; Plus adds the smart advisor, smart reordering, offers, cheques, installments and stock counting from the phone (the mobile app for price checks is available on every plan); Pro adds accounting, the financial audit, payroll, the online store, the owner dashboard and zakat; Max adds the superpowers and branches.
+- **What each plan includes:** Free covers selling, inventory, debts and reports; Plus adds the smart advisor, smart reordering, offers, cheques, installments and stock counting from the phone (the mobile app for price checks is available on every plan); Pro adds accounting, the financial audit, payroll, the online store, the owner dashboard and zakat; Max adds the shop assistant and branches.
 
 **Activation steps (from an administrator account):**
 1. Click **💎 Plans & upgrade** → **🔑 I have an activation key**, or Settings → **License & activation**. (Or click **"Get Pro"**, for example, in the plan comparison — the request reaches your provider on WhatsApp.)
@@ -292,8 +292,8 @@ An expense paid from the drawer of a closed shift can't be deleted (its cash cou
 - **Tamper seal:** every invoice and every line of the activity log is sealed with a chained digital fingerprint. If anyone edits or deletes an invoice directly in the data file (outside the program), it shows up as a critical finding with the invoice number.
 > The audit sees everything recorded in the program, but not what was never recorded; physical stock counts and cash counts are still essential.
 
-### 5.13.2 Superpowers ✨ (Max plan; zakat in Pro)
-From the menu: **✨ Superpowers** — four tabs:
+### 5.13.2 Shop assistant 🧭 (Max plan; zakat in Pro)
+From the menu: **🧭 Shop assistant** — four tabs:
 
 **💬 Ask your shop** — type your question the way you'd ask your accountant and press Enter:
 - "How much did I sell today?" → sales compared with yesterday at the same hour, and the payment mix.
@@ -419,7 +419,7 @@ Do them in order. After each exercise, check the expected result.
 | 22 | Reports → E-payments → This month → choose PalPay | Its transactions with each transaction number, for reconciliation |
 | 23 | Reports → Period summary → "Last 3 years" → Yearly, then Monthly | Sales growth year after year, and the Ramadan and summer peaks |
 | 24 | Accounting → Financial transaction → "Transfer e-wallet balance to the bank" | The wallets balance goes down and the bank goes up on the balance sheet |
-| 25 | ✨ Superpowers → Ask your shop: "profit last month", then "what should I prepare for Ramadan?" | The answer with figures, a comparison and a table; the Ramadan plan with order quantities |
+| 25 | 🧭 Shop assistant → Ask your shop: "profit last month", then "what should I prepare for Ramadan?" | The answer with figures, a comparison and a table; the Ramadan plan with order quantities |
 | 26 | Click 🌙 at the top, then ☀ | The whole program switches to dark and back, on the same screen, in under a second |
 
 ---

@@ -212,6 +212,30 @@ def get_all_products(active_only=True, search=None, category=None, low_only=Fals
     return db.query(sql, params)
 
 
+# ---------------- طابور ملصقات الأسعار ----------------
+
+def pending_labels():
+    """أصناف تغيّر سعرها (أو جديدة) ولم يُطبع ملصق رفّها بالسعر الحالي بعد"""
+    return db.query("""SELECT * FROM products WHERE is_active=1 AND is_service=0
+                       AND (label_price IS NULL OR ABS(label_price - sale_price) > 0.004)
+                       ORDER BY updated_at DESC, name""")
+
+
+def pending_labels_count():
+    return db.scalar("""SELECT COUNT(*) FROM products WHERE is_active=1 AND is_service=0
+                        AND (label_price IS NULL OR ABS(label_price - sale_price) > 0.004)""") or 0
+
+
+def mark_labels_printed(product_ids):
+    """بعد الطباعة: يخرج الصنف من الطابور حتى يتغير سعره مرة أخرى"""
+    ids = [int(i) for i in product_ids or []]
+    if not ids:
+        return 0
+    with db.tx() as conn:
+        conn.executemany("UPDATE products SET label_price = sale_price WHERE id=?", [(i,) for i in ids])
+    return len(ids)
+
+
 def english_names():
     """{الاسم العربي: الاسم الإنجليزي} للأصناف التي كتب لها صاحب المحل اسماً إنجليزياً"""
     return {r[0]: r[1] for r in db.query(

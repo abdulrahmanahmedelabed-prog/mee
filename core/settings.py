@@ -34,6 +34,7 @@ DEFAULTS = {
     # الصلاحية
     "expiry_alert_days": "30",
     "block_expired_sale": "0",
+    "round_total_up": "0",          # تقريب إجمالي كل فاتورة لأعلى رقم صحيح افتراضياً (يمكن إلغاؤه في الفاتورة)
     # واتساب
     "whatsapp_country_code": "970",
     "owner_whatsapp": "",           # رقم المالك لإرسال ملخص اليوم

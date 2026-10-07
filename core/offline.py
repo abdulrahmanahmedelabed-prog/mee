@@ -144,11 +144,13 @@ def pending_count():
 
 
 def queue_sale(cart, discount, promo_discount, cash_amount, card_amount, cash_received, shift_id,
-               wallet_amount=0.0, wallet_name="", wallet_ref="", card_ref="", ref=None):
+               wallet_amount=0.0, wallet_name="", wallet_ref="", card_ref="", ref=None, round_up=False):
     from core import sales
     if not cart:
         raise sales.SaleError("السلة فارغة")
     t = sales.compute_totals(cart, money(discount + promo_discount))
+    rounding = sales.round_up_amount(t["total"]) if round_up else 0.0
+    t["total"] = money(t["total"] + rounding)
     if abs(money(cash_amount + card_amount + (wallet_amount or 0)) - t["total"]) > 0.009:
         raise sales.SaleError("مجموع المدفوع لا يساوي إجمالي الفاتورة")
     clean_cart = [{k: it[k] for k in ("product_id", "product_name", "quantity", "unit_price", "factor", "unit_name",
@@ -158,7 +160,7 @@ def queue_sale(cart, discount, promo_discount, cash_amount, card_amount, cash_re
                "card_amount": money(card_amount), "wallet_amount": money(wallet_amount or 0),
                "wallet_name": wallet_name or "", "wallet_ref": wallet_ref or "", "card_ref": card_ref or "",
                "cash_received": money(cash_received or cash_amount),
-               "shift_id": shift_id, "user": (auth.current_user() or {}).get("username"), "total": t["total"],
+               "shift_id": shift_id, "user": (auth.current_user() or {}).get("username"), "total": t["total"], "rounding": rounding,
                "subtotal": t["subtotal"], "tax": t["tax"], "change": money((cash_received or cash_amount) - cash_amount)}
     with _lock:
         q = queue()

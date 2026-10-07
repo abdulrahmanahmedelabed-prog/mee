@@ -613,6 +613,7 @@ ADDED_COLUMNS = {
         ("updated_at", "TEXT"),
         ("wholesale_price", "REAL NOT NULL DEFAULT 0"),   # سعر الجملة (0 = لا يوجد)
         ("name_en", "TEXT"),                        # الاسم بالإنجليزية (اختياري؛ وإلا ترجمة تلقائية)
+        ("label_price", "REAL"),                     # السعر المطبوع على ملصق الرف (لطابور الملصقات)
     ],
     "customers": [
         ("address", "TEXT"),
@@ -647,17 +648,20 @@ ADDED_COLUMNS = {
         ("points_value", "REAL NOT NULL DEFAULT 0"),     # قيمتها (جزء من discount)
         ("points_earned", "REAL NOT NULL DEFAULT 0"),
         ("seal", "TEXT"),                           # ختم ضد العبث (core/integrity.py)
+        ("rounding", "REAL NOT NULL DEFAULT 0"),     # تقريب الإجمالي لأعلى رقم صحيح (خارج وعاء الضريبة)
     ],
     "invoice_items": [
         ("returned_qty", "REAL NOT NULL DEFAULT 0"),
         ("unit_name", "TEXT"),
         ("factor", "REAL NOT NULL DEFAULT 1"),     # كم وحدة أساسية في الوحدة المباعة
+        ("list_price", "REAL"),                     # السعر الأصلي للصنف وقت البيع (لكشف تغيير السعر)
     ],
     "return_items": [
         ("factor", "REAL NOT NULL DEFAULT 1"),
     ],
     "returns": [
         ("refund_account", "TEXT"),               # حساب الاسترداد: الصندوق/البنك/المحفظة/ذمم العملاء (فارغ = حسب الطريقة)
+        ("rounding", "REAL NOT NULL DEFAULT 0"),
     ],
     "purchase_returns": [
         ("tax", "REAL NOT NULL DEFAULT 0"),       # ضريبة المدخلات المشمولة في المرتجع (تُعكس من حساب ضريبة المدخلات)
@@ -747,6 +751,8 @@ def init_db():
             for name, ddl in cols:
                 if name not in have:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+                    if (table, name) == ("products", "label_price"):      # الملصقات الحالية تُعتبر مطبوعة بسعرها
+                        conn.execute("UPDATE products SET label_price = sale_price")
         conn.executescript(INDEXES)
 
         if was_v1:

@@ -210,7 +210,7 @@ def status():
         out.update(state="free", tier=_plans.FREE, terminals=_plans.TERMINALS[_plans.FREE],
                    plan_label=_plans.label(_plans.FREE),
                    message="الباقة المجانية: البيع والمخزون والديون والتقارير الأساسية. رقِّ لتفتح المستشار الذكي "
-                           "والمحاسبة والتدقيق والقوى الخارقة.")
+                           "والمحاسبة والتدقيق ومساعد المحل.")
     return out
 
 

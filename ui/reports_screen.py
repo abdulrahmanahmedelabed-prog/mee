@@ -199,6 +199,10 @@ class ReportsScreen(QWidget):
         info(self, f"أُضيف الفرع: {name}")
         self.load()
 
+    def open_section(self, name):
+        from ui.widgets import select_tab
+        select_tab(self.tabs, name)
+
     def _add_tab(self, widget, name, table):
         self.tabs.blockSignals(True)          # لا تحميل أثناء البناء: refresh() عند فتح الشاشة يحمّل مرة واحدة
         idx = self.tabs.addTab(widget, name)

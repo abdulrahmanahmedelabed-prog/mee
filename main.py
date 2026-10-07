@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 DEMO = "--demo" in sys.argv
 if DEMO:
+    os.environ["SHOP_DEMO_ACTIVE"] = "1"
     _base = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
     os.environ["SHOP_DATA_DIR"] = os.environ.get("SHOP_DEMO_DIR") or os.path.join(_base, "demo_data")
 

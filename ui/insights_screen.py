@@ -3,7 +3,7 @@
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget, QFrame, QComboBox,
-                               QDoubleSpinBox, QCheckBox)
+                               QDoubleSpinBox, QCheckBox, QDialog)
 
 from core import insights, products, settings
 from ui.widgets import Table, button, page, hint, info, ask, m, qty_cell, require_permission, KpiCard
@@ -185,8 +185,19 @@ class InsightsScreen(QWidget):
             return
         if not require_permission(self, "inventory"):
             return
-        if ask(self, f"تغيير سعر بيع {len(self.changes)} صنف؟\nتذكّر طباعة ملصقات الأسعار الجديدة من شاشة المخزون."):
+        if ask(self, f"تغيير سعر بيع {len(self.changes)} صنف؟\n"
+                     "تُضاف تلقائياً إلى «ملصقات بانتظار الطباعة» ولا تخرج منها حتى تُطبع ملصقاتها."):
+            ids = [c["id"] for c in self.changes]
             n = insights.apply_price_update(self.changes)
             self.changes = []
             self.preview()
-            info(self, f"تم تحديث {n} سعر.")
+            if ask(self, f"تم تحديث {n} سعر.\n\nهل تطبع ملصقات الأسعار الجديدة الآن؟\n"
+                         "(إن أجّلت تبقى في المخزون ← «🏷 ملصقات بانتظار الطباعة» ويذكّرك بها المستشار والمدقق)"):
+                from core import products
+                from ui import printing
+                from ui.inventory_screen import LabelsDialog
+                rows = [r for r in products.pending_labels() if r["id"] in set(ids)]
+                dlg = LabelsDialog(self, rows)
+                if rows and dlg.exec() == QDialog.Accepted:
+                    printing.print_labels(self, dlg.items())
+                    products.mark_labels_printed([r["id"] for r in rows])

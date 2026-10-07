@@ -194,6 +194,11 @@ QTableWidget::item { padding: 6px 10px; border-bottom: 1px solid #F4F6FB; }
 QTableWidget::item:selected { background: #EEF4FF; color: #101828; }
 QTableWidget#cart { font-size: 15px; }
 QTableCornerButton::section { background: white; border: none; }
+/* حقول التعديل داخل الجداول (تعديل السعر/الكمية): بلا حشو كبير حتى لا تضيق وتختفي أرقامها */
+QTableView QLineEdit, QTableView QAbstractSpinBox, QTableView QComboBox, QTableView QDateEdit {
+    padding: 0px 6px; margin: 2px; border-radius: 6px; border: 1.5px solid #2563EB; background-color: white;
+    min-height: 0px;
+}
 
 /* ---------- التبويبات (أزرار مقسّمة مثل تطبيقات الجوال) ---------- */
 QTabWidget::pane { border: none; background: transparent; top: 6px; }

@@ -21,6 +21,8 @@ def profit_and_loss(date_from, date_to):
     ret = db.query_one(f"""SELECT COUNT(*) AS cnt, COALESCE(SUM(total),0) AS total, COALESCE(SUM(tax),0) AS tax,
                                   COALESCE(SUM(cost_total),0) AS cost
                            FROM returns WHERE {_RANGE.format(col='created_at')}""", p)
+    rounding = money(db.scalar(f"SELECT SUM(rounding) FROM invoices WHERE {_RANGE.format(col='created_at')}", p) -
+                     db.scalar(f"SELECT SUM(rounding) FROM returns WHERE {_RANGE.format(col='created_at')}", p))
     payroll = money(db.scalar(f"SELECT SUM(base + bonus - deductions) FROM payroll_payments WHERE {_RANGE.format(col='created_at')}", p))
     expenses = money(db.scalar(f"SELECT SUM(amount) FROM expenses WHERE {_RANGE.format(col='expense_date')}", p) + payroll)
     stock_loss = money(db.scalar(f"SELECT SUM(loss_value) FROM stock_movements WHERE {_RANGE.format(col='created_at')}", p))
@@ -51,6 +53,7 @@ def profit_and_loss(date_from, date_to):
         "sales_after_discount": money(inv["net"]),
         "returns": money(ret["total"]),
         "returns_count": ret["cnt"],
+        "rounding": rounding,
         "net_sales": net_sales,
         "tax": tax_due,
         "net_revenue": net_revenue,

@@ -158,6 +158,9 @@ class InventoryScreen(QWidget):
         outer.addWidget(w)
 
         head = QHBoxLayout()
+        self.labels_btn = button("🏷 ملصقات بانتظار الطباعة", "secondaryBtn", self.print_pending_labels,
+                                 "كل صنف تغيّر سعره (فردياً أو بالتحديث الجماعي) أو أُضيف جديداً يبقى هنا حتى تطبع ملصق رفّه")
+        head.addWidget(self.labels_btn)
         head.addStretch()
         head.addWidget(button("🌐 الأسماء الإنجليزية", "secondaryBtn", self.english_names,
                               "يكتب لكل صنف اسماً إنجليزياً تلقائياً (للواجهة والفواتير الإنجليزية) لتراجعه وتعدّله"))
@@ -208,6 +211,7 @@ class InventoryScreen(QWidget):
         self.load()
 
     def load(self):
+        self._update_labels_btn()
         cat = self.category.currentText()
         rows = products.get_all_products(search=self.search.text().strip() or None,
                                          category=None if cat in ("", "الكل") else cat, low_only=self.low_only.isChecked())
@@ -276,7 +280,28 @@ class InventoryScreen(QWidget):
         dlg = LabelsDialog(self, rows)
         if dlg.exec() == QDialog.Accepted:
             printing.print_labels(self, dlg.items())
+            products.mark_labels_printed([r["id"] for r in rows])
             self.load()
+
+    def print_pending_labels(self):
+        rows = products.pending_labels()
+        if not rows:
+            info(self, "كل ملصقات الرفوف مطبوعة بالأسعار الحالية 👍")
+            return
+        dlg = LabelsDialog(self, rows)
+        dlg.setWindowTitle(f"ملصقات بانتظار الطباعة ({len(rows)})")
+        if dlg.exec() == QDialog.Accepted:
+            printing.print_labels(self, dlg.items())
+            if ask(self, "هل طُبعت الملصقات وعُلّقت على الرفوف؟ (تخرج الأصناف من الطابور)"):
+                products.mark_labels_printed([r["id"] for r in rows])
+            self.load()
+
+    def _update_labels_btn(self):
+        n = products.pending_labels_count()
+        self.labels_btn.setText(f"🏷 ملصقات بانتظار الطباعة ({n})" if n else "🏷 الملصقات محدّثة")
+        self.labels_btn.setObjectName("dangerBtn" if n else "secondaryBtn")
+        self.labels_btn.style().unpolish(self.labels_btn)
+        self.labels_btn.style().polish(self.labels_btn)
 
     def delete(self):
         p = self.selected()

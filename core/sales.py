@@ -59,6 +59,11 @@ def compute_totals(cart, discount=0.0):
     return {"subtotal": subtotal, "discount": discount, "tax": tax, "total": total}
 
 
+def round_up_amount(total):
+    """مبلغ التقريب لأعلى رقم صحيح: 19.40 ← 0.60"""
+    return money(math.ceil(money(total) - 1e-9) - money(total))
+
+
 def payment_label(cash, card, credit, wallet=0.0, wallet_name=""):
     used = [m for m, v in ((METHOD_CASH, cash), (METHOD_CARD, card), (METHOD_CREDIT, credit),
                            (wallet_name or "محفظة إلكترونية", wallet)) if v > 0.004]
@@ -85,7 +90,8 @@ def cart_discounts(cart, manual_discount=0.0, points=0.0):
 
 def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amount=0.0, credit_amount=0.0,
                 cash_received=None, note="", shift_id=None, allow_over_limit=False, points_redeemed=0.0,
-                offline=None, card_ref="", wallet_amount=0.0, wallet_name="", wallet_ref="", sale_ref=None):
+                offline=None, card_ref="", wallet_amount=0.0, wallet_name="", wallet_ref="", sale_ref=None,
+                round_up=False):
     """
     cart: قائمة dict: product_id, product_name, quantity, unit_price
           (اختياري) factor, unit_name للبيع بوحدة أكبر مثل الكرتونة
@@ -126,6 +132,12 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
     if points_redeemed and disc["total"] > subtotal + 0.009:
         raise SaleError("قيمة النقاط المستبدلة أكبر من قيمة الفاتورة بعد الخصم")
     t = compute_totals(cart, disc["total"])
+    # التقريب لأعلى رقم صحيح (بلا كسور): الفرق خارج وعاء الضريبة ويُسجَّل في حساب «فروق التقريب»
+    rounding = money((offline or {}).get("rounding") or 0) if offline else \
+        (round_up_amount(t["total"]) if round_up else 0.0)
+    if rounding:
+        t["total"] = money(t["total"] + rounding)
+    t["rounding"] = rounding
     total = t["total"]
     card_amount = money(card_amount or 0)
     credit_amount = money(credit_amount or 0)
@@ -233,6 +245,8 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
               context.terminal(), disc["promo"], points_redeemed, disc["points_value"], points_earned, created,
               wallet_amount, wallet_name or None, (wallet_ref or "").strip() or None, wallet_bank))
         invoice_id = cur.lastrowid
+        if rounding:
+            conn.execute("UPDATE invoices SET rounding=? WHERE id=?", (rounding, invoice_id))
         if ref:
             conn.execute("UPDATE invoices SET offline_ref=? WHERE id=?", (ref, invoice_id))
         if card_ref:
@@ -251,11 +265,12 @@ def create_sale(cart, discount=0.0, customer_id=None, cash_amount=None, card_amo
             factor = float(item.get("factor", 1) or 1)
             conn.execute("""
                 INSERT INTO invoice_items (invoice_id, product_id, product_name, quantity, unit_price, cost_price, total,
-                                           unit_name, factor)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                           unit_name, factor, list_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (invoice_id, p["id"], item.get("product_name") or p["name"], q, money(item["unit_price"]),
                   unit_cost(p["cost_price"] * factor), money(q * item["unit_price"]),
-                  item.get("unit_name") or p["unit"], factor))
+                  item.get("unit_name") or p["unit"], factor,
+                  money(item.get("list_price", p["sale_price"] if factor == 1 else item["unit_price"]))))
             if not p["is_service"]:
                 _move_stock(conn, p["id"], -qty(q * factor), f"بيع - فاتورة {number}")
             list_price = item.get("list_price", p["sale_price"] if factor == 1 else item["unit_price"])
@@ -281,7 +296,8 @@ def import_offline_sale(payload):
                        wallet_ref=payload.get("wallet_ref", ""), card_ref=payload.get("card_ref", ""),
                        shift_id=payload.get("shift_id"),
                        offline={"ref": payload["ref"], "created_at": payload["created_at"],
-                                "promo_discount": payload.get("promo_discount", 0)})
+                                "promo_discount": payload.get("promo_discount", 0),
+                                "rounding": payload.get("rounding", 0)})
 
 
 # ---------------------------------------------------------------------------
@@ -327,8 +343,10 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
             refund_account, paid_by = (ledger.BANK if inv["wallet_bank"] else ledger.WALLETS), inv["wallet_amount"]
         else:
             raise SaleError("طريقة الإرجاع غير متاحة لهذه الفاتورة: يُرد المبلغ نقداً أو بنفس طريقة الدفع")
-        ratio = (inv["total"] / inv["subtotal"]) if inv["subtotal"] else 0
-        tax_ratio = (inv["tax"] / inv["total"]) if inv["total"] else 0
+        inv_rounding = inv["rounding"] or 0
+        base_total = money(inv["total"] - inv_rounding)          # إجمالي الفاتورة قبل التقريب
+        ratio = (base_total / inv["subtotal"]) if inv["subtotal"] else 0
+        tax_ratio = (inv["tax"] / base_total) if base_total else 0
 
         lines = []
         for it in items:
@@ -343,8 +361,15 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
             lines.append((row, q, money(row["unit_price"] * q * ratio)))
 
         total = money(sum(l[2] for l in lines))
+        # إرجاع الفاتورة كاملة: يُرد للزبون أيضاً مبلغ التقريب الذي دفعه
+        left_after = conn.execute("SELECT COALESCE(SUM(quantity - returned_qty),0) FROM invoice_items WHERE invoice_id=?",
+                                  (invoice_id,)).fetchone()[0] - sum(l[1] for l in lines)
+        rounding_back = 0.0
+        if inv_rounding and left_after <= 1e-9:
+            done = conn.execute("SELECT COALESCE(SUM(rounding),0) FROM returns WHERE invoice_id=?", (invoice_id,)).fetchone()[0]
+            rounding_back = money(inv_rounding - done)
         max_refund = money(inv["total"] - inv["returned_total"])
-        total = min(total, max_refund)
+        total = min(money(total + rounding_back), max_refund)
         if paid_by is not None:
             # لا يُرد للبطاقة أو المحفظة أكثر مما دُفع بها في هذه الفاتورة
             before = conn.execute("SELECT COALESCE(SUM(total),0) FROM returns WHERE invoice_id=? AND refund_method=?",
@@ -360,7 +385,7 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
             if total > money(paid - refunded) + 0.009 and _customer_balance(conn, inv["customer_id"]) > 0.009:
                 raise SaleError("هذه الفاتورة بيعت آجلاً وما زال على العميل دين، فلا يُرد له نقداً أكثر مما دفعه "
                                 f"({money(paid - refunded)}). اختر «{REFUND_DEBT}».")
-        tax = money(total * tax_ratio)
+        tax = money((total - rounding_back) * tax_ratio)
         cost_total = money(sum(l[0]["cost_price"] * l[1] for l in lines))
 
         number = db.next_number(conn, "return", "RET")
@@ -371,6 +396,8 @@ def create_return(invoice_id, items, refund_method=REFUND_CASH, reason="", shift
                            (number, invoice_id, total, tax, cost_total, refund_method, reason, user_id, shift_id, created,
                             refund_account))
         ret_id = cur.lastrowid
+        if rounding_back:
+            conn.execute("UPDATE returns SET rounding=? WHERE id=?", (rounding_back, ret_id))
         for row, q, line_total in lines:
             factor = row["factor"] or 1
             conn.execute("""INSERT INTO return_items (return_id, invoice_item_id, product_id, product_name, quantity,

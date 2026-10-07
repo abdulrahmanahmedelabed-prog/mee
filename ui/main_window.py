@@ -40,7 +40,7 @@ ADVANCED_PAGES = {"insights", "orders", "reorder", "promotions", "cheques", "acc
 
 PAGES = [
     ("dashboard", "🏠   لوحة التحكم", ("dashboard",), DashboardScreen),
-    ("smart", "✨   القوى الخارقة", ("reports",), SmartScreen),
+    ("smart", "🧭   مساعد المحل", ("reports",), SmartScreen),
     ("insights", "🤖   المستشار الذكي", ("reports",), InsightsScreen),
     ("pos", "🧾   نقطة البيع", ("pos",), POSScreen),
     ("orders", "🛵   الطلبات الأونلاين", ("pos",), OrdersScreen),
@@ -545,6 +545,9 @@ class MainWindow(QMainWindow):
         self.greeting.setText(f"{tr(days[n.weekday()])} • {n:%Y-%m-%d}")
 
     def go(self, key):
+        section = None
+        if isinstance(key, str) and "/" in key:          # «reports/المبيعات اليومية»: الشاشة ثم القسم داخلها
+            key, section = key.split("/", 1)
         if key not in self.page_holders or self.nav_buttons[key].isHidden():   # مخفية لعدم الصلاحية أو الوضع المبسّط
             return
         self.current_key = key
@@ -563,6 +566,8 @@ class MainWindow(QMainWindow):
             t = time.perf_counter()
             w.refresh()
             self._refresh_cost[key] = time.perf_counter() - t
+        if section and hasattr(w, "open_section"):
+            w.open_section(section)
 
     def logout(self):
         pos = self.pages["pos"]
@@ -591,7 +596,7 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.set_rail(self.width() < self.RAIL_WIDTH)
-        self.ask_box.setVisible(self.width() >= 1180)        # الشاشات الضيقة: من شاشة القوى الخارقة أو Ctrl+K
+        self.ask_box.setVisible(self.width() >= 1180)        # الشاشات الضيقة: من شاشة مساعد المحل أو Ctrl+K
         self.plan_chip.setVisible(self.width() >= 1000 and bool(self.plan_chip.text()))
 
     def set_rail(self, rail):

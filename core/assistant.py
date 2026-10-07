@@ -225,16 +225,122 @@ PLAN_WORDS = ["جهز", "اجهز", "حضر", "احضر", "اطلب", "استع�
 SALES_WORDS = ["بعت", "بعنا", "مبيعات", "بيع", "ربح", "ربحت", "ارباح", "sales", "sold", "sell", "profit"]
 
 
+# ---------------------------------------------------------------------------
+# الفهم بالمعنى: جذور الكلمات + الأعداد + الأخطاء الإملائية
+# ---------------------------------------------------------------------------
+_PREFIXES = ("وبال", "فبال", "بال", "وال", "فال", "كال", "لل", "ال", "و", "ف", "ب", "ل")
+_SUFFIXES = ("اتنا", "اتي", "ينا", "هم", "ها", "نا", "ي", "ك", "ه")
+
+SUPERLATIVE = ["افضل", "اكثر", "اكبر", "اهم", "اعلى", "احسن", "اقوى", "ابرز", "top", "best", "most", "biggest",
+               "largest", "highest", "leading"]
+LEAST = ["اقل", "اضعف", "اسوا", "ادنى", "least", "worst", "lowest", "fewest"]
+CONCEPTS = {
+    "customer": ["زبون", "زباين", "زبائن", "عميل", "عملاء", "العملا", "مشتري", "customer", "customers", "client",
+                 "clients", "buyer", "buyers"],
+    "product": ["صنف", "اصناف", "منتج", "منتجات", "سلعه", "سلع", "بضاعه", "بضايع", "مواد", "اشي", "شي", "item",
+                "items", "product", "products", "goods"],
+    "supplier": ["مورد", "موردين", "الموردين", "تاجر", "تجار", "supplier", "suppliers", "vendor", "vendors"],
+    "cashier": ["كاشير", "موظف", "موظفين", "بياع", "cashier", "cashiers", "employee", "staff"],
+    "profit": ["ربح", "ارباح", "مربح", "ربحا", "profit", "profitable", "margin"],
+}
+NUMBER_WORDS = {"واحد": 1, "اثنين": 2, "اثنان": 2, "ثنين": 2, "ثلاث": 3, "ثلاثه": 3, "تلات": 3, "تلاته": 3, "اربع": 4,
+                "اربعه": 4, "خمس": 5, "خمسه": 5, "ست": 6, "سته": 6, "سبع": 7, "سبعه": 7, "ثمان": 8, "ثمانيه": 8,
+                "تمانيه": 8, "تسع": 9, "تسعه": 9, "عشر": 10, "عشره": 10, "عشرين": 20, "ثلاثين": 30, "خمسين": 50,
+                "مئه": 100, "ميه": 100, "five": 5, "ten": 10, "twenty": 20, "three": 3, "fifty": 50, "hundred": 100}
+
+
+def stem(word):
+    """«زبائني» ← زبائن، «بالزحمه» ← زحمه، «للموردين» ← موردين"""
+    w = word
+    for pre in _PREFIXES:
+        if w.startswith(pre) and len(w) - len(pre) >= 3:
+            w = w[len(pre):]
+            break
+    for suf in _SUFFIXES:
+        if w.endswith(suf) and len(w) - len(suf) >= 3:
+            w = w[:-len(suf)]
+            break
+    return w
+
+
+def stems(q):
+    return " " + " ".join(stem(w) for w in q.split()) + " "
+
+
+def has_concept(q, key):
+    words = CONCEPTS[key] if isinstance(key, str) and key in CONCEPTS else key
+    qs = stems(q)
+    for w in words:
+        w2 = stem(norm(w).strip())
+        if (" " + w + " ") in q or (" " + w2 + " ") in qs or (len(w2) >= 4 and w2 in qs):
+            return True
+    return False
+
+
+def limit_of(q, default=10, cap=100):
+    """«أفضل 10 زبائن» / «أكثر عشرة أصناف» / «top 5»"""
+    m = re.search(r"(?<![\d-])(\d{1,3})(?![\d-])", q)
+    if m and not re.search(r"\d{4}-\d{2}", q):
+        n = int(m.group(1))
+        if 1 <= n <= cap:
+            return n
+    for w in q.split():
+        for cand in (w, stem(w)):
+            if cand in NUMBER_WORDS:
+                return min(NUMBER_WORDS[cand], cap)
+    return default
+
+
+def _by_meaning(q):
+    """نية من تركيب المعنى: (أفضل/أكثر/أقل) + (زبون/صنف/مورد/كاشير)"""
+    sup = has_concept(q, SUPERLATIVE)
+    least = has_concept(q, LEAST)
+    if not (sup or least):
+        return None
+    if has_concept(q, "customer"):
+        return "top_customers"
+    if has_concept(q, "cashier"):
+        return "cashier"
+    if has_concept(q, "supplier"):
+        return "payables"
+    if has_concept(q, "product") or has_concept(q, ["مبيعا", "بيعا", "selling", "sold", "sell", "مبيعات"]):
+        return "slow" if least and not sup and not has_concept(q, "profit") else "top"
+    return None
+
+
+def _fuzzy(q):
+    """أقرب نية لكلمات فيها أخطاء إملائية («مبيعاة»، «زكاه»...)"""
+    import difflib
+    vocab = {}
+    for key, words in INTENTS:
+        for w in words:
+            if " " not in w and len(w) >= 4:
+                vocab.setdefault(w, key)
+    best, score = None, 0.0
+    for tok in q.split():
+        if len(tok) < 4:
+            continue
+        for cand in difflib.get_close_matches(stem(tok), vocab, n=1, cutoff=0.82):
+            r = difflib.SequenceMatcher(None, stem(tok), cand).ratio()
+            if r > score:
+                best, score = vocab[cand], r
+    return best
+
+
 def detect(q):
     if q.strip().startswith(NAV_VERBS):
         return "navigate"
+    meaning = _by_meaning(q)
+    if meaning:
+        return meaning
     scores = {}
+    qs = stems(q)
     for key, words in INTENTS:
-        hits = [w for w in words if (" " + w + " ") in q or (len(w) > 4 and w in q)]
+        hits = [w for w in words if (" " + w + " ") in q or (" " + w + " ") in qs or (len(w) > 4 and w in q)]
         if hits:
             scores[key] = sum(len(h) for h in hits)
     if not scores:
-        return None
+        return _fuzzy(q)
     # «كم ربحت من الحليب» ربح وليس مخزون؛ «كم باقي حليب» مخزون
     best = max(scores.values())
     cands = [k for k, s in scores.items() if s >= best * 0.6]
@@ -301,7 +407,7 @@ def _sales(q, today):
         return {"intent": "sales", "title": f"🧾 مبيعات {top[0]} — {label}", "period": label,
                 "lines": [f"بعت {top[1]} بقيمة {top[2]} وربح {top[3]}."],
                 "table": {"headers": ["الصنف", "الكمية", "المبيعات", "الربح"], "rows": rows} if len(rows) > 1 else None,
-                "action": ("reports", "التقارير")}
+                "action": ("reports/المبيعات اليومية", "المبيعات اليومية في التقارير")}
     p = reports.profit_and_loss(a.isoformat(), b.isoformat())
     pa, pb = previous_period(a, b)
     prev = reports.profit_and_loss(pa.isoformat(), pb.isoformat())
@@ -322,7 +428,7 @@ def _sales(q, today):
     lines.append(f"نقدي {_m(p['cash_sales'])} • بطاقة {_m(p['card_sales'])} • محافظ {_m(p['wallet_sales'])} • "
                  f"آجل {_m(p['credit_sales'])}")
     return {"intent": "sales", "title": f"🧾 المبيعات — {label}", "period": label, "lines": lines,
-            "action": ("reports", "التقارير"), "value": p["net_sales"]}
+            "action": ("reports/المبيعات اليومية", "المبيعات اليومية في التقارير"), "value": p["net_sales"]}
 
 
 def _profit(q, today):
@@ -340,7 +446,7 @@ def _profit(q, today):
         ch = p["net_profit"] - prev["net_profit"]
         lines.append(f"{'📈 زيادة' if ch >= 0 else '📉 نقص'} {_m(abs(ch))} عن الفترة السابقة ({_m(prev['net_profit'])}).")
     return {"intent": "profit", "title": f"💰 الربح — {label}", "period": label, "lines": lines,
-            "action": ("reports", "التقارير"), "value": p["net_profit"]}
+            "action": ("reports/الأرباح والخسائر", "الأرباح والخسائر في التقارير"), "value": p["net_profit"]}
 
 
 def _expenses(q, today):
@@ -368,13 +474,21 @@ def _top(q, today):
     from core import reports
     a, b, label = parse_period(q, today, "month")
     order = "profit" if _has(q, ["ربح", "ارباح", "profit"]) else "qty" if _has(q, ["كميه", "عدد", "quantity"]) else "total"
-    rows = reports.top_products(a.isoformat(), b.isoformat(), 10, order)
+    if has_concept(q, "profit"):
+        order = "profit"
+    n = limit_of(q)
+    rows = reports.top_products(a.isoformat(), b.isoformat(), n, order)
+    if not rows and label == "هذا الشهر" and not _has(q, ["هذا الشهر", "هالشهر", "this month"]):
+        a, label = today - timedelta(days=29), "آخر 30 يوماً"
+        rows = reports.top_products(a.isoformat(), b.isoformat(), n, order)
     table = [[r["product_name"], fmt_qty(r["qty"] or 0), _m(r["total"] or 0), _m(r["profit"] or 0)] for r in rows]
     lines = [f"الأول: {rows[0]['product_name']} — {fmt_qty(rows[0]['qty'])} بقيمة {_m(rows[0]['total'])}."] if rows else \
         ["لا توجد مبيعات في هذه الفترة."]
-    return {"intent": "top", "title": f"🏆 الأكثر {'ربحاً' if order == 'profit' else 'مبيعاً'} — {label}", "period": label,
+    title = f"🏆 أكثر {_n(n, 'صنفاً', 'أصناف')} ربحاً — {label}" if order == "profit" else \
+        f"🏆 أكثر {_n(n, 'صنفاً', 'أصناف')} مبيعاً — {label}"
+    return {"intent": "top", "title": title, "period": label,
             "lines": lines, "table": {"headers": ["الصنف", "الكمية", "المبيعات", "الربح"], "rows": table},
-            "action": ("reports", "التقارير")}
+            "action": ("reports/الأصناف الأكثر مبيعاً", "الأكثر مبيعاً في التقارير")}
 
 
 def _slow(q, today):
@@ -390,7 +504,7 @@ def _slow(q, today):
             "table": {"headers": ["الصنف", "الموجود", "قيمة المخزون", "آخر بيع"],
                       "rows": [[r["name"], fmt_qty(r["quantity"]), _m(r["stock_value"] or 0),
                                 (r["last_sold"] or "لم يُبع")[:10]] for r in rows[:15]]},
-            "action": ("insights", "المستشار الذكي")}
+            "action": ("reports/أصناف راكدة", "الأصناف الراكدة في التقارير")}
 
 
 def _debts(q, today):
@@ -419,7 +533,7 @@ def _debts(q, today):
                 "action": ("customers", "العملاء والديون")}
     return {"intent": "debts", "title": "📒 ديون العملاء", "lines": lines,
             "table": {"headers": ["العميل", "الهاتف", "الدين"],
-                      "rows": [[r["name"], r["phone"] or "", _m(r["balance_due"])] for r in rows[:12]]},
+                      "rows": [[r["name"], r["phone"] or "", _m(r["balance_due"])] for r in rows[:limit_of(q, 12)]]},
             "action": ("customers", "العملاء والديون"), "value": total}
 
 
@@ -431,13 +545,13 @@ def _payables(q, today):
         bal = suppliers.balance(s["id"])
         return {"intent": "payables", "title": f"🚚 حساب {s['name']}",
                 "lines": [f"المستحق للمورد {s['name']}: {_m(bal)}." if bal > 0.009 else f"لا شيء مستحق لـ{s['name']}."],
-                "action": ("suppliers", "الموردون")}
+                "action": ("reports/الديون والمستحقات", "الديون والمستحقات")}
     rows = sorted(suppliers.list_suppliers(), key=lambda r: -(r["balance_due"] or 0))
     rows = [r for r in rows if (r["balance_due"] or 0) > 0.009]
     return {"intent": "payables", "title": "🚚 مستحقات الموردين",
             "lines": [f"المجموع: {_m(suppliers.total_dues())} لـ{_n(len(rows), 'مورداً', 'موردين')}."],
             "table": {"headers": ["المورد", "المستحق"], "rows": [[r["name"], _m(r["balance_due"])] for r in rows[:12]]},
-            "action": ("suppliers", "الموردون")}
+            "action": ("reports/الديون والمستحقات", "الديون والمستحقات")}
 
 
 def _stock(q, today):
@@ -489,7 +603,7 @@ def _expiry(q, today):
             "table": {"headers": ["الصنف", "الكمية", "تنتهي"],
                       "rows": [[r["name"] if "name" in r.keys() else r["product_name"], fmt_qty(r["quantity"]),
                                 r["expiry_date"]] for r in rows[:15]]} if rows else None,
-            "action": ("expiry", "الصلاحية")}
+            "action": ("expiry", "شاشة الصلاحية")}
 
 
 def _cash(q, today):
@@ -510,10 +624,15 @@ def _top_customers(q, today):
     a, b, label = parse_period(q, today, "month")
     if label == "اليوم":
         a, label = today.replace(day=1), "هذا الشهر"
-    rows = db.query("""SELECT c.name, COUNT(*) AS n, SUM(i.total) AS t FROM invoices i JOIN customers c ON c.id=i.customer_id
-                       WHERE date(i.created_at) BETWEEN date(?) AND date(?) GROUP BY c.id ORDER BY t DESC LIMIT 10""",
-                    (a.isoformat(), b.isoformat()))
-    return {"intent": "top_customers", "title": f"⭐ أفضل الزبائن — {label}", "period": label,
+    n = limit_of(q)
+    explicit = parse_period(q, today, "none")[2] != "اليوم" or _has(q, ["اليوم", "today"])
+    sql = """SELECT c.name, COUNT(*) AS n, SUM(i.total) AS t FROM invoices i JOIN customers c ON c.id=i.customer_id
+             WHERE date(i.created_at) BETWEEN date(?) AND date(?) GROUP BY c.id ORDER BY t DESC LIMIT ?"""
+    rows = db.query(sql, (a.isoformat(), b.isoformat(), n))
+    if not rows and not explicit:                     # لا مشتريات هذا الشهر بعد: آخر 90 يوماً
+        a, label = today - timedelta(days=89), "آخر 90 يوماً"
+        rows = db.query(sql, (a.isoformat(), b.isoformat(), n))
+    return {"intent": "top_customers", "title": f"⭐ أفضل {_n(n, 'زبوناً', 'زبائن')} — {label}", "period": label,
             "lines": [f"الأول: {rows[0]['name']} بمشتريات {_m(rows[0]['t'])} في {rows[0]['n']} زيارة."] if rows else
             ["لا توجد مشتريات مسجلة بأسماء زبائن في هذه الفترة."],
             "table": {"headers": ["الزبون", "الزيارات", "المشتريات"],
@@ -523,13 +642,17 @@ def _top_customers(q, today):
 
 def _cashier(q, today):
     from core import reports
-    a, b, label = parse_period(q, today)
+    ranking = has_concept(q, SUPERLATIVE) or has_concept(q, LEAST)
+    a, b, label = parse_period(q, today, "month" if ranking else "today")
     rows = reports.sales_by_cashier(a.isoformat(), b.isoformat())
+    if not rows and ranking:
+        a, label = today - timedelta(days=29), "آخر 30 يوماً"
+        rows = reports.sales_by_cashier(a.isoformat(), b.isoformat())
     return {"intent": "cashier", "title": f"🧑‍💼 الكاشير — {label}", "period": label,
             "lines": [f"الأعلى مبيعاً: {rows[0]['cashier']} ({_m(rows[0]['total'])})."] if rows else ["لا توجد مبيعات."],
             "table": {"headers": ["الكاشير", "الفواتير", "المبيعات", "الخصومات"],
                       "rows": [[r["cashier"], r["cnt"], _m(r["total"]), _m(r["discount"] or 0)] for r in rows]},
-            "action": ("reports", "التقارير")}
+            "action": ("reports/حسب الكاشير", "المبيعات حسب الكاشير")}
 
 
 def _hours(q, today):
@@ -547,7 +670,7 @@ def _hours(q, today):
                       f"أهدأ ساعة: {quiet['hour']}:00 — مناسبة للجرد وترتيب الرفوف."],
             "table": {"headers": ["الساعة", "الفواتير", "المبيعات"],
                       "rows": [[f"{r['hour']}:00", r["count"], _m(r["total"])] for r in rows]},
-            "action": ("reports", "التقارير")}
+            "action": ("reports/ساعات الذروة", "ساعات الذروة في التقارير")}
 
 
 def _price(q, today):
@@ -576,8 +699,23 @@ def _compare(q, today):
         a, b, label = parse_period(q, today, "month")
     if label == "اليوم" and not _has(q, ["اليوم", "today"]):
         a, b, label = today.replace(day=1), today, "هذا الشهر"
-    pa, pb = previous_period(a, b)
-    if _has(q, ["السنه الماضيه", "العام الماضي", "last year"]) and label != "السنة الماضية":
+    # «مقارنة بالسنة/بالشهر الماضي»: الفترة المذكورة هي الأساس والمقارنة للفترة الحالية المقابلة
+    if re.search(r"(مقارنه|مقابل|compared|vs|versus)\s+(ب|مع|with|to)?\s*(ال)?(سنه|عام|شهر|اسبوع|last)", q) or \
+            _has(q, ["بالسنه الماضيه", "بالشهر الماضي", "بالاسبوع الماضي", "compared to last"]):
+        if label == "السنة الماضية":
+            a, b, label = date(today.year, 1, 1), today, "هذه السنة"
+            pa, pb = a.replace(year=a.year - 1), b.replace(year=b.year - 1)
+        elif label == "الشهر الماضي":
+            a, b, label = today.replace(day=1), today, "هذا الشهر"
+            pa, pb = previous_period(a, b)
+        elif label == "الأسبوع الماضي":
+            a, b, label = parse_period(" هذا الاسبوع ", today)
+            pa, pb = a - timedelta(days=7), b - timedelta(days=7)
+        else:
+            pa, pb = previous_period(a, b)
+    else:
+        pa, pb = previous_period(a, b)
+    if _has(q, ["السنه الماضيه", "العام الماضي", "last year"]) and label not in ("السنة الماضية", "هذه السنة"):
         pa, pb = a.replace(year=a.year - 1), b.replace(year=b.year - 1)
     cur = reports.profit_and_loss(a.isoformat(), b.isoformat())
     prev = reports.profit_and_loss(pa.isoformat(), pb.isoformat())
@@ -589,10 +727,11 @@ def _compare(q, today):
         fmt = (lambda v: str(v)) if k == "invoice_count" else _m
         rows.append([name, fmt(c), fmt(p), ch])
     ch = (cur["net_sales"] / prev["net_sales"] - 1) * 100 if prev["net_sales"] else 0
-    return {"intent": "compare", "title": f"⚖ {label} مقابل {pa.isoformat()} → {pb.isoformat()}", "period": label,
+    return {"intent": "compare", "title": f"⚖ {label} ({a.isoformat()} → {b.isoformat()}) مقابل {pa.isoformat()} → {pb.isoformat()}",
+            "period": label,
             "lines": [f"المبيعات {'ارتفعت' if ch >= 0 else 'انخفضت'} {abs(ch):.1f}%، وصافي الربح {_m(cur['net_profit'])} "
                       f"مقابل {_m(prev['net_profit'])}."],
-            "table": {"headers": ["البند", "الفترة", "السابقة", "التغير"], "rows": rows}, "action": ("reports", "التقارير")}
+            "table": {"headers": ["البند", "الفترة", "السابقة", "التغير"], "rows": rows}, "action": ("reports/ملخص الفترات", "ملخص الفترات في التقارير")}
 
 
 def _forecast(q, today):
@@ -609,7 +748,7 @@ def _forecast(q, today):
     return {"intent": "forecast", "title": "🔮 توقعات الشهر القادم", "lines": lines,
             "table": {"headers": ["اليوم", "التاريخ", "متوقع", "من", "إلى"],
                       "rows": [[d["weekday"], d["date"], _m(d["value"]), _m(d["low"]), _m(d["high"])] for d in s["days"][:14]]},
-            "action": ("smart", "التنبؤ")}
+            "action": ("smart/forecast", "التنبؤ والسيولة")}
 
 
 def _zakat(q, today):
@@ -621,7 +760,7 @@ def _zakat(q, today):
     else:
         lines.append(f"الزكاة (2.5%) إن بلغ النصاب: {_m(money(r['base'] * r['rate']))} — أدخل سعر غرام الذهب لمعرفة النصاب.")
     lines.append(f"الحَوْل القادم: {r['next_hawl']['date']} ({r['next_hawl']['hijri']}) بعد {r['next_hawl']['days_left']} يوماً.")
-    return {"intent": "zakat", "title": "🕌 الزكاة", "lines": lines, "action": ("smart", "حاسبة الزكاة")}
+    return {"intent": "zakat", "title": "🕌 الزكاة", "lines": lines, "action": ("smart/zakat", "حاسبة الزكاة")}
 
 
 def _season(q, today):
@@ -636,7 +775,7 @@ def _season(q, today):
     key = key or ups[0]["key"]
     p = seasons.plan(key, today)
     if not p["enough_data"]:
-        return {"intent": "season", "title": f"{p['icon']} {p['name']}", "lines": [p["message"]], "action": ("smart", "المواسم")}
+        return {"intent": "season", "title": f"{p['icon']} {p['name']}", "lines": [p["message"]], "action": ("smart/seasons", "مخطط المواسم ورمضان")}
     lines = [f"{p['name']} يبدأ {p['start']} {('(' + p['hijri'] + ')') if p['hijri'] else ''} — بعد {p['days_until']} يوماً. "
              f"اطلب قبل {p['order_by']}.",
              f"مبيعاتك في الموسم الماضي: {_m(p['last_season_sales'])}" +
@@ -646,7 +785,7 @@ def _season(q, today):
             "table": {"headers": ["الصنف", "بيع الموسم الماضي", "ارتفاع", "الطلبية الأولى"],
                       "rows": [[i["name"], fmt_qty(i["last_season"]), (f"×{i['uplift']}" if i["uplift"] else "موسمي"),
                                 fmt_qty(i["order"])] for i in p["items"][:12]]},
-            "action": ("smart", "المواسم")}
+            "action": ("smart/seasons", "مخطط المواسم ورمضان")}
 
 
 def _vat(q, today):
@@ -659,7 +798,7 @@ def _vat(q, today):
     return {"intent": "vat", "title": f"🧾 الضريبة — {label}", "period": label,
             "lines": [f"صافي الضريبة المستحقة: {_m(r['net_due'])} (مخرجات {_m(r['output_tax'])} − مدخلات {_m(r['input_tax'])})."],
             "table": {"headers": ["البند", "المبلغ"], "rows": rows},
-            "action": ("reports", "التقارير")}
+            "action": ("reports/ضريبة القيمة المضافة", "إقرار الضريبة في التقارير")}
 
 
 def _returns(q, today):
@@ -680,7 +819,7 @@ def _worth(q, today):
             "lines": [f"ما يملكه المحل: {_m(bs['total_assets'])} • ما عليه: {_m(bs['total_liabilities'])}",
                       f"صافي حق المالك: {_m(bs['net_worth'])}."],
             "table": {"headers": ["البند", "المبلغ"], "rows": [[x["name"], _m(x["amount"])] for x in bs["assets"][:10]]},
-            "action": ("accounting", "المحاسبة والميزانية")}
+            "action": ("accounting/الميزانية العمومية", "الميزانية العمومية")}
 
 
 def _audit(q, today):
@@ -704,7 +843,7 @@ def _category(q, today):
             "lines": [f"الأعلى: {rows[0]['category']} ({_m(rows[0]['total'])})."] if rows else ["لا توجد مبيعات."],
             "table": {"headers": ["الفئة", "المبيعات", "الربح"],
                       "rows": [[r["category"], _m(r["total"] or 0), _m(r["profit"] or 0)] for r in rows[:12]]},
-            "action": ("reports", "التقارير")}
+            "action": ("reports/حسب الفئة", "المبيعات حسب الفئة")}
 
 
 def _invoices(q, today):

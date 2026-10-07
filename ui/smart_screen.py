@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-القوى الخارقة: اسأل محلك • التنبؤ والسيولة • المواسم ورمضان • الزكاة
+مساعد المحل: اسأل محلك • التنبؤ والسيولة • المواسم ورمضان • الزكاة
 (كل تبويب يُفتح حسب الباقة؛ المقفل يعرض ما يقدمه وزر الترقية)
 """
 
@@ -60,6 +60,10 @@ class SmartScreen(QWidget):
             self.load_seasons()
         elif i == 3 and plans.has("zakat"):
             self.calc_zakat()
+
+    def open_section(self, key):
+        self.show_tab(key)
+        self.refresh()
 
     def show_tab(self, key):
         self.tabs.setCurrentIndex({"ask": 0, "forecast": 1, "seasons": 2, "zakat": 3}.get(key, 0))

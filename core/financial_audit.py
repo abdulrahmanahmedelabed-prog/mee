@@ -797,13 +797,87 @@ def check_fixed_assets(c):
     return []
 
 
+
+def check_price_overrides(c):
+    """تغيير السعر عند الكاشير: كم خُفّض ومَن خفّضه، وأي رفع فوق السعر الأصلي (تحصيل زائد من الزبون)"""
+    rows = db.query(f"""SELECT i.user_id, ii.product_name, i.invoice_number, ii.quantity, ii.unit_price, ii.list_price
+                        FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
+                        WHERE {_in('i.created_at')} AND ii.list_price IS NOT NULL
+                          AND ABS(ii.unit_price - ii.list_price) > 0.004""", c.p)
+    if not rows:
+        return [_ok(A_SALES, "تغيير الأسعار عند البيع", "لم يُغيَّر سعر أي صنف يدوياً عند البيع في الفترة.")]
+    down = [r for r in rows if r["unit_price"] < r["list_price"]]
+    up = [r for r in rows if r["unit_price"] > r["list_price"]]
+    out = []
+    lost = sum((r["list_price"] - r["unit_price"]) * r["quantity"] for r in down)
+    if down:
+        by = defaultdict(float)
+        for r in down:
+            by[r["user_id"]] += (r["list_price"] - r["unit_price"]) * r["quantity"]
+        share = lost / c.sales * 100 if c.sales else 0
+        sev = "high" if share > 2 else "medium" if share > 0.5 else "low"
+        out.append(_f(A_SALES, "تخفيض أسعار يدوي عند البيع", sev,
+                      f"{len(down)} سطراً بيعت بأقل من سعرها الأصلي، بفرق {n(lost)} ({share:.2f}% من المبيعات). "
+                      "الإيراد مسجّل بالسعر الفعلي (وهو الصحيح محاسبياً)، والفرق يظهر هنا خصماً إدارياً.",
+                      "تأكد أن كل تخفيض بموافقة مدير وسبب واضح؛ الكاشير الأعلى تخفيضاً يحتاج متابعة.", amount=lost,
+                      count=len(down), samples=[f"{c.user(u)}: {n(v)}" for u, v in sorted(by.items(), key=lambda x: -x[1])]))
+    if up:
+        extra = sum((r["unit_price"] - r["list_price"]) * r["quantity"] for r in up)
+        out.append(_f(A_SALES, "بيع بأعلى من السعر الأصلي", "high",
+                      f"{len(up)} سطراً بيعت بسعر أعلى من سعر الصنف بفرق {n(extra)}: قد يكون خطأ إدخال أو تحصيلاً زائداً من الزبون.",
+                      "راجع هذه الفواتير؛ رفع السعر عند البيع يخالف السعر المعلن على الرف.", amount=extra, count=len(up),
+                      samples=[f"{r['invoice_number']}: {r['product_name']} {n(r['list_price'])} ← {n(r['unit_price'])}"
+                               for r in up]))
+    return out
+
+
+def check_rounding(c):
+    """التقريب لأعلى رقم صحيح: كل تقريب يجب أن يكون أقل من 1، ونسبة استخدامه متقاربة بين الكاشيرات"""
+    rows = db.query(f"""SELECT user_id, COUNT(*) AS n, SUM(rounding > 0) AS r, SUM(rounding) AS amt, MAX(rounding) AS mx
+                        FROM invoices WHERE {_in('created_at')} GROUP BY user_id""", c.p)
+    total = sum(r["amt"] or 0 for r in rows)
+    if not total:
+        return []
+    out = []
+    bad = db.query(f"""SELECT invoice_number, rounding FROM invoices WHERE {_in('created_at')}
+                       AND (rounding < 0 OR rounding >= 1)""", c.p)
+    if bad:
+        out.append(_f(A_SALES, "تقريب غير صحيح", "critical", f"{len(bad)} فاتورة فيها تقريب سالب أو 1 فأكثر — مستحيل من البرنامج.",
+                      "راجع هذه الفواتير وسجل العمليات.", count=len(bad),
+                      samples=[f"{r['invoice_number']}: {n(r['rounding'])}" for r in bad]))
+    rates = {r["user_id"]: (r["r"] or 0) / r["n"] for r in rows if r["n"] >= 20}
+    avg = sum(rates.values()) / len(rates) if rates else 0
+    odd = [u for u, v in rates.items() if avg and v > avg * 2 and v > 0.3]
+    if odd:
+        out.append(_f(A_CASH, "كاشير يقرّب أكثر من زملائه", "low",
+                      "نسبة الفواتير المقرّبة عنده ضعف المعدل تقريباً؛ التقريب مسموح لكن التفاوت الكبير يستحق السؤال.",
+                      "تأكد أن التقريب يتم بعلم الزبون وأن فرقه يدخل الدرج.",
+                      samples=[f"{c.user(u)}: {rates[u] * 100:.0f}% من فواتيره" for u in odd]))
+    out.append(_ok(A_SALES, "فروق التقريب", f"مجموع التقريب {n(total)} مسجّل في حساب «فروق تقريب الفواتير» خارج وعاء الضريبة."))
+    return out
+
+
+def check_shelf_labels(c):
+    """أسعار تغيّرت ولم تُطبع ملصقاتها منذ أكثر من يومين: السعر على الرف يخالف سعر الكاشير"""
+    rows = db.query("""SELECT name, label_price, sale_price, updated_at FROM products
+                       WHERE is_active=1 AND is_service=0 AND label_price IS NOT NULL
+                         AND ABS(label_price - sale_price) > 0.004 AND date(updated_at) <= date('now', '-2 days')""")
+    if not rows:
+        return []
+    return [_f(A_STOCK, "ملصقات أسعار قديمة على الرفوف", "medium",
+               f"{len(rows)} صنفاً تغيّر سعره منذ أكثر من يومين ولم يُطبع ملصقه الجديد.",
+               "المخزون ← «🏷 ملصقات بانتظار الطباعة».", count=len(rows),
+               samples=[f"{r['name']}: الملصق {n(r['label_price'])} والسعر {n(r['sale_price'])}" for r in rows])]
+
+
 CHECKS = [check_integrity, check_books_balance, check_receivables, check_payables, check_inventory_value, check_impossible_balances,
           check_manual_entries, check_sequences, check_invoice_integrity, check_duplicate_refs, check_shifts, check_employee_advances,
           check_cash_refund_on_electronic, check_refunds_by_cashier, check_drawer_and_prices, check_discounts,
           check_below_cost, check_expired_stock, check_dead_stock, check_shrinkage, check_receivables_aging,
           check_credit_balances, check_installments, check_cheques, check_expense_duplicates, check_expense_spikes, check_benford,
           check_margin_trend, check_cash_ratio, check_vat, check_deletions, check_backups, check_users,
-          check_tamper, check_locked_period, check_month_close, check_fixed_assets]
+          check_tamper, check_locked_period, check_month_close, check_fixed_assets,
+          check_price_overrides, check_rounding, check_shelf_labels]
 
 
 def run(date_from, date_to, progress=None):

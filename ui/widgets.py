@@ -181,6 +181,37 @@ def hint(text):
     return lbl
 
 
+def select_tab(tabs, name):
+    """اختيار تبويب باسمه (بالعربية، كما في الكود) — يعمل في الواجهتين العربية والإنجليزية"""
+    for i in range(tabs.count()):
+        if tabs.tabText(i) == name or tabs.tabText(i).endswith(name):
+            tabs.setCurrentIndex(i)
+            return True
+    return False
+
+
+def open_training(parent=None):
+    """فتح «نسخة التدريب» (بيانات سوبرماركت تجريبية في مجلد منفصل) في نافذة مستقلة — بيانات المحل لا تتأثر"""
+    import os
+    import sys
+    from PySide6.QtCore import QProcess
+    if os.environ.get("SHOP_DEMO_ACTIVE") == "1":
+        info(parent, "أنت الآن في نسخة التدريب.")
+        return False
+    if getattr(sys, "frozen", False):
+        ok = QProcess.startDetached(sys.executable, ["--demo"])
+    else:
+        main_py = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py")
+        ok = QProcess.startDetached(sys.executable, [main_py, "--demo"])
+    ok = ok[0] if isinstance(ok, tuple) else ok
+    if ok:
+        info(parent, "تُفتح نسخة التدريب في نافذة جديدة (أول مرة تحتاج دقيقة لتجهيز البيانات).\n"
+                     "الدخول: admin / admin — وبيانات محلك لا تتأثر بأي شيء تفعله فيها.")
+    else:
+        warn(parent, "تعذر فتح نسخة التدريب.")
+    return ok
+
+
 def button(text, obj=None, slot=None, tooltip=None, shortcut=None):
     b = QPushButton(text)
     if obj:

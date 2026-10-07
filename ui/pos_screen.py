@@ -12,7 +12,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QTableWidget, QTableWidgetItem, QHeaderView,
     QFrame, QGridLayout, QDialog, QFormLayout, QCheckBox, QInputDialog, QAbstractItemView, QApplication,
-    QScrollArea, QRadioButton, QButtonGroup, QLayout
+    QScrollArea, QRadioButton, QButtonGroup, QLayout, QPushButton
 )
 
 from core import products, sales, settings, auth, receipts, customers, drawer, audit, loyalty, remote, offline, config
@@ -601,6 +601,16 @@ class POSScreen(QWidget):
         self.lbl_total.setObjectName("grandTotal")
         self.lbl_total.setAlignment(Qt.AlignCenter)
         tl.addWidget(self.lbl_total, 4, 0, 1, 2)
+        self.round_btn = QPushButton("⬆ رقم صحيح")
+        self.round_btn.setCheckable(True)
+        self.round_btn.setObjectName("ghostBtn")
+        self.round_btn.setFocusPolicy(Qt.NoFocus)
+        self.round_btn.setToolTip("تقريب إجمالي الفاتورة لأعلى رقم صحيح (بلا كسور). الفرق يُسجَّل في حساب «فروق التقريب» "
+                                  "خارج الضريبة، ويُرد للزبون إذا أرجع الفاتورة كاملة")
+        self.round_up = settings.get_bool("round_total_up")
+        self.round_btn.setChecked(self.round_up)
+        self.round_btn.toggled.connect(self._toggle_round)
+        tl.addWidget(self.round_btn, 7, 0, 1, 2)
         self.lbl_promo = QLabel("")
         self.lbl_promo.setStyleSheet("color:#F9A8D4; font-weight:700;")
         self.lbl_promo.setAlignment(Qt.AlignCenter)
@@ -1024,9 +1034,13 @@ class POSScreen(QWidget):
         else:
             disc = {"total": 0.0, "promo_lines": [], "points_value": 0.0}
         t = sales.compute_totals(self.cart, disc["total"])
+        t["rounding"] = sales.round_up_amount(t["total"]) if (self.round_up and self.cart) else 0.0
+        t["total"] = money(t["total"] + t["rounding"])
         parts = [f"🎁 {l['name']}: −{m(l['amount'])}" for l in disc["promo_lines"]]
         if disc["points_value"]:
             parts.append(f"⭐ {self.points:g} نقطة: −{m(disc['points_value'])}")
+        if t["rounding"]:
+            parts.append(f"⬆ تقريب: +{m(t['rounding'])}")
         self.lbl_promo.setText("\n".join(parts))
         self._update_display(t, disc)
         sym = settings.get("currency_symbol")
@@ -1109,8 +1123,17 @@ class POSScreen(QWidget):
             self.render_cart(select=min(idx, len(self.cart) - 1))
             self.show_flash(f"تم حذف {name}", "info")
 
+    def _toggle_round(self, on):
+        self.round_up = bool(on)
+        self.update_totals()
+
     def clear_cart(self):
         self.pending_order_id = None
+        self.round_up = settings.get_bool("round_total_up")
+        if hasattr(self, "round_btn"):
+            self.round_btn.blockSignals(True)
+            self.round_btn.setChecked(self.round_up)
+            self.round_btn.blockSignals(False)
         self.cart = []
         self.discount = 0.0
         self.points = 0.0
@@ -1315,7 +1338,7 @@ class POSScreen(QWidget):
                       cash_received=pay["cash_received"], shift_id=shift_id, points_redeemed=self.points,
                       note=pay.get("note") or "", card_ref=pay.get("card_ref") or "",
                       wallet_amount=pay.get("wallet_amount", 0.0), wallet_name=pay.get("wallet_name") or "",
-                      wallet_ref=pay.get("wallet_ref") or "")
+                      wallet_ref=pay.get("wallet_ref") or "", round_up=self.round_up)
         try:
             try:
                 res = sales.create_sale(self.cart, **kwargs)
@@ -1407,7 +1430,7 @@ class POSScreen(QWidget):
             p = offline.queue_sale(self.cart, self.discount, disc["promo"], pay["cash_amount"], pay["card_amount"],
                                    pay["cash_received"], self.last_shift_id, wallet_amount=pay.get("wallet_amount", 0.0),
                                    wallet_name=pay.get("wallet_name") or "", wallet_ref=pay.get("wallet_ref") or "",
-                                   card_ref=pay.get("card_ref") or "", ref=ref)
+                                   card_ref=pay.get("card_ref") or "", ref=ref, round_up=self.round_up)
         except SaleError as e:
             warn(self, str(e))
             return

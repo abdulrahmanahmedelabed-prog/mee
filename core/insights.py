@@ -59,6 +59,14 @@ def insights(days=30):
                           for p in sorted(thin, key=lambda p: -(sold[p['id']]['revenue'] or 0))[:12]],
                          "insights:prices", "تحديث الأسعار"))
 
+    # 1.5) أسعار تغيّرت ولم تُطبع ملصقاتها: السعر على الرف لا يطابق الكاشير
+    stale = [p for p in prods if p["label_price"] is not None and abs((p["label_price"] or 0) - p["sale_price"]) > 0.004]
+    if stale:
+        out.append(_card("warning", "labels", f"{len(stale)} صنف تغيّر سعره ولم يُطبع ملصقه",
+                         "السعر على الرف يختلف عن سعر الكاشير: الزبون يرى سعراً ويدفع غيره. اطبع الملصقات الجديدة.",
+                         [f"{p['name']}: الملصق {money(p['label_price'])} والسعر الآن {money(p['sale_price'])}"
+                          for p in stale[:12]], "inventory", "ملصقات بانتظار الطباعة"))
+
     # 2) الأكثر مبيعاً على وشك النفاد
     top = sorted(sold.items(), key=lambda kv: -(kv[1]["revenue"] or 0))[:30]
     pmap = {p["id"]: p for p in prods}

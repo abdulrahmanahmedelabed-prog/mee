@@ -38,6 +38,7 @@ OPENING = "3130"         # أرصدة افتتاحية (بضاعة وديون ك
 SALES = "4110"
 SALES_RETURNS = "4120"
 OTHER_INCOME = "4210"
+ROUNDING = "4230"        # فروق تقريب إجمالي الفواتير (خارج وعاء الضريبة)
 COGS = "5110"
 STOCK_LOSS = "5120"
 CASH_SHORT = "5130"
@@ -69,6 +70,7 @@ SYSTEM_ACCOUNTS = [
     (SALES, "المبيعات", "revenue"),
     (SALES_RETURNS, "مردودات المبيعات", "revenue"),
     (OTHER_INCOME, "إيرادات أخرى (زيادة صندوق، خصم مكتسب)", "revenue"),
+    (ROUNDING, "فروق تقريب الفواتير", "revenue"),
     (COGS, "تكلفة البضاعة المباعة", "expense"),
     (STOCK_LOSS, "خسائر المخزون (تالف، منتهي، عجز)", "expense"),
     (CASH_SHORT, "عجز الصندوق", "expense"),
@@ -275,24 +277,26 @@ def _daily_sales_entries(conn, date_from, date_to):
                                      SUM(card_amount) AS card, SUM(credit_amount) AS credit,
                                      SUM(CASE WHEN wallet_bank=1 THEN wallet_amount ELSE 0 END) AS wbank,
                                      SUM(CASE WHEN wallet_bank=0 THEN wallet_amount ELSE 0 END) AS wallet,
-                                     SUM(total - tax) AS net, SUM(tax) AS tax, SUM(cost_total) AS cost
+                                     SUM(total - tax - COALESCE(rounding,0)) AS net, SUM(tax) AS tax,
+                                     SUM(COALESCE(rounding,0)) AS rnd, SUM(cost_total) AS cost
                               FROM invoices WHERE 1=1 {cond} GROUP BY d""", params):
         out.append({"date": r["d"] + " 23:59:00", "ref": f"Z-{r['d']}", "description": f"مبيعات اليوم ({r['n']} فاتورة)",
                     "source": "sale", "lines": [ln for ln in [
                         (CASH, money(r["cash"]), 0.0), (BANK, money(r["card"] + r["wbank"]), 0.0),
                         (WALLETS, money(r["wallet"]), 0.0), (RECEIVABLES, money(r["credit"]), 0.0),
-                        (SALES, 0.0, money(r["net"])), (VAT, 0.0, money(r["tax"])),
+                        (SALES, 0.0, money(r["net"])), (VAT, 0.0, money(r["tax"])), (ROUNDING, 0.0, money(r["rnd"])),
                         (COGS, money(r["cost"]), 0.0), (INVENTORY, 0.0, money(r["cost"]))] if ln[1] or ln[2]]})
     refunds = {}
     for r in conn.execute(f"""SELECT date(created_at) AS d, {REFUND_ACCOUNT_SQL} AS acc, SUM(total) AS t
                               FROM returns WHERE 1=1 {cond} GROUP BY d, acc""", params):
         refunds.setdefault(r["d"], []).append((r["acc"], 0.0, money(r["t"])))
     for r in conn.execute(f"""SELECT date(created_at) AS d, COUNT(*) AS n,
-                                     SUM(total - tax) AS net, SUM(tax) AS tax, SUM(cost_total) AS cost
+                                     SUM(total - tax - COALESCE(rounding,0)) AS net, SUM(tax) AS tax,
+                                     SUM(COALESCE(rounding,0)) AS rnd, SUM(cost_total) AS cost
                               FROM returns WHERE 1=1 {cond} GROUP BY d""", params):
         out.append({"date": r["d"] + " 23:59:30", "ref": f"ZR-{r['d']}", "description": f"مرتجعات اليوم ({r['n']})",
                     "source": "return", "lines": [ln for ln in [
-                        (SALES_RETURNS, money(r["net"]), 0.0), (VAT, money(r["tax"]), 0.0),
+                        (SALES_RETURNS, money(r["net"]), 0.0), (VAT, money(r["tax"]), 0.0), (ROUNDING, money(r["rnd"]), 0.0),
                         *sorted(refunds.get(r["d"], [])),
                         (INVENTORY, money(r["cost"]), 0.0), (COGS, 0.0, money(r["cost"]))] if ln[1] or ln[2]]})
     from core import loyalty
@@ -334,7 +338,8 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
                 (CASH, money(r["cash_amount"]), 0.0), (BANK, money(r["card_amount"]), 0.0),
                 (BANK if r["wallet_bank"] else WALLETS, money(r["wallet_amount"]), 0.0),
                 (RECEIVABLES, money(r["credit_amount"]), 0.0),
-                (SALES, 0.0, money(r["total"] - r["tax"])), (VAT, 0.0, money(r["tax"])),
+                (SALES, 0.0, money(r["total"] - r["tax"] - (r["rounding"] or 0))), (VAT, 0.0, money(r["tax"])),
+                (ROUNDING, 0.0, money(r["rounding"] or 0)),
                 (COGS, money(r["cost_total"]), 0.0), (INVENTORY, 0.0, money(r["cost_total"]))])
 
         # 2) مرتجعات البيع
@@ -342,7 +347,8 @@ def entries(date_from=None, date_to=None, skip_bulk=False, daily_sales=False):
                       WHERE 1=1 {cond}""", "r.created_at")):
             refund_acc = r["refund_account"] or (CASH if r["refund_method"] == "نقدي" else RECEIVABLES)
             add(r["created_at"], r["return_number"], f"مرتجع من الفاتورة {r['invoice_number']}", "return", [
-                (SALES_RETURNS, money(r["total"] - r["tax"]), 0.0), (VAT, money(r["tax"]), 0.0),
+                (SALES_RETURNS, money(r["total"] - r["tax"] - (r["rounding"] or 0)), 0.0), (VAT, money(r["tax"]), 0.0),
+                (ROUNDING, money(r["rounding"] or 0), 0.0),
                 (refund_acc, 0.0, money(r["total"])),
                 (INVENTORY, money(r["cost_total"]), 0.0), (COGS, 0.0, money(r["cost_total"]))])
 
@@ -507,11 +513,13 @@ def _bulk_lines(conn, date_from, date_to):
     """مجاميع فواتير البيع والمرتجعات في الفترة كأسطر قيد (مكافئة تماماً لقيودها التفصيلية)"""
     cond, params = _range("created_at", date_from, date_to)
     i = conn.execute(f"""SELECT COALESCE(SUM(cash_amount),0), COALESCE(SUM(card_amount),0), COALESCE(SUM(credit_amount),0),
-                                COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0),
+                                COALESCE(SUM(total - tax - COALESCE(rounding,0)),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0),
                                 COALESCE(SUM(CASE WHEN wallet_bank=1 THEN wallet_amount END),0),
-                                COALESCE(SUM(CASE WHEN wallet_bank=0 THEN wallet_amount END),0)
+                                COALESCE(SUM(CASE WHEN wallet_bank=0 THEN wallet_amount END),0),
+                                COALESCE(SUM(rounding),0)
                          FROM invoices WHERE 1=1 {cond}""", params).fetchone()
-    r = conn.execute(f"""SELECT COALESCE(SUM(total - tax),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0)
+    r = conn.execute(f"""SELECT COALESCE(SUM(total - tax - COALESCE(rounding,0)),0), COALESCE(SUM(tax),0), COALESCE(SUM(cost_total),0),
+                                COALESCE(SUM(rounding),0)
                          FROM returns WHERE 1=1 {cond}""", params).fetchone()
     refunds = [(a, 0.0, t) for a, t in conn.execute(
         f"SELECT {REFUND_ACCOUNT_SQL} AS acc, SUM(total) FROM returns WHERE 1=1 {cond} GROUP BY acc", params)]
@@ -520,6 +528,7 @@ def _bulk_lines(conn, date_from, date_to):
                                     FROM (SELECT {loyalty.value_sql()} AS v FROM loyalty_transactions WHERE 1=1 {cond})""",
                                  params).fetchone()
     return [(CASH, i[0], 0.0), (BANK, i[1] + i[6], 0.0), (WALLETS, i[7], 0.0), (RECEIVABLES, i[2], 0.0), (SALES, 0.0, i[3]), (VAT, 0.0, i[4]),
+            (ROUNDING, r[3], i[8]),
             (COGS, i[5], 0.0), (INVENTORY, 0.0, i[5]),
             (SALES_RETURNS, r[0], 0.0), (VAT, r[1], 0.0), *refunds,
             (INVENTORY, r[2], 0.0), (COGS, 0.0, r[2]),

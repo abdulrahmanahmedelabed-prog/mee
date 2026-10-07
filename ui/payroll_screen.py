@@ -163,7 +163,14 @@ class PayrollScreen(QWidget):
         self.h_title.setObjectName("subTitle")
         hl.addWidget(self.h_title)
         self.history = Table(["التاريخ", "البيان", "المستحق", "سلف", "المدفوع"], stretch=1)
+        self.history.doubleClicked.connect(self.print_history_slip)
         hl.addWidget(self.history, 1)
+        hb = QHBoxLayout()
+        hb.addWidget(button("🖨 قسيمة الشهر المحدد", "secondaryBtn", self.print_history_slip,
+                            "اختر راتب أي شهر من الكشف (أو انقر عليه مرتين) لطباعة قسيمته"))
+        hb.addWidget(button("📄 طباعة كشف الموظف", "secondaryBtn", self.print_statement))
+        hb.addStretch()
+        hl.addLayout(hb)
         split.addWidget(hc)
         split.setSizes([620, 480])
         lay.addWidget(split, 1)
@@ -196,14 +203,15 @@ class PayrollScreen(QWidget):
             return
         self.h_title.setText(f"كشف {r['name']}")
         rows = []
-        for h in payroll.history(r["id"]):
+        hist = payroll.history(r["id"])
+        for h in hist:
             if h["kind"] == "advance":
                 rows.append([h["created_at"][:10], f"سلفة ({h['method']})", "", float(h["amount"]), ""])
             else:
                 rows.append([h["created_at"][:10], f"راتب {h['period']} ({h['method']})",
                              float(money(h["base"] + h["bonus"] - h["deductions"])), float(h["advances"]),
                              float(h["net"])])
-        self.history.set_rows(rows)
+        self.history.set_rows(rows, hist)
 
     def new_employee(self):
         if EmployeeDialog(self).exec() == QDialog.Accepted:
@@ -232,11 +240,33 @@ class PayrollScreen(QWidget):
             printing.print_html(self, payroll.payslip_html(res["id"]), width_mm=210, preview=True)
 
     def print_slip(self):
+        """قسيمة أي شهر: آخر راتب افتراضياً، مع قائمة بكل الأشهر السابقة للاختيار"""
         r = self.selected()
         if not r:
             return
-        last = [h for h in payroll.history(r["id"]) if h["kind"] == "salary"]
-        if not last:
+        slips = [h for h in payroll.history(r["id"]) if h["kind"] == "salary"]
+        if not slips:
             warn(self, "لم يُصرف له راتب بعد")
             return
-        printing.print_html(self, payroll.payslip_html(last[0]["id"]), width_mm=210, preview=True)
+        h = self.history.selected_data()
+        if not (h and h.get("kind") == "salary"):
+            from PySide6.QtWidgets import QInputDialog
+            labels = [f"{x['period']} — {m(x['net'])} ({x['created_at'][:10]})" for x in slips]
+            choice, ok = QInputDialog.getItem(self, "قسيمة الراتب", f"اختر الشهر — {r['name']}:", labels, 0, False)
+            if not ok:
+                return
+            h = slips[labels.index(choice)]
+        printing.print_html(self, payroll.payslip_html(h["id"]), width_mm=210, preview=True)
+
+    def print_history_slip(self, *_):
+        h = self.history.selected_data()
+        if not h or h.get("kind") != "salary":
+            warn(self, "اختر راتباً من الكشف (السطر الذي يبدأ بكلمة «راتب»)")
+            return
+        printing.print_html(self, payroll.payslip_html(h["id"]), width_mm=210, preview=True)
+
+    def print_statement(self):
+        r = self.selected()
+        if not r:
+            return
+        printing.print_html(self, payroll.statement_html(r["id"]), width_mm=210, preview=True)

@@ -40,7 +40,7 @@ LOCAL_ONLY = {
     "settings": {"get", "get_bool", "get_float", "set", "set_many", "reload", "expense_categories", "ensure_defaults"},
     "auth": {"hash_password", "verify_password", "login", "set_current_user", "current_user", "current_user_id",
              "logout", "has_permission", "ensure_admin"},
-    "sales": {"compute_totals", "payment_label", "refund_methods"},
+    "sales": {"compute_totals", "payment_label", "refund_methods", "round_up_amount"},
     "products": {"is_loss_reason", "export_csv", "import_csv", "price_for"},
     "promotions": {"compute"},
     "backup": {"restore_backup", "validate_backup", "auto_daily_backup"},
@@ -103,7 +103,7 @@ FUNCTION_PERMISSION = {
     **{("products", f): ("inventory",) for f in (
         "add_product", "update_product", "delete_product", "adjust_stock", "set_stock_count", "set_units",
         "assign_internal_barcode", "next_internal_barcode", "write_off_batch", "stock_movements", "get_batches",
-        "fill_english_names")},
+        "fill_english_names", "mark_labels_printed")},
     ("products", "inventory_value"): ("inventory", "reports"),
     ("products", "expiring_batches"): ("inventory", "reports", "dashboard"),
     ("products", "get_low_stock_products"): ("inventory", "reports", "dashboard", "suppliers"),

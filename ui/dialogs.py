@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """نوافذ مشتركة: الدخول، كلمة المرور، فتح الوردية، العملاء، المنتجات، عدّ النقود"""
 
+import os
+
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (
     QDialog, QFormLayout, QLineEdit, QLabel, QVBoxLayout, QHBoxLayout, QComboBox, QCheckBox, QTextEdit,
@@ -32,7 +34,10 @@ class LoginDialog(QDialog):
         head.setObjectName("titleLabel")
         head.setAlignment(Qt.AlignCenter)
         lay.addWidget(head)
-        lay.addWidget(hint("مرحباً بك، سجّل دخولك للبدء"), alignment=Qt.AlignCenter)
+        welcome = QLabel("مرحباً بك، سجّل دخولك للبدء")
+        welcome.setObjectName("hint")
+        welcome.setAlignment(Qt.AlignCenter)              # سطر واحد دون التفاف
+        lay.addWidget(welcome)
         form = QFormLayout()
         self.user = QLineEdit()
         self.user.setPlaceholderText("اسم المستخدم")
@@ -57,8 +62,15 @@ class LoginDialog(QDialog):
         lang.setCurrentIndex(max(0, lang.findData(config.get("language") or "ar")))
         lang.currentIndexChanged.connect(lambda _: self.change_language(lang.currentData()))
         lay.addWidget(lang, alignment=Qt.AlignCenter)
-        forgot = button("نسيت كلمة المرور؟", "ghostBtn", self.forgot)
-        lay.addWidget(forgot, alignment=Qt.AlignCenter)
+        links = QHBoxLayout()
+        links.addStretch()
+        links.addWidget(button("نسيت كلمة المرور؟", "ghostBtn", self.forgot))
+        if not remote.is_client() and os.environ.get("SHOP_DEMO_ACTIVE") != "1":
+            from ui.widgets import open_training
+            links.addWidget(button("🎓 نسخة التدريب", "ghostBtn", lambda: open_training(self),
+                                   "برنامج كامل ببيانات سوبرماركت تجريبية لثلاث سنوات للتعلّم والتجربة، منفصل عن بيانات محلك"))
+        links.addStretch()
+        lay.addLayout(links)
         if remote.is_client():
             lay.addWidget(hint(f"نقطة بيع فرعية «{config.get('terminal_name')}» متصلة بالجهاز الرئيسي "
                                f"{config.get('server_host')}"))

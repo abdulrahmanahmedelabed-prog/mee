@@ -74,7 +74,7 @@
 ## 4. Where we clearly lead
 
 1. **Selling never stops:** no internet? It works. Subscription ended? It returns to Free and keeps selling. Cloud competitors stop or restrict access when the subscription lapses.
-2. **No one else has the superpowers together:** Ask your shop in everyday language, cash-flow forecasting, the Hijri Ramadan planner, zakat, and the automated financial auditor.
+2. **No one else has these tools together:** Ask your shop in everyday language, cash-flow forecasting, the Hijri Ramadan planner, zakat, and the automated financial auditor.
 3. **Built for shops in the region:** debts, installments, post-dated cheques, local wallets, the Hijri calendar and zakat are part of the program, not "add-ons".
 4. **Price:** every plan costs less than half of the matching global product, and Free takes no cut of your sales.
 5. **Privacy:** your figures stay on your computer; no one else sees your sales or profit.
