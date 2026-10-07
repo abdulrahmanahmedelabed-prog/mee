@@ -23,18 +23,22 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 - **Control** — cashier shifts with cash counting, manager approval for sensitive actions, full activity log, server-side permission checks.
 - **Owner on the go** — dashboard on the owner's phone and a daily WhatsApp summary.
 - **VAT ready** — output and input VAT with a VAT return report, and an e-invoice QR code on receipts (Saudi simplified tax invoice format).
+- **Connected e-invoicing (optional)** — Saudi Fatoora phase 2 (UBL 2.1, ECDSA digital signature, invoice hash chain, phase-2 QR, onboarding with ZATCA compliance checks, background reporting) and Jordan's national system JoFotara (official QR printed on the receipt). Selling continues offline; invoices are sent when the connection returns.
+- **No small change** — round any invoice up to a whole number with one tap (or by default); the difference goes to its own account outside VAT and is refunded on a full return.
+- **Price changes handled properly** — returns are refunded at the original invoice price, price overrides at the till keep both prices for the auditor, and an automatic **shelf-label queue** collects every item whose price changed.
 - **Online ordering** — a mobile store page for pickup or delivery orders; orders become POS invoices in one click. No commissions to delivery apps.
-- **Android app** — pairs with the shop by scanning a QR code: price, stock and expiry lookup, shelf counts with the phone camera, and the owner dashboard.
+- **Android app** — finds the shop automatically on Wi-Fi. Tabs by permission: today's figures, price and stock lookup with shelf counts by camera, low stock, customers and debts with WhatsApp reminders, handling online orders, and Ask your shop; plus the owner dashboard.
 - **Card terminal ready** — sends the amount to the bank card terminal and prints the approval code on the receipt (bank-specific connection required).
 - **Simple mode & touch screens** — a lighter layout for small corner shops, big buttons and an on-screen keypad for touch tills.
 - **Easy switch** — import your old credit book (customers, suppliers and balances) from Excel in a minute.
 - **E-wallets & banking apps** — one tap per method (e.g. instant bank transfer, mobile wallets): shows your account and QR code to the customer, records the transaction number, keeps a separate e-wallet account in the books, and a reconciliation report per method.
 - **Daily, weekly, monthly and yearly summaries** — sales, profit, expenses and payment mix per period, adding up exactly to the profit report.
-- **Training copy with 3 years of data** — a complete supermarket history to train staff and explore reports without touching real data.
+- **Training copy with 3 years of data** — a complete supermarket history (online orders, current and former staff, three branches) to train staff and explore reports without touching real data; opens from inside the program.
 - **Multi-currency cash** — accept cash in other currencies at your exchange rate.
 - **Your data stays yours** — stored on your computer with daily backups and an optional cloud copy (Google Drive / OneDrive).
-- **Built-in financial auditor** — 37 audit procedures on every transaction (not a sample): ledger reconciliations, document sequence gaps, cashier fraud indicators (cash refunds on card sales, reused wallet references, repeated shortages), debt aging with a doubtful-debt allowance, Benford's law, data-file integrity. Gives a clean/qualified/adverse opinion, a score out of 100 and a printable report.
-- **Payroll** — monthly salaries, bonuses and deductions, advances deducted automatically from the next salary, printable payslips, all flowing into expenses, profit and the cash drawer.
+- **Built-in financial auditor** — 47 audit procedures on every transaction (not a sample): ledger reconciliations, document sequence gaps, cashier fraud indicators (quick sale-and-refund by the same cashier, after-hours sales, cash refunds on card sales, reused wallet references, repeated shortages, manual price cuts), purchase-cost jumps, duplicate customers, payroll anomalies, bank reconciliation, e-invoice reporting, debt aging with a doubtful-debt allowance, Benford's law, data-file integrity. Gives a clean/qualified/adverse opinion, a score out of 100 and a printable report.
+- **Accountant autopilot** — comparative income statement, 12 financial ratios explained in plain words (liquidity, cash cycle, break-even, cash runway…), bank reconciliation, fixed assets with automatic depreciation, cash flow statement and one-click month close that locks the books.
+- **Payroll** — monthly salaries, bonuses and deductions, advances deducted automatically from the next salary, payslips for any past month and an employee statement, all flowing into expenses, profit and the cash drawer.
 - **Customer installments** — split a customer's debt into a dated schedule; payments are applied to the oldest installment, overdue ones trigger advisor alerts and WhatsApp reminders.
 - **Branches & chains** — each branch works independently; the owner sees every branch and the total in one report, read from a shared Google Drive folder.
 - **Fits any screen, any language** — modern mobile-app style interface that adapts to small laptops, and switches between Arabic and English instantly.
@@ -57,4 +61,4 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 ## Requirements
 Windows 10/11 PC, any thermal receipt printer (58/80 mm), USB barcode scanner, optional cash drawer and customer display. Multiple tills connect over the shop's local network.
 
-**Contact:** _your name — WhatsApp — email — website_
+**Contact:** Al-Hassan Software & Advertising — Abdulrahman Al-Abed — WhatsApp **+970 59 245 8157**

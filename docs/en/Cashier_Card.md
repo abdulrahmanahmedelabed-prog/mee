@@ -14,6 +14,7 @@
 | **F9** | Discount | **F10** | Change price |
 | **F11** | Reprint last invoice | **Esc** | Back to search |
 | **Enter** (empty search) | Pay | 🔍 **Price check** | "How much is this?" |
+| **⬆ Whole number** | No small change | | |
 
 ## Payment
 - Type what the customer gave you → look at the **change** → **Enter**.
@@ -28,10 +29,10 @@
 - ❌ Don't share your password, and never work on someone else's account.
 
 ## Returns
-Invoices & returns → invoice number → **↩ Return** → quantity → cash or against the customer's debt.
+Invoices & returns → invoice number → **↩ Return** → quantity → cash or against the customer's debt. The refund uses **that invoice's price**, even if the price has changed.
 
 ## End of shift
 **Cash & shifts → 🔒 Close shift** → count by denomination → **🖨 Print report** → hand the cash and the report to the manager.
 
 ---
-Support: ______________________  Phone: ______________________
+Support: Al-Hassan Software & Advertising — WhatsApp +970 59 245 8157

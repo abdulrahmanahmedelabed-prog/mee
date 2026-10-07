@@ -28,7 +28,7 @@ if errorlevel 1 (
 
 if exist build rmdir /s /q build
 if exist dist\ShopAccounting rmdir /s /q dist\ShopAccounting
-python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --hidden-import tools.demo_data --add-data "i18n;i18n" --add-data "docs;docs" --add-data "ui/fonts;ui/fonts" --add-data "marketing/ad/ad_horizontal.mp4;marketing/ad" --hidden-import PySide6.QtMultimedia --hidden-import PySide6.QtMultimediaWidgets main.py || goto :fail
+python -m PyInstaller --noconfirm --clean --windowed --name ShopAccounting --hidden-import core.license_pubkey --hidden-import tools.demo_data --add-data "i18n;i18n" --add-data "docs;docs" --add-data "ui/fonts;ui/fonts" --add-data "marketing/ad/ad_horizontal.mp4;marketing/ad" --hidden-import PySide6.QtMultimedia --hidden-import PySide6.QtMultimediaWidgets --hidden-import core.einvoicing --hidden-import ui.einvoicing_ui --hidden-import cryptography.hazmat.primitives.asymmetric.ec main.py || goto :fail
 if not exist dist\ShopAccounting\ShopAccounting.exe goto :fail
 
 echo.

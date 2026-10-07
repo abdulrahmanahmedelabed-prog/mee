@@ -55,7 +55,7 @@
 | Local e-wallets and banking apps | ✅ | ❌ | ❌ | ❌ | ➖ | ➖ | ➖ | ➖ |
 | Expiry tracking by batch | ✅ | ❌ | ❌ | ➖ | ✅ | ➖ | ❌ | ✅ |
 | Double-entry accounting + balance sheet | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ➖ |
-| **Automated financial auditor** (37 procedures on every transaction) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Automated financial auditor** (47 procedures on every transaction) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Ask your shop** in plain language, offline (incl. Arabic dialect) | ✅ | ❌ | ➖ English, cloud | ➖ | ➖ | ❌ | ❌ | ❌ |
 | **Sales and cash-flow forecast** day by day | ✅ | ❌ | ❌ | ➖ | ➖ | ❌ | ❌ | ❌ |
 | **Ramadan and Eid planner** on the Hijri calendar | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -84,7 +84,7 @@
 | Area | Who leads | What we offer today |
 |---|---|---|
 | Real-time cloud sync between branches in different cities | Square, Lightspeed, Odoo, Daftra | A consolidated report from branch backups in a shared folder (Google Drive/OneDrive), and a local network inside each shop |
-| Certified integration with Saudi Arabia's "Fatoora" platform (phase 2) | Rewaa, Qoyod, Daftra, Wafeq | QR code for simplified tax invoices (phase 1); phase 2 needs a certified, country-specific integration |
+| Years of experience with Saudi Arabia's "Fatoora" platform and listing as solution providers | Rewaa, Qoyod, Daftra, Wafeq | Full phase-2 integration built in (digital signature, hash chain, phase-2 QR, automatic reporting) that passes ZATCA's compliance checks when each shop is linked, plus Jordan's JoFotara; testing in ZATCA's sandbox before production is recommended |
 | Restaurant management (tables, kitchen, menus) | Foodics, Square for Restaurants | The program is designed for retail and supermarkets |
 | App marketplaces and hundreds of integrations | Shopify, Odoo, QuickBooks | Built-in integration with WhatsApp, card terminals, printers and scales |
 | Company-branded POS hardware | Square, Shopify, Lightspeed | Runs on any Windows PC with any thermal printer and scanner |
