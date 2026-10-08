@@ -3,6 +3,7 @@
 
 from datetime import datetime
 
+import shiboken6
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QFrame, QLabel, QPushButton,
                                QStackedWidget, QButtonGroup, QDialog, QScrollArea, QLineEdit)
@@ -288,6 +289,15 @@ class MainWindow(QMainWindow):
         self.calc_btn.setMinimumWidth(1)
         tl.addWidget(self.calc_btn)
         QShortcut(QKeySequence("Ctrl+="), self, activated=lambda: self.open_calculator())
+        self.notes_btn = QPushButton()
+        self.notes_btn.setObjectName("secondaryBtn")
+        self.notes_btn.setCursor(Qt.PointingHandCursor)
+        _iq.set_raw_text(self.notes_btn, "📝")
+        self.notes_btn.setToolTip("الملاحظات والتذكيرات (Ctrl+Shift+N)")
+        self.notes_btn.clicked.connect(lambda: self.open_notes())
+        self.notes_btn.setMinimumWidth(1)
+        tl.addWidget(self.notes_btn)
+        QShortcut(QKeySequence("Ctrl+Shift+N"), self, activated=lambda: self.open_notes())
         from ui import calculator as _calc
         _calc.track_focus()
         content.addWidget(top)
@@ -357,6 +367,13 @@ class MainWindow(QMainWindow):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.tick)
         self._timer.start(15000)
+        # التذكيرات: فحص كل دقيقة وتنبيه صغير عند حلول موعد (وعند الفتح بعد ثوانٍ)
+        self._notes_due = 0
+        self._reminder = None
+        self._notes_timer = QTimer(self)
+        self._notes_timer.timeout.connect(self.check_reminders)
+        self._notes_timer.start(60000)
+        QTimer.singleShot(4000, self.check_reminders)
         self.apply_user()
 
     def _page_built(self, key, w):
@@ -383,6 +400,7 @@ class MainWindow(QMainWindow):
             short = short[2:]
         self.avatar.setText((short[:1] or "؟").upper())
         self.update_header()
+        self.refresh_notes()
         # الكاشير يبدأ مباشرة بنقطة البيع
         start, self._start = getattr(self, "_start", None), None
         if start and start in self.page_holders and not self.nav_buttons[start].isHidden():
@@ -588,11 +606,52 @@ class MainWindow(QMainWindow):
         from ui.pair_dialog import open_pairing
         open_pairing(self)
 
+    def open_notes(self, select_id=None):
+        from ui.notes_dialog import open_notes
+        open_notes(self, select_id)
+
+    def refresh_notes(self):
+        from core import notes
+        try:
+            due = notes.counts()["due"]
+        except Exception:  # noqa: BLE001  (جهاز فرعي بلا اتصال، أو قبل تسجيل الدخول)
+            return
+        self._notes_due = due
+        _iq_text = f"📝 {due}" if due else "📝"
+        from ui import i18n_qt
+        i18n_qt.set_raw_text(self.notes_btn, _iq_text)
+        self.notes_btn.setObjectName("warnBtn" if due else "secondaryBtn")
+        self.notes_btn.style().unpolish(self.notes_btn)
+        self.notes_btn.style().polish(self.notes_btn)
+        self.notes_btn.setVisible(self.width() >= 1020 or bool(due))
+
+    def check_reminders(self):
+        from core import notes
+        if not auth.current_user():
+            return
+        try:
+            rows = notes.pop_new_due()
+        except Exception:  # noqa: BLE001
+            return
+        self.refresh_notes()
+        if not rows:
+            return
+        from ui.notes_dialog import ReminderPopup
+        old = self._reminder
+        if old is not None and shiboken6.isValid(old):
+            old.close_popup()
+        self._reminder = ReminderPopup(self, rows)
+        from PySide6.QtWidgets import QApplication
+        QApplication.beep()
+
     def open_calculator(self, tab=0):
         from ui.calculator import open_calculator
         return open_calculator(self, tab)
 
     def go(self, key):
+        if key == "notes":                                  # «ذكّرني» / «ملاحظاتي» من المساعد
+            self.open_notes()
+            return
         if key in ("calculator", "pricing"):                # «افتح الحاسبة» / «احسب سعر البيع» من المساعد
             self.open_calculator(1 if key == "pricing" else 0)
             return
@@ -654,6 +713,10 @@ class MainWindow(QMainWindow):
         self.plan_chip.setVisible(self.width() >= 1000 and bool(self.plan_chip.text()))
         self.pair_btn.setVisible(self.width() >= 1100)       # الشاشات الضيقة: من المساعدة أو «كيف أربط الجوال؟»
         self.calc_btn.setVisible(self.width() >= 1060)       # الشاشات الضيقة: Ctrl+=
+        self.notes_btn.setVisible(self.width() >= 1020 or bool(getattr(self, "_notes_due", 0)))
+        popup = getattr(self, "_reminder", None)
+        if popup is not None and shiboken6.isValid(popup) and popup.isVisible():
+            popup.place()
 
     def set_rail(self, rail):
         if rail == self._rail:

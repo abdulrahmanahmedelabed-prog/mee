@@ -617,6 +617,22 @@ CREATE TABLE IF NOT EXISTS fixed_assets (
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS notes (               -- الملاحظات والتذكيرات (core/notes.py)
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    body TEXT,
+    due_at TEXT,                     -- YYYY-MM-DD HH:MM أو NULL لملاحظة بلا موعد
+    repeat TEXT NOT NULL DEFAULT '', -- daily / weekly / monthly / yearly
+    shared INTEGER NOT NULL DEFAULT 0,
+    color TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    user_id INTEGER,
+    created_at TEXT,
+    done_at TEXT,
+    done_count INTEGER NOT NULL DEFAULT 0,
+    notified_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -739,6 +755,7 @@ CREATE INDEX IF NOT EXISTS ix_loyalty_customer ON loyalty_transactions(customer_
 CREATE INDEX IF NOT EXISTS ix_shifts_terminal ON shifts(terminal, id);
 CREATE INDEX IF NOT EXISTS ix_invoices_offline ON invoices(offline_ref);
 CREATE INDEX IF NOT EXISTS ix_orders_status ON online_orders(status, id);
+CREATE INDEX IF NOT EXISTS ix_notes_due ON notes(done_at, due_at);
 """
 
 

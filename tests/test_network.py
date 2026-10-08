@@ -158,8 +158,17 @@ def test_owner_page_and_server_side_permissions(server):
     import urllib.error
     with pytest.raises(urllib.error.HTTPError):          # بدون تسجيل دخول
         urllib.request.urlopen(base + "/m/api/find?q=t77")
+    from core import notes
+    shared = notes.add_note("اجتماع الموظفين", shared=True)
+    private = notes.add_note("خاصة بالمدير")
     auth.create_user("kashier", "كاشير", "1234", "cashier")
     assert auth.login("kashier", "1234")["role"] == "cashier"
+    seen = [n["id"] for n in notes.list_notes()]              # الملاحظات عبر الشبكة بهوية الكاشير
+    assert shared in seen and private not in seen
+    mine = notes.add_note("تذكير الكاشير", due="2020-01-01 08:00")
+    assert notes.pop_new_due()[0]["id"] == mine
+    with pytest.raises(ValueError):
+        notes.delete_note(private)                                 # لا يحذف ملاحظة غيره الخاصة
     with pytest.raises(remote.RemoteError):
         auth.create_user("hacker", "x", "1234", "admin")         # الخادم يرفض حتى لو تجاوز الجهاز الواجهة
     with pytest.raises(remote.RemoteError):

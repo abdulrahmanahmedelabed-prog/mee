@@ -601,6 +601,17 @@ def finishing_touches(pids, cids):
     if customers.balance(debtor) > 100 and not installments.active_plan(debtor):
         installments.create_plan(debtor, 4, exp(-35), 30, note="تقسيط دين الشهرين الماضيين")
     suppliers.create_purchase_return(s1, [{"product_id": pids[1], "quantity": 4}], "منتهي الصلاحية")
+    # ملاحظات وتذكيرات: واحد مستحق اليوم (يظهر تنبيهه بعد الفتح) وأخرى متكررة
+    from core import notes
+    at = lambda days, h: f"{exp(days)} {h:02d}:00"
+    notes.add_note("دفع فاتورة الكهرباء", "رقم الاشتراك 44821 — آخر موعد للدفع اليوم", due=at(0, 8), repeat="monthly",
+                   color=notes.COLORS[3], pinned=True)
+    notes.add_note("طلبية مورد الألبان", "حليب 40 كرتونة، لبن 20، جبنة 10", due=at(1, 10), repeat="weekly", shared=True,
+                   color=notes.COLORS[1])
+    notes.add_note("جرد الثلاجة والمجمدات", due=at(3, 21), repeat="weekly", shared=True, color=notes.COLORS[5])
+    notes.add_note("تجديد رخصة المحل", "البلدية — إحضار السجل التجاري", due=at(40, 9), repeat="yearly",
+                   color=notes.COLORS[2])
+    notes.add_note("أفكار عروض الموسم", "تمر + حليب بسعر خاص، سلة رمضان", color=notes.COLORS[4])
 
 
 def make_branches():

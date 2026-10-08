@@ -22,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from core import (config, context, auth, products, sales, customers, suppliers, expenses, shifts, reports, audit,
                   backup, settings, db, ledger, cheques, promotions, loyalty, reorder, license, insights, orders,
                   wallets, financial_audit, payroll, installments, branches, assistant, forecast, seasons, zakat,
-                  accountant)
+                  accountant, notes)
 
 PROTOCOL_VERSION = 2
 MAX_BODY = 20 * 1024 * 1024     # أكبر طلب مقبول من جهاز فرعي
@@ -33,7 +33,8 @@ MODULES = {"products": products, "sales": sales, "customers": customers, "suppli
            "loyalty": loyalty, "reorder": reorder, "license": license, "insights": insights,
            "orders": orders, "wallets": wallets, "financial_audit": financial_audit,
            "payroll": payroll, "installments": installments, "branches": branches, "assistant": assistant,
-           "forecast": forecast, "seasons": seasons, "zakat": zakat, "accountant": accountant}
+           "forecast": forecast, "seasons": seasons, "zakat": zakat, "accountant": accountant,
+           "notes": notes}
 
 # دوال تبقى على الجهاز نفسه (لا تحتاج قاعدة البيانات أو تستدعي دوال أخرى تُرسل للخادم تلقائياً)
 LOCAL_ONLY = {
@@ -51,6 +52,7 @@ LOCAL_ONLY = {
     "financial_audit": {"report_html", "benford"},
     "assistant": {"norm", "parse_period", "previous_period", "detect"},
     "zakat": {"report_html"},
+    "notes": {"next_due", "describe_due"},
 }
 
 # صلاحيات يتحقق منها الخادم نفسه (لا نعتمد على الواجهة وحدها: جهاز فرعي معدّل قد يرسل أي طلب)
@@ -138,6 +140,9 @@ FUNCTION_PERMISSION = {
 }
 # متاحة لكل مستخدم مسجّل (يحتاجها البيع والطباعة على كل الأجهزة)
 OPEN_FUNCTIONS = {("auth", "authenticate"), ("auth", "change_password"), ("audit", "log")}
+# الملاحظات والتذكيرات لكل مستخدم (يرى ملاحظاته والمشتركة فقط؛ التحقق داخل core/notes.py)
+OPEN_FUNCTIONS |= {("notes", f) for f in ("add_note", "update_note", "delete_note", "complete", "reopen", "snooze",
+                                          "list_notes", "due_now", "pop_new_due", "counts")}
 
 ELEVATION_SECONDS = 300      # موافقة المدير على جهاز الكاشير صالحة 5 دقائق لهذه الجلسة
 

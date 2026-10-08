@@ -357,8 +357,10 @@ def answer(question, today=None):
     math = _math(question)
     if math:
         return math
-    if any(w in q for w in CALC_WORDS):
+    if any((" " + w + " ") in q for w in CALC_WORDS):       # كلمات كاملة: «المحاسبة» ليست «الحاسبة»
         return _calculator(q)
+    if any((" " + w + " ") in q for w in NOTES_WORDS):
+        return _notes()
     intent = detect(q)
     if not intent:
         def named(table):
@@ -881,8 +883,8 @@ def _navigate(q, today):
     return _help(unknown=True)
 
 
-CALC_WORDS = ["حاسبه", "الحاسبه", "اله حاسبه", "حاسبه التسعير", "احسب سعر البيع", "سعر البيع المناسب", "كيف اسعر",
-              "تسعير", "calculator", "pricing"]
+CALC_WORDS = ["حاسبه", "الحاسبه", "الاله الحاسبه", "حاسبه التسعير", "احسب سعر البيع", "سعر البيع المناسب", "كيف اسعر",
+              "تسعير", "التسعير", "calculator", "pricing"]
 _MATH_PREFIX = ("كم يساوي", "كم تساوي", "كم ناتج", "ناتج", "احسب", "احسبلي", "احسب لي", "كم", "what is", "calculate",
                 "calc")
 
@@ -904,6 +906,21 @@ def _math(question):
         return None
     shown = f"{v:,.6f}".rstrip("0").rstrip(".")
     return {"intent": "math", "title": "🧮 " + t, "lines": [f"= {shown}"], "action": ("calculator", "الآلة الحاسبة")}
+
+
+NOTES_WORDS = ["ذكرني", "تذكيراتي", "التذكيرات", "ملاحظاتي", "ملاحظه جديده", "اكتب ملاحظه", "مواعيدي", "remind me",
+               "my notes", "my reminders"]
+
+
+def _notes():
+    from core import notes
+    rows = notes.due_now()
+    upcoming = [n for n in notes.list_notes() if n["due_at"] and n not in rows][:5]
+    lines = ([f"⏰ {n['title']} — {notes.describe_due(n['due_at'])}" for n in rows] +
+             [f"• {n['title']} — {notes.describe_due(n['due_at'])}" for n in upcoming])
+    if not lines:
+        lines = ["لا توجد تذكيرات قادمة. أضف ملاحظة بموعد وتكرار (مثل دفع الكهرباء كل شهر) ليظهر لك تنبيه في وقته."]
+    return {"intent": "notes", "title": "📝 الملاحظات والتذكيرات", "lines": lines, "action": ("notes", "فتح الملاحظات")}
 
 
 def _calculator(q):
