@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-الأعمال الثقيلة في الخلفية (تجهيز الطباعة الكبيرة): شريط تقدّم رفيع أسفل النافذة، والعمل يستمر عادياً.
+الطباعة الثقيلة دون تعطيل العمل: شريط تقدّم رفيع أسفل النافذة، والبيع وكل الشاشات تعمل عادياً.
+
+كل عمل له مرحلتان:
+1. تجهيز البيانات (استعلامات وحسابات بايثون) في خيط خلفي.
+2. رسم الصفحات على خيط الواجهة صفحةً صفحة بين أحداث النافذة (نحو 30 ملّي ثانية في كل دورة)،
+   فلا يعمل Qt في خيط خلفي أبداً (الأكثر أماناً مع خطوط ويندوز وطابعاتها).
 عند الانتهاء: 📄 فتح، 🖨 طباعة، 💾 حفظ باسم.
 """
 
@@ -18,12 +23,21 @@ from core import i18n
 from ui.widgets import button, error, info
 
 _BAR = None
+SLICE_SECONDS = 0.03
 
 
 class _Bridge(QObject):
-    progress = Signal(int, int)
-    finished = Signal(object)
+    ready = Signal()
     failed = Signal(str)
+
+
+class _Job:
+    def __init__(self, title, prepare, pages, path, report):
+        self.title, self.prepare, self.pages, self.path, self.report = title, prepare, pages, path, report
+        self.cancel = False
+        self.start = time.time()
+        self.it = None
+        self.count = 0
 
 
 class JobBar(QFrame):
@@ -56,40 +70,70 @@ class JobBar(QFrame):
             lay.addWidget(b)
         self.queue = []
         self.current = None
-        self.result = None
+        self.last = None
         self.hide()
 
     # ---------------------------------------------------------------- تشغيل
-    def submit(self, title, work, on_done=None, report=None):
-        """work(progress, cancelled) يعمل في خيط خلفي ويرجع النتيجة (مسار PDF غالباً)"""
-        self.queue.append((title, work, on_done, report))
+    def submit(self, title, pages, prepare=None, path=None, report=None):
+        """pages(): مولّد يرسم صفحة في كل خطوة ويُرجع (i, n). prepare(): تجهيز بيانات في خيط خلفي (اختياري)"""
+        self.queue.append(_Job(title, prepare, pages, path, report))
         if self.current is None:
             self._next()
 
     def _next(self):
-        if not self.queue:
+        if self.current is not None or not self.queue:
             return
-        title, work, on_done, report = self.queue.pop(0)
-        self.current = {"title": title, "cancel": False, "on_done": on_done, "report": report, "start": time.time()}
-        job = self.current
-        br = _Bridge()
-        job["bridge"] = br
-        br.progress.connect(lambda i, n: self._progress(job, i, n))
-        br.finished.connect(lambda res: self._done(job, res))
-        br.failed.connect(lambda msg: self._failed(job, msg))
-        self.label.setText(i18n.tr("⏳ جارٍ تجهيز {0}…").format(i18n.tr(title)))
+        job = self.current = self.queue.pop(0)
+        self.label.setText(i18n.tr("⏳ جارٍ تجهيز {0}…").format(i18n.tr(job.title)))
         self.bar.setRange(0, 0)
         self.bar.show()
         self._buttons(working=True)
         self.show()
+        if job.prepare is None:
+            QTimer.singleShot(0, lambda: self._begin(job))
+            return
+        br = _Bridge()
+        job.bridge = br
+        br.ready.connect(lambda: self._begin(job))
+        br.failed.connect(lambda msg: self._fail(job, msg))
 
         def run():
             try:
-                res = work(lambda i, n: br.progress.emit(i, n), lambda: job["cancel"])
-                br.finished.emit(res)
+                job.prepare()
+                br.ready.emit()
             except Exception as e:  # noqa: BLE001
-                br.failed.emit("" if e.__class__.__name__ == "Cancelled" else str(e))
+                br.failed.emit(str(e))
         threading.Thread(target=run, daemon=True).start()
+
+    def _begin(self, job):
+        if job.cancel:
+            return self._cancelled(job)
+        try:
+            job.it = job.pages()
+        except Exception as e:  # noqa: BLE001
+            return self._fail(job, str(e))
+        QTimer.singleShot(0, lambda: self._step(job))
+
+    def _step(self, job):
+        """يرسم صفحات لمدة قصيرة ثم يعيد التحكم للنافذة"""
+        if job.cancel:
+            job.it.close()
+            return self._cancelled(job)
+        t = time.perf_counter()
+        i = n = 0
+        try:
+            while time.perf_counter() - t < SLICE_SECONDS:
+                i, n = next(job.it)
+                job.count = n
+        except StopIteration:
+            return self._done(job)
+        except Exception as e:  # noqa: BLE001
+            job.it.close()
+            return self._fail(job, str(e))
+        self.bar.setRange(0, max(n, 1))
+        self.bar.setValue(i)
+        self.label.setText(i18n.tr("⏳ جارٍ تجهيز {0}… صفحة {1} من {2}").format(i18n.tr(job.title), i, n))
+        QTimer.singleShot(0, lambda: self._step(job))
 
     def _buttons(self, working):
         self.cancel_btn.setVisible(working)
@@ -97,49 +141,41 @@ class JobBar(QFrame):
             b.setVisible(not working)
         self.close_btn.setVisible(not working)
 
-    def _progress(self, job, i, n):
-        if job is not self.current:
-            return
-        self.bar.setRange(0, max(n, 1))
-        self.bar.setValue(i)
-        self.label.setText(i18n.tr("⏳ جارٍ تجهيز {0}… صفحة {1} من {2}").format(i18n.tr(job["title"]), i, n))
-
-    def _done(self, job, res):
-        self.current = None
-        self.result = (job, res)
-        if job.get("on_done"):
-            job["on_done"](res)
-        pages = res[1] if isinstance(res, tuple) else None
-        secs = time.time() - job["start"]
+    def _done(self, job):
+        self.current, self.last = None, job
+        secs = time.time() - job.start
+        pages = f" — {job.count} " + i18n.tr("صفحة") if job.count else ""
         self.bar.hide()
-        self.label.setText(i18n.tr("✓ جاهز: {0}").format(i18n.tr(job["title"]))
-                           + (f" — {pages} " + i18n.tr("صفحة") if pages else "") + f"  ({secs:.1f} s)")
         self._buttons(working=False)
-        has_file = bool(self._path())
+        has_file = bool(job.path)
         self.open_btn.setVisible(has_file)
         self.save_btn.setVisible(has_file)
-        self.print_btn.setVisible(has_file and bool(job.get("report")))
-        if not has_file:
-            self.label.setText(i18n.tr("✓ أُرسل للطابعة: {0}").format(i18n.tr(job["title"]))
-                               + (f" — {pages} " + i18n.tr("صفحة") if pages else ""))
+        self.print_btn.setVisible(has_file and job.report is not None)
+        if has_file:
+            self.label.setText(i18n.tr("✓ جاهز: {0}").format(i18n.tr(job.title)) + pages + f"  ({secs:.1f} s)")
+        else:
+            self.label.setText(i18n.tr("✓ أُرسل للطابعة: {0}").format(i18n.tr(job.title)) + pages)
         QTimer.singleShot(0, self._next)
 
-    def _failed(self, job, msg):
+    def _cancelled(self, job):
         self.current = None
         self.hide()
-        if msg:
-            error(self.window(), i18n.tr("تعذر تجهيز {0}:").format(i18n.tr(job["title"])) + "\n" + msg)
+        QTimer.singleShot(0, self._next)
+
+    def _fail(self, job, msg):
+        self.current = None
+        self.hide()
+        error(self.window(), i18n.tr("تعذر تجهيز {0}:").format(i18n.tr(job.title)) + "\n" + msg)
         QTimer.singleShot(0, self._next)
 
     def cancel(self):
         if self.current:
-            self.current["cancel"] = True
+            self.current.cancel = True
             self.label.setText(i18n.tr("جارٍ الإلغاء…"))
 
     # ---------------------------------------------------------------- بعد الانتهاء
     def _path(self):
-        res = self.result[1] if self.result else None
-        return res[0] if isinstance(res, tuple) else None
+        return self.last.path if self.last else None
 
     def open_file(self):
         if self._path():
@@ -149,44 +185,47 @@ class JobBar(QFrame):
         src = self._path()
         if not src:
             return
-        name = i18n.tr(self.result[0]["title"]) + ".pdf"
+        name = i18n.tr(self.last.title) + ".pdf"
         path, _ = QFileDialog.getSaveFileName(self, i18n.tr("حفظ PDF"), name, "PDF (*.pdf)")
         if path:
             shutil.copyfile(src, path)
             info(self.window(), i18n.tr("تم الحفظ"))
 
     def print_file(self):
-        """اختيار الطابعة ثم الطباعة في الخلفية بنفس الرسم السريع"""
-        if not self.result or not self.result[0].get("report"):
+        """اختيار الطابعة ثم الطباعة بنفس الرسم السريع، والعمل مستمر"""
+        if not self.last or self.last.report is None:
             return
         from PySide6.QtPrintSupport import QPrintDialog, QPrinter
         from ui import table_print
-        rep = self.result[0]["report"]
+        rep = self.last.report
         printer = QPrinter(QPrinter.HighResolution)
         table_print._page(printer, rep.landscape)
         if QPrintDialog(printer, self.window()).exec() != QPrintDialog.Accepted:
             return
-        self.submit(self.result[0]["title"], lambda prog, canc: (None, table_print.render(rep, printer, prog, canc)))
+        self.submit(self.last.title, lambda: table_print.render_iter(rep, printer))
 
 
 def bar():
-    return _BAR
+    """شريط النافذة الرئيسية الحالية (أو None إن أُغلقت، مثلاً بعد تبديل اللغة)"""
+    import shiboken6
+    return _BAR if _BAR is not None and shiboken6.isValid(_BAR) else None
 
 
 def print_table(parent, report, title=None):
-    """تجهيز جدول كبير كملف PDF في الخلفية مع شريط تقدّم (أو مباشرة إن لم توجد نافذة رئيسية)"""
+    """تجهيز جدول كبير كملف PDF دون تعطيل العمل (أو مباشرة إن لم توجد نافذة رئيسية)"""
     from ui import table_print
     fd, path = tempfile.mkstemp(prefix="report_", suffix=".pdf")
     os.close(fd)
 
-    def work(progress, cancelled):
-        printer = table_print.make_pdf_printer(path, report.landscape)
-        return path, table_print.render(report, printer, progress, cancelled)
+    def pages():
+        return table_print.render_iter(report, table_print.make_pdf_printer(path, report.landscape))
 
     b = bar()
     if b is None:                                 # بلا نافذة رئيسية (نوافذ مستقلة)
-        work(None, None)
+        report.rows
+        for _ in pages():
+            pass
         QDesktopServices.openUrl(QUrl.fromLocalFile(path))
         return path
-    b.submit(title or report.title, work, report=report)
+    b.submit(title or report.title, pages, prepare=lambda: report.rows, path=path, report=report)
     return None

@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 طباعة الجداول الكبيرة بسرعة: رسم مباشر للصفحات (QPainter) بدل تنسيق HTML.
-دفتر يومية بثمانية آلاف سطر يصبح PDF في ثوانٍ، ويُجهَّز في الخلفية (ui/jobs.py) دون تعطيل العمل.
+دفتر يومية بعشرة آلاف سطر يصبح PDF في ثوانٍ.
 
-يعمل في خيط خلفي: Qt يسمح بالرسم على QPrinter وQImage خارج خيط الواجهة.
+الرسم يتم على خيط الواجهة صفحةً صفحة (render_iter) بين أحداث النافذة، فتبقى الواجهة سريعة الاستجابة
+دون تشغيل Qt في خيط خلفي (ui/jobs.py). أما تجهيز البيانات فيتم في خيط خلفي.
 """
 
 import base64
@@ -79,19 +80,29 @@ def _page(printer, landscape=False):
     printer.setPageMargins(QMarginsF(10, 10, 10, 12), QPageLayout.Millimeter)
 
 
-def render(report, printer, progress=None, cancelled=None):
-    """يرسم التقرير على الطابعة (أو PDF). يرجع عدد الصفحات"""
+def render_iter(report, printer, cancelled=None):
+    """مولّد يرسم صفحة واحدة في كل خطوة ويُرجع (الصفحة، عدد الصفحات). إغلاقه مبكراً يُنهي الملف بأمان"""
     rtl = i18n.is_rtl()
     painter = QPainter()
     if not painter.begin(printer):
         raise RuntimeError(i18n.tr("تعذر فتح الطابعة أو ملف PDF"))
     try:
-        return _render(report, printer, painter, rtl, progress, cancelled)
+        yield from _render(report, printer, painter, rtl, cancelled)
     finally:
         painter.end()
 
 
-def _render(rep, printer, p, rtl, progress, cancelled):
+def render(report, printer, progress=None, cancelled=None):
+    """يرسم التقرير كاملاً مرة واحدة. يرجع عدد الصفحات"""
+    pages = 0
+    for i, n in render_iter(report, printer, cancelled):
+        pages = n
+        if progress:
+            progress(i, n)
+    return pages
+
+
+def _render(rep, printer, p, rtl, cancelled):
     page = printer.pageRect(QPrinter.DevicePixel)
     W, H = page.width(), page.height()
     mm = printer.resolution() / 25.4
@@ -232,6 +243,4 @@ def _render(rep, printer, p, rtl, progress, cancelled):
         foot_t = i18n.tr("صفحة {0} من {1}").format(pg + 1, pages)
         text(QRectF(0, H - foot, W, foot), Qt.AlignCenter, foot_t, f_sub, MUTED)
         text(QRectF(0, H - foot, W, foot), align_text, printed, f_sub, MUTED)
-        if progress:
-            progress(pg + 1, pages)
-    return pages
+        yield pg + 1, pages
