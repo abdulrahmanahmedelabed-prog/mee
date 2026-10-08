@@ -6,9 +6,9 @@
 
 > 🌱 **مجاني للأبد** • ⚡ بلس • 💎 برو • 👑 ماكس — **وأول شهر ماكس كامل مجاناً.** البيع لا يتوقف أبداً.
 >
-> 🌐 **صفحة البرنامج:** https://abdulrahmanahmedelabed-prog.github.io/mee/
+> 🌐 **صفحة البرنامج:** https://abdulrahmanahmedelabed-prog.github.io/shopping/
 
-[![آخر إصدار](https://img.shields.io/github/v/release/abdulrahmanahmedelabed-prog/mee?label=%D8%A2%D8%AE%D8%B1%20%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1)](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest)
+[![آخر إصدار](https://img.shields.io/github/v/release/abdulrahmanahmedelabed-prog/shopping?label=%D8%A2%D8%AE%D8%B1%20%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1)](https://github.com/abdulrahmanahmedelabed-prog/shopping/releases/latest)
 [![التقييم](https://img.shields.io/badge/%D8%A7%D9%84%D8%AA%D9%82%D9%8A%D9%8A%D9%85-10%2F10-brightgreen)](docs/01_تقييم_البرنامج.md)
 [![الباقات](https://img.shields.io/badge/%D8%A7%D9%84%D8%A8%D8%A7%D9%82%D8%A7%D8%AA-%D9%85%D8%AC%D8%A7%D9%86%D9%8A%20%E2%80%A2%20%D8%A8%D9%84%D8%B3%20%E2%80%A2%20%D8%A8%D8%B1%D9%88%20%E2%80%A2%20%D9%85%D8%A7%D9%83%D8%B3-blueviolet)](#-الباقات)
 [![بناء ويندوز](https://github.com/abdulrahmanahmedelabed-prog/mee/actions/workflows/windows.yml/badge.svg)](https://github.com/abdulrahmanahmedelabed-prog/mee/actions/workflows/windows.yml)
@@ -19,12 +19,12 @@
 
 | | |
 |---|---|
-| 🖥 **ويندوز (ملف التثبيت)** | [**ShopAccounting-Setup.exe**](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopAccounting-Setup.exe) |
-| 🗂 **ويندوز بدون تثبيت** | [ShopAccounting-Portable.zip](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopAccounting-Portable.zip) — فك الضغط وشغّل `ShopAccounting.exe` |
-| 📱 **أندرويد** | [ShopPOS-android.apk](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopPOS-android.apk) — تطبيق الجوال للموظفين وصاحب المحل (يجد جهاز المحل تلقائياً) |
+| 🖥 **ويندوز (ملف التثبيت)** | [**ShopAccounting-Setup.exe**](https://github.com/abdulrahmanahmedelabed-prog/shopping/releases/latest/download/ShopAccounting-Setup.exe) |
+| 🗂 **ويندوز بدون تثبيت** | [ShopAccounting-Portable.zip](https://github.com/abdulrahmanahmedelabed-prog/shopping/releases/latest/download/ShopAccounting-Portable.zip) — فك الضغط وشغّل `ShopAccounting.exe` |
+| 📱 **أندرويد** | [ShopPOS-android.apk](https://github.com/abdulrahmanahmedelabed-prog/shopping/releases/latest/download/ShopPOS-android.apk) — تطبيق الجوال للموظفين وصاحب المحل (يجد جهاز المحل تلقائياً) |
 | 🍏 **آيفون وأي جوال** | لوحة المالك والمتجر من المتصفح، وتُضاف للشاشة الرئيسية كتطبيق |
 
-كل الإصدارات في صفحة [**Releases**](https://github.com/abdulrahmanahmedelabed-prog/mee/releases). عند التثبيت قد يظهر «ويندوز حمى جهازك»: اضغط «معلومات إضافية» ← «تشغيل على أي حال». بعد التثبيت افتح **«نسخة التدريب»** من قائمة ابدأ: سوبرماركت كامل بتاريخ 3 سنوات (الدخول `admin` / `admin`).
+كل الإصدارات في صفحة [**Releases**](https://github.com/abdulrahmanahmedelabed-prog/shopping/releases). عند التثبيت قد يظهر «ويندوز حمى جهازك»: اضغط «معلومات إضافية» ← «تشغيل على أي حال». بعد التثبيت افتح **«نسخة التدريب»** من قائمة ابدأ: سوبرماركت كامل بتاريخ 3 سنوات (الدخول `admin` / `admin`).
 
 ## 🎬 شاهد البرنامج في دقيقة
 
@@ -78,6 +78,7 @@
 | 🤖 **المستشار الذكي** | تنبيه يومي بما يخسّر المحل: صنف سينفد، بيع بخسارة، بضاعة راكدة، أقساط متأخرة |
 | 🔒 **الرقابة والأمان** | ورديات وعدّ صندوق، إذن المدير، سجل العمليات، نسخ احتياطي يومي ونسخة في Google Drive، فحص سلامة البيانات، صلاحيات يتحقق منها جهاز المحل وحماية من تخمين كلمات المرور |
 | 📱 **الجوال والأونلاين** | تطبيق أندرويد بتبويبات: أرقام اليوم، الأسعار والجرد بالكاميرا، النواقص، الزبائن والديون مع تذكير واتساب، تجهيز الطلبات الأونلاين، اسأل محلك؛ ولوحة المالك، ومتجر أونلاين بلا عمولة، وملخص اليوم بواتساب |
+| 🧰 **أدوات يومية** | **آلة حاسبة** في كل شاشة تُدرج النتيجة في الخانة، **الحساب داخل خانات المبالغ** (`12*3.5+4`، `100+16%`)، **حاسبة التسعير** من التكلفة إلى سعر البيع شاملاً الضريبة والعكس، **ملاحظات وتذكيرات** متكررة ومشتركة، و**تحديث بضغطة واحدة** |
 | 🖥 **لكل محل** | يعمل بدون إنترنت، عدة كاشيرات، شاشات صغيرة ولمس، عربي و English (**وأسماء الأصناف تُترجم تلقائياً**)، وضع داكن، شعار المحل في كل مكان |
 
 ## 💎 الباقات
@@ -147,7 +148,7 @@
 
 | الخطوة | ماذا تفعل |
 |---|---|
-| **1. نزّل البرنامج** | من روابط التحميل أعلاه، أو من [صفحة آخر إصدار](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest) |
+| **1. نزّل البرنامج** | من روابط التحميل أعلاه، أو من [صفحة آخر إصدار](https://github.com/abdulrahmanahmedelabed-prog/shopping/releases/latest) |
 | **2. تدرّب** | افتح «نسخة التدريب» من قائمة ابدأ وجرّب كل شيء على بيانات 3 سنوات — [دليل التدريب](docs/03_دليل_التدريب.md) |
 | **3. جهّز التفعيل** | شغّل `LicenseManager.exe` من صفحة الإصدارات ← «📥 استيراد مفتاحي» (مرة واحدة) — [دليل التفعيل](docs/07_دليل_التفعيل.md) |
 | **4. بِع** | [دليل التسويق والبيع](docs/05_دليل_التسويق_والبيع.md)، والفيديو والإنفوجرافيك أعلاه |

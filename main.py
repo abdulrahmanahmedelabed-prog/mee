@@ -9,6 +9,9 @@ import os
 import sys
 import traceback
 
+if "__compiled__" in globals():            # بناء Nuitka (الكود مترجم إلى C): يُعامل كبرنامج مُجمَّع مثل PyInstaller
+    sys.frozen = True
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 DEMO = "--demo" in sys.argv

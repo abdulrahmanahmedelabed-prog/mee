@@ -227,6 +227,8 @@ Three steps at the top explain it: **📈 measures sales speed → 🧮 suggests
 - **Bulk price update** (after suppliers raise prices): Smart advisor → Bulk price update → "Target margin", e.g. 20% → "Only items with a lower margin" → round to the nearest 0.50 → **👁 Preview** → **✓ Apply**. The program then offers to **print labels for the items that changed** right away; if you postpone, they wait in the label queue.
 - **Raised a price and a customer returns an item bought before the increase?** They're refunded **the price on their original invoice**, not the new one, and the stock returns at its original cost. Neither the customer nor the shop gains or loses from the price change.
 - **Changing a price at the till (F10):** each line keeps **the original price**, **the price it was sold at** and the cashier's name. In the books, revenue is recorded at the actual price (which is correct), and the difference appears in the **financial audit** as a management discount: "Manual price reductions at the till" with its total, its share of sales and the cashiers ranked, and "Sold above the original price" if a customer was overcharged. Every change is also in the activity log.
+- **🏷 Pricing calculator:** next to "Sale price" in the product card press **🏷 Pricing**: enter the unit cost (or carton cost ÷ pieces) and the target profit (% on cost or % of the sale price), pick the rounding (for example up to the nearest 0.25) and you get the price incl. VAT and the unit profit; then **✓ Use this price**. Or type a price to see your profit. In a purchase invoice: select the line ← **🏷 Price line**.
+- **Math inside fields:** in any amount field type `24*1.25`, `100+16%` or `250-10%` then Enter. The full calculator is the **🧮** button at the top or **Ctrl+=**: calculate, then **⤵ Insert into field** puts the result into the last field you were in.
 - **ABC analysis:** never let A items (80% of your sales) run out. Reduce quantities of C items.
 - **Bought together:** place the two items side by side or put them on a joint offer.
 
@@ -362,10 +364,17 @@ Each branch runs its own copy, and the owner sees all branches in one report:
 3. For each branch you see: invoices, net sales, gross profit, expenses, net profit, stock value, debts, and a **Total** row. Choose the period at the top.
 - No internet in a branch? Send its backup file over WhatsApp or on a USB stick, and add it with **📥 Add branch file**.
 
+### 5.15.2 Notes and reminders 📝
+- The **📝** button at the top (or Ctrl+Shift+N): **+ New note** ← title and details ← **Remind me at** (date and time) ← repeat (daily, weekly, monthly, yearly) ← **💾 Save**.
+- **Shared with all shop staff:** everyone who logs in sees it (like "count the fridge every week"). Notes that are not shared are visible only to you.
+- When a reminder is due a small card appears at the bottom without stopping sales: **✓ Done** (a repeating reminder moves to its next date) or **⏰ In an hour**. The number of due reminders shows on the 📝 button.
+- Ask your shop: "remind me" or "my notes" lists what is due and coming up.
+
 ### 5.16 Backup (never ignore it)
 - An automatic copy every day and when the program closes.
 - Settings → Backup → **Automatic second copy in a cloud folder**: choose a folder inside Google Drive or OneDrive. This is what saves you if the computer breaks or is stolen.
 - Restore: "♻ Restore selected" (from the main computer only).
+- **Updates:** when a new version is released a **⬆ New version — update** button appears at the top, or use ❓ Help ← **⬆ Updates**. Press **⬆ Update now**: the file is downloaded and verified, a backup is taken, then it installs and the program reopens within a minute. Finish any open sale first. Update every till the same way.
 
 ### 5.16.1 Appearance and logo
 - **🌙 / ☀ at the top:** switches between dark and light mode instantly, on the same screen, without losing your cart or your work. In Settings → Shop details → **Appearance** you can also choose **Auto** to follow Windows. Each computer keeps its own look.

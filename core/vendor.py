@@ -5,7 +5,7 @@
 """
 
 PRODUCT_NAME = "برنامج المحاسبة ونقاط البيع"
-VERSION = "10.6"
+VERSION = "10.7"
 VENDOR_NAME = "شركة الحسن للبرمجة والدعاية"
 VENDOR_OWNER = "عبد الرحمن العابد"         # المدير
 VENDOR_PHONE = "970592458157"          # رقم واتساب الدعم بالصيغة الدولية (بدون +)
@@ -14,7 +14,7 @@ VENDOR_EMAIL = ""
 VENDOR_WEBSITE = ""
 SUPPORT_HOURS = "يومياً 9 صباحاً - 9 مساءً"
 # آخر نسخة: صفحة الإصدارات في GitHub (أو رابط JSON بالشكل {"version": "...", "url": "https://...", "notes": "..."})
-UPDATE_URL = "https://api.github.com/repos/abdulrahmanahmedelabed-prog/mee/releases/latest"
+UPDATE_URL = "https://api.github.com/repos/abdulrahmanahmedelabed-prog/shopping/releases/latest"
 
 
 def display_name():

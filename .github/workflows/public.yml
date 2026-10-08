@@ -1,0 +1,55 @@
+name: Public website and guides (shopping)
+
+# ينشر صفحة البرنامج والأدلة والصور والفيديو في المستودع العام abdulrahmanahmedelabed-prog/shopping
+# (بدون أي كود مصدري: tools/build_public.py). الصفحة تُعرض من هناك على GitHub Pages.
+on:
+  push:
+    branches: ["claude/nifty-curie-huwwr0", "main"]
+    paths:
+      - "README.md"
+      - "docs/**"
+      - "marketing/ad/*.mp4"
+      - "marketing/infographic/*.png"
+      - "tools/build_public.py"
+      - ".github/workflows/public.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: public-site
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Build the public bundle (fails if any source file would be published)
+        run: python tools/build_public.py _public_check
+      - name: Token missing
+        if: env.PUBLIC_REPO_TOKEN == ''
+        run: echo "::warning::PUBLIC_REPO_TOKEN is not set — the public repository was not updated."
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: env.PUBLIC_REPO_TOKEN != ''
+        with:
+          repository: abdulrahmanahmedelabed-prog/shopping
+          token: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          path: _public
+      - name: Publish
+        if: env.PUBLIC_REPO_TOKEN != ''
+        run: |
+          python tools/build_public.py _public
+          cd _public
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "Update website and guides"
+          git push

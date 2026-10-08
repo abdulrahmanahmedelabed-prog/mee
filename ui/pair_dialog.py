@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QVBoxLayout
 from core import config, remote, settings
 from ui.widgets import button, card, hint, title, warn
 
-APK_URL = "https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopPOS-android.apk"
+APK_URL = "https://github.com/abdulrahmanahmedelabed-prog/shopping/releases/latest/download/ShopPOS-android.apk"
 
 
 def _qr_pixmap(text, size):

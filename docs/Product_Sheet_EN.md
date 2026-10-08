@@ -41,6 +41,7 @@ Works fully offline on your own computer, in **English and Arabic**. **Free fore
 - **Payroll** — monthly salaries, bonuses and deductions, advances deducted automatically from the next salary, payslips for any past month and an employee statement, all flowing into expenses, profit and the cash drawer.
 - **Customer installments** — split a customer's debt into a dated schedule; payments are applied to the oldest installment, overdue ones trigger advisor alerts and WhatsApp reminders.
 - **Branches & chains** — each branch works independently; the owner sees every branch and the total in one report, read from a shared Google Drive folder.
+- **Everyday tools** — a calculator on every screen (Ctrl+=) that inserts its result into the field you were typing in; math inside every amount field (`12*3.5+4`, `100+16%`); a pricing calculator from cost and target margin to the shelf price incl. VAT and back; notes and repeating reminders shared with your staff; and one-click updates that verify, back up, install and reopen.
 - **Fits any screen, any language** — modern mobile-app style interface that adapts to small laptops, and switches between Arabic and English instantly.
 
 | | |
