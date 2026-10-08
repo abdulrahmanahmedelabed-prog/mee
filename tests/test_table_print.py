@@ -64,6 +64,8 @@ def test_pairing_dialog_and_assistant(app):
     d = PairDialog()
     assert d.pair_qr.pixmap() is not None and not d.pair_qr.pixmap().isNull()
     assert d.addr.text().endswith("/m") and APK_URL.endswith("ShopPOS-android.apk")
+    d.close()
+    d.deleteLater()
     r = assistant.answer("كيف اربط الجوال؟")
     assert r["intent"] == "pair" and r["action"][0] == "pair"
 
@@ -91,3 +93,5 @@ def test_job_bar_draws_between_events_and_keeps_ui_responsive(app, tmp_path):
     assert bar.current is None and bar.last.count > 50 and os.path.getsize(path) > 50_000
     assert len(ticks) >= 3                              # الواجهة لم تتجمد أثناء الرسم
     assert bar._path() == path and bar.print_btn.isVisibleTo(bar)
+    bar.deleteLater()
+    app.processEvents()
