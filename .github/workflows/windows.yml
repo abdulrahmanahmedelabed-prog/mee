@@ -24,8 +24,8 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       PYTHONIOENCODING: utf-8
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - name: Install
@@ -80,11 +80,11 @@ jobs:
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
           & $iscc installer\ShopAccounting.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ShopAccounting-Windows-folder
           path: dist/ShopAccounting
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ShopAccounting-Setup
           path: dist/installer/*.exe
@@ -96,7 +96,7 @@ jobs:
           Copy-Item (Get-ChildItem dist\installer\*.exe | Select-Object -First 1).FullName release\ShopAccounting-Setup.exe
           Compress-Archive -Path dist\ShopAccounting -DestinationPath release\ShopAccounting-Portable.zip
           Copy-Item dist\lm\LicenseManager.exe release\LicenseManager.exe
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         if: startsWith(github.ref, 'refs/tags/v') || inputs.release != ''
         with:
           tag_name: ${{ inputs.release || github.ref_name }}
