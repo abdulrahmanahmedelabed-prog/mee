@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QComboBox, QCheckBox, QDoubleSpinBox
 
 from core import settings, db, remote
+from ui.widgets import CalcDoubleSpinBox
 from ui.widgets import ok_cancel, hint, title, warn
 
 CURRENCIES = [("₪", "شيكل"), ("د.أ", "دينار"), ("$", "دولار"), ("ج.م", "جنيه"), ("ر.س", "ريال"), ("د.إ", "درهم"),
@@ -55,7 +56,7 @@ class SetupWizard(QDialog):
         for code, name in COUNTRY_CODES:
             self.country.addItem(f"{name} (+{code})", code)
         self.vat = QCheckBox("المحل مسجّل في ضريبة القيمة المضافة")
-        self.vat_rate = QDoubleSpinBox()
+        self.vat_rate = CalcDoubleSpinBox()
         self.vat_rate.setRange(0, 50)
         self.vat_rate.setValue(settings.get_float("vat_rate", 16))
         self.vat_rate.setEnabled(False)

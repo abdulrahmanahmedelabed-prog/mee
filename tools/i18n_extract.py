@@ -17,7 +17,7 @@ ARABIC = re.compile(r"[؀-ۿ]")
 SKIP_FILES = {"license_tool.py", "i18n_extract.py", "demo_data.py", "product_names.py"}
 # كلمات يفهم بها «اسأل محلك» الأسئلة (عامية وفصحى) — مفردات للفهم وليست نصوصاً تظهر للمستخدم
 VOCAB_NAMES = {"INTENTS", "NAV", "MONTHS", "_STOP", "PLAN_WORDS", "SALES_WORDS", "NAV_VERBS", "SUPERLATIVE", "LEAST",
-               "CONCEPTS", "NUMBER_WORDS", "_PREFIXES", "_SUFFIXES"}
+               "CONCEPTS", "NUMBER_WORDS", "_PREFIXES", "_SUFFIXES", "CALC_WORDS", "_MATH_PREFIX"}
 VOCAB_CALLS = {"_has", "norm", "has_concept"}
 
 

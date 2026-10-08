@@ -354,6 +354,11 @@ def answer(question, today=None):
     """يرجع: {intent, title, lines, table:{headers, rows}?, action:(page, label)?, period}"""
     q = norm(question)
     today = today or date.fromisoformat(db.today())
+    math = _math(question)
+    if math:
+        return math
+    if any(w in q for w in CALC_WORDS):
+        return _calculator(q)
     intent = detect(q)
     if not intent:
         def named(table):
@@ -874,6 +879,43 @@ def _navigate(q, today):
         if _has(q, words):
             return {"intent": "navigate", "title": "↪ فتح الشاشة", "lines": ["تفضل."], "action": (key, ""), "go": key}
     return _help(unknown=True)
+
+
+CALC_WORDS = ["حاسبه", "الحاسبه", "اله حاسبه", "حاسبه التسعير", "احسب سعر البيع", "سعر البيع المناسب", "كيف اسعر",
+              "تسعير", "calculator", "pricing"]
+_MATH_PREFIX = ("كم يساوي", "كم تساوي", "كم ناتج", "ناتج", "احسب", "احسبلي", "احسب لي", "كم", "what is", "calculate",
+                "calc")
+
+
+def _math(question):
+    """«كم 12*3.5+4؟» أو «احسب 250-10%» ← النتيجة مباشرة"""
+    from core import calc
+    t = str(question or "").strip().rstrip("؟?=").strip()
+    low = t.lower()
+    for p in _MATH_PREFIX:
+        if low.startswith(p):
+            t = t[len(p):].strip()
+            break
+    if not t or not calc.is_expression(t):
+        return None
+    try:
+        v = calc.evaluate(t)
+    except ValueError:
+        return None
+    shown = f"{v:,.6f}".rstrip("0").rstrip(".")
+    return {"intent": "math", "title": "🧮 " + t, "lines": [f"= {shown}"], "action": ("calculator", "الآلة الحاسبة")}
+
+
+def _calculator(q):
+    pricing = any(w in q for w in ("تسعير", "سعر", "pricing"))
+    if pricing:
+        lines = ["حاسبة التسعير: اكتب تكلفة الحبة والربح المطلوب فيظهر سعر البيع شاملاً الضريبة، أو اكتب السعر لترى ربحك.",
+                 "تجدها أيضاً بزر «🏷 تسعير» بجانب سعر البيع في نافذة المنتج وفي فاتورة المشتريات."]
+    else:
+        lines = ["الآلة الحاسبة من أي شاشة: زر 🧮 أعلى النافذة أو Ctrl+=.",
+                 "يمكنك أيضاً كتابة عملية مباشرة في أي خانة مبلغ: 12*3.5+4 أو 100+16% ثم Enter."]
+    return {"intent": "calculator", "title": "🏷 حاسبة التسعير" if pricing else "🧮 الآلة الحاسبة", "lines": lines,
+            "action": ("pricing" if pricing else "calculator", "فتح الحاسبة")}
 
 
 def _pair(q, today):

@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLa
 
 from core import promotions, products, loyalty, settings
 from ui.dialogs import ProductPicker
+from ui.widgets import CalcDoubleSpinBox
 from ui.widgets import Table, button, page, hint, warn, ask, MoneySpin, ok_cancel, m, card, title, require_permission
 
 
@@ -90,7 +91,7 @@ class PromotionDialog(QDialog):
         self.update_visibility()
 
     def _spin(self, lo, hi, dec):
-        s = QDoubleSpinBox()
+        s = CalcDoubleSpinBox()
         s.setRange(lo, hi)
         s.setDecimals(dec)
         return s

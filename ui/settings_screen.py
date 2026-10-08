@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from core import settings, auth, backup, receipts, drawer, config, remote, shifts
 from ui import printing
 from ui.dialogs import ChangePasswordDialog, NetworkDialog
+from ui.widgets import CalcDoubleSpinBox
 from ui.widgets import Table, button, page, title, hint, warn, info, ask, error, ok_cancel, card, require_permission
 
 
@@ -380,7 +381,7 @@ class SettingsScreen(QWidget):
         form.addRow("", w)
 
     def _num(self, form, key, label, lo, hi, decimals=2):
-        w = QDoubleSpinBox()
+        w = CalcDoubleSpinBox()
         w.setRange(lo, hi)
         w.setDecimals(decimals)
         self.fields[key] = w

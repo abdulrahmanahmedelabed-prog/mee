@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QLa
 from core import sales, receipts, shifts
 from core.utils import money, fmt_qty
 from ui import printing
+from ui.widgets import CalcDoubleSpinBox
 from ui.widgets import (Table, button, page, title, hint, warn, info, error, m, card, DateRange, qty_cell,
                         require_permission, ok_cancel, open_whatsapp)
 
@@ -33,7 +34,7 @@ class ReturnDialog(QDialog):
             self.table.setItem(r, 0, QTableWidgetItem(it["product_name"]))
             self.table.setItem(r, 1, QTableWidgetItem(fmt_qty(it["remaining"])))
             self.table.setItem(r, 2, QTableWidgetItem(m(it["unit_price"])))
-            s = QDoubleSpinBox()
+            s = CalcDoubleSpinBox()
             s.setDecimals(3)
             s.setMaximum(it["remaining"])
             s.valueChanged.connect(self.update_total)

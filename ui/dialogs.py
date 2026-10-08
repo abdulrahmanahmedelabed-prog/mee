@@ -373,7 +373,11 @@ class ProductDialog(QDialog):
         lay.addRow("الفئة:", self.category)
         lay.addRow("الوحدة:", self.unit)
         lay.addRow("سعر التكلفة:", self.cost)
-        lay.addRow("سعر البيع:", self.price)
+        price_row = QHBoxLayout()
+        price_row.addWidget(self.price, 1)
+        price_row.addWidget(button("🏷 تسعير", "secondaryBtn", self.open_pricing,
+                                   "حاسبة التسعير: من التكلفة والربح المطلوب إلى سعر البيع شاملاً الضريبة"))
+        lay.addRow("سعر البيع:", price_row)
         lay.addRow("", self.margin)
         lay.addRow("سعر الجملة (اختياري):", self.wholesale)
         if not product:
@@ -451,6 +455,12 @@ class ProductDialog(QDialog):
             self.margin.setStyleSheet(f"color:{color};")
         else:
             self.margin.setText("")
+
+    def open_pricing(self):
+        from ui.calculator import pricing_dialog
+        price = pricing_dialog(self, self.cost.value(), self.price.value())
+        if price is not None:
+            self.price.setValue(price)
 
     def gen_barcode(self):
         self.barcode.setText(products.next_internal_barcode(self.product["id"] if self.product else None))

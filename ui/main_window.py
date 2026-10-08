@@ -279,6 +279,17 @@ class MainWindow(QMainWindow):
         self.pair_btn.clicked.connect(self.open_pairing)
         self.pair_btn.setMinimumWidth(1)             # لا يفرض عرضاً على النافذة؛ يختفي على الشاشات الضيقة
         tl.addWidget(self.pair_btn)
+        self.calc_btn = QPushButton()
+        self.calc_btn.setObjectName("secondaryBtn")
+        self.calc_btn.setCursor(Qt.PointingHandCursor)
+        _iq.set_raw_text(self.calc_btn, "🧮")
+        self.calc_btn.setToolTip("الآلة الحاسبة وحاسبة التسعير (Ctrl+=)")
+        self.calc_btn.clicked.connect(lambda: self.open_calculator())
+        self.calc_btn.setMinimumWidth(1)
+        tl.addWidget(self.calc_btn)
+        QShortcut(QKeySequence("Ctrl+="), self, activated=lambda: self.open_calculator())
+        from ui import calculator as _calc
+        _calc.track_focus()
         content.addWidget(top)
         # شريط الترخيص (يظهر في التجربة أو عند الانتهاء)
         self.license_bar = QFrame()
@@ -577,7 +588,14 @@ class MainWindow(QMainWindow):
         from ui.pair_dialog import open_pairing
         open_pairing(self)
 
+    def open_calculator(self, tab=0):
+        from ui.calculator import open_calculator
+        return open_calculator(self, tab)
+
     def go(self, key):
+        if key in ("calculator", "pricing"):                # «افتح الحاسبة» / «احسب سعر البيع» من المساعد
+            self.open_calculator(1 if key == "pricing" else 0)
+            return
         if key == "pair":                                  # «كيف أربط الجوال؟» من المساعد أو المساعدة
             self.open_pairing()
             return
@@ -635,6 +653,7 @@ class MainWindow(QMainWindow):
         self.ask_box.setVisible(self.width() >= 1180)        # الشاشات الضيقة: من شاشة مساعد المحل أو Ctrl+K
         self.plan_chip.setVisible(self.width() >= 1000 and bool(self.plan_chip.text()))
         self.pair_btn.setVisible(self.width() >= 1100)       # الشاشات الضيقة: من المساعدة أو «كيف أربط الجوال؟»
+        self.calc_btn.setVisible(self.width() >= 1060)       # الشاشات الضيقة: Ctrl+=
 
     def set_rail(self, rail):
         if rail == self._rail:

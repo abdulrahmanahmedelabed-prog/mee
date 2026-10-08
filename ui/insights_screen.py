@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWi
                                QDoubleSpinBox, QCheckBox, QDialog)
 
 from core import insights, products, settings
+from ui.widgets import CalcDoubleSpinBox
 from ui.widgets import Table, button, page, hint, info, ask, m, qty_cell, require_permission, KpiCard
 from ui import theme
 
@@ -94,7 +95,7 @@ class InsightsScreen(QWidget):
         self.mode = QComboBox()
         self.mode.addItem("هامش ربح مستهدف من التكلفة %", "margin")
         self.mode.addItem("رفع/خفض سعر البيع بنسبة %", "percent")
-        self.value = QDoubleSpinBox()
+        self.value = CalcDoubleSpinBox()
         self.value.setRange(-90, 95)
         self.value.setValue(settings.get_float("target_margin_percent", 15))
         self.category = QComboBox()

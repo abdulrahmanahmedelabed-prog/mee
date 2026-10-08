@@ -111,6 +111,8 @@ class PurchaseDialog(QDialog):
                            "امسح باركود الكرتونة لشرائها كرتونة، أو غيّر وحدة السطر من الزر."))
         rrow = QHBoxLayout()
         rrow.addWidget(button("📦 تغيير الوحدة", "secondaryBtn", self.change_unit))
+        rrow.addWidget(button("🏷 تسعير السطر", "secondaryBtn", self.price_line,
+                              "حاسبة التسعير لسعر بيع الحبة في السطر المحدد"))
         rrow.addWidget(button("حذف السطر المحدد", "dangerBtn", self.remove_line))
         rrow.addStretch()
         lay.addLayout(rrow)
@@ -175,6 +177,18 @@ class PurchaseDialog(QDialog):
                            "sale_price": p["sale_price"], "stock": p["quantity"], "expiry": ""})
         self.render()
         self.table.selectRow(len(self.lines) - 1)
+
+    def price_line(self):
+        r = self.table.currentRow()
+        if r < 0 or r >= len(self.lines):
+            return warn(self, "حدد سطراً أولاً")
+        from ui.calculator import pricing_dialog
+        ln = self.lines[r]
+        price = pricing_dialog(self, ln["unit_cost"] / (ln["factor"] or 1), ln["sale_price"])
+        if price is not None:
+            ln["sale_price"] = price
+            self.render()
+            self.table.selectRow(r)
 
     def render(self):
         self._busy = True

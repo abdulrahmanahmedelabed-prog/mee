@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QC
 from core import ledger, settings, db
 from core.utils import money, to_float
 from ui import printing
+from ui.widgets import CalcDoubleSpinBox
 from ui.widgets import (Table, button, page, title, hint, m, card, DateRange, KpiCard, warn, info, ask, MoneySpin,
                         ok_cancel, require_permission)
 
@@ -182,7 +183,7 @@ class AssetDialog(QDialog):
         self.date.setDisplayFormat("yyyy-MM-dd")
         self.date.setDate(QDate.currentDate())
         from PySide6.QtWidgets import QDoubleSpinBox
-        self.life = QDoubleSpinBox()
+        self.life = CalcDoubleSpinBox()
         self.life.setRange(0.5, 50)
         self.life.setDecimals(1)
         self.life.setValue(5)

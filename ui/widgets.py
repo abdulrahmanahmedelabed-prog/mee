@@ -277,7 +277,59 @@ def page():
 # إدخال المبالغ
 # ---------------------------------------------------------------------------
 
-class MoneySpin(QDoubleSpinBox):
+_CALC_CHARS = set("+-*/()%×÷٪٠١٢٣٤٥٦٧٨٩٫")
+
+
+class CalcDoubleSpinBox(QDoubleSpinBox):
+    """خانة رقم تقبل عملية حسابية: اكتب 12*3+4 أو 100+16% ثم Enter فتصبح النتيجة (core/calc.py)"""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.setToolTip(i18n.tr("يمكنك كتابة عملية حسابية مثل 12*3+4 أو 100+16% ثم Enter"))
+
+    def _body(self, text):
+        t = text
+        if self.prefix() and t.startswith(self.prefix()):
+            t = t[len(self.prefix()):]
+        if self.suffix() and t.endswith(self.suffix()):
+            t = t[:-len(self.suffix())]
+        return t.strip()
+
+    def _is_calc(self, body):
+        from core import calc
+        return calc.is_expression(body) or any(ch in _CALC_CHARS for ch in body.lstrip("+-"))
+
+    def validate(self, text, pos):
+        # العبارة تبقى «غير مكتملة» أثناء الكتابة فلا يعيد Qt تنسيقها بعد كل رقم؛ تُحسب عند Enter أو مغادرة الخانة
+        from PySide6.QtGui import QValidator
+        if self._is_calc(self._body(text)):
+            return QValidator.Intermediate, text, pos
+        return super().validate(text, pos)
+
+    def _result(self, text):
+        from core import calc
+        try:
+            v = round(calc.evaluate(self._body(text)), self.decimals())
+        except ValueError:
+            return None
+        return v if self.minimum() <= v <= self.maximum() else None
+
+    def fixup(self, text):
+        if self._is_calc(self._body(text)):
+            v = self._result(text)
+            if v is not None:
+                return self.textFromValue(v)
+            return text
+        return super().fixup(text)
+
+    def valueFromText(self, text):
+        if self._is_calc(self._body(text)):
+            v = self._result(text)
+            return self.value() if v is None else v
+        return super().valueFromText(text)
+
+
+class MoneySpin(CalcDoubleSpinBox):
     def __init__(self, maximum=100_000_000, decimals=2, big=False, allow_negative=False):
         super().__init__()
         self.setDecimals(decimals)
