@@ -5,6 +5,8 @@
 **برنامج بيع ومحاسبة كامل للدكاكين والسوبرماركت والسلاسل:** يعمل بدون إنترنت، يبيع بسرعة، يتذكر الديون والأقساط والشيكات والصلاحية، يصرف الرواتب، يجمع الفروع في تقرير واحد، ويدقق حساباته بنفسه — **وتسأله بلهجتك فيجيبك من أرقامك، ويتوقع سيولتك، ويجهّزك لرمضان، ويحسب زكاتك.**
 
 > 🌱 **مجاني للأبد** • ⚡ بلس • 💎 برو • 👑 ماكس — **وأول شهر ماكس كامل مجاناً.** البيع لا يتوقف أبداً.
+>
+> 🌐 **صفحة البرنامج:** https://abdulrahmanahmedelabed-prog.github.io/mee/
 
 [![آخر إصدار](https://img.shields.io/github/v/release/abdulrahmanahmedelabed-prog/mee?label=%D8%A2%D8%AE%D8%B1%20%D8%A5%D8%B5%D8%AF%D8%A7%D8%B1)](https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest)
 [![التقييم](https://img.shields.io/badge/%D8%A7%D9%84%D8%AA%D9%82%D9%8A%D9%8A%D9%85-10%2F10-brightgreen)](docs/01_تقييم_البرنامج.md)

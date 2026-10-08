@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self'; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2224%22 fill=%22%232563EB%22/%3E%3Ctext x=%2250%22 y=%2268%22 font-size=%2254%22 text-anchor=%22middle%22%3E🏪%3C/text%3E%3C/svg%3E">
+<title>المحاسبة ونقاط البيع</title>
+<meta name="description" content="برنامج بيع ومحاسبة كامل للدكاكين والسوبرماركت والسلاسل: يعمل بدون إنترنت، بالعربية والإنجليزية، مع مدقق مالي آلي، ومساعد تسأله بلهجتك، وتطبيق جوال. مجاني للأبد، وأول شهر بكل الميزات.">
+<meta property="og:title" content="المحاسبة ونقاط البيع">
+<meta property="og:description" content="نقطة بيع ومحاسبة وتدقيق لمحلك، بدون إنترنت، وتسأله بلهجتك فيجيبك من أرقامك.">
+<meta property="og:image" content="img/pos.png">
+<style>
+@font-face { font-family: "Plex Arabic"; src: url("fonts/IBMPlexSansArabic_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Plex Arabic"; src: url("fonts/IBMPlexSansArabic_700Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+/* ألوان البرنامج نفسه */
+:root {
+  --bg: #f1f5f9; --surface: #ffffff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0;
+  --blue: #2563eb; --blue-soft: #dbeafe; --navy: #0f172a; --navy-2: #1e293b;
+  --green: #16a34a; --green-soft: #dcfce7; --amber: #d97706; --amber-soft: #fef3c7;
+  --purple: #7c3aed; --purple-soft: #ede9fe; --red: #dc2626; --red-soft: #fee2e2; --teal: #0d9488; --teal-soft: #ccfbf1;
+  --shadow: 0 1px 2px rgba(15,23,42,.05), 0 10px 30px rgba(15,23,42,.07); --radius: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1220; --surface: #131c2e; --text: #e2e8f0; --muted: #94a3b8; --line: #23324a;
+    --blue: #60a5fa; --blue-soft: #172554; --green: #4ade80; --green-soft: #052e16; --amber: #fbbf24; --amber-soft: #422006;
+    --purple: #a78bfa; --purple-soft: #2e1065; --red: #f87171; --red-soft: #450a0a; --teal: #2dd4bf; --teal-soft: #042f2e;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.75 "Plex Arabic", "Segoe UI", Tahoma, system-ui, sans-serif; }
+a { color: var(--blue); }
+img { max-width: 100%; }
+.wrap { max-width: 1160px; margin: 0 auto; padding: 0 16px; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+
+/* ===== الشريط العلوي: مثل شريط البرنامج ===== */
+.top { position: sticky; top: 0; z-index: 9; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 14px; min-height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); white-space: nowrap; }
+.logo { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); box-shadow: 0 6px 14px rgba(37,99,235,.35); }
+.brand b { display: block; line-height: 1.2; }
+.brand small { color: var(--muted); font-size: 12px; }
+.nav { display: flex; gap: 6px; overflow-x: auto; margin-inline-start: auto; scrollbar-width: none; }
+.nav a { color: var(--muted); text-decoration: none; padding: 6px 12px; border-radius: 999px; white-space: nowrap; font-size: 15px; border: 1px solid transparent; }
+.nav a:hover { background: var(--blue-soft); color: var(--blue); }
+.cta-top { background: var(--blue); color: #fff !important; font-weight: 700; }
+.nav a.cta-top { flex: 0 0 auto; }
+@media (max-width: 720px) { .nav a:not(.cta-top) { display: none; } .nav { overflow: visible; } .brand small { display: none; } }
+
+/* ===== الواجهة: لوحة داكنة مثل لوحة الإجمالي في نقطة البيع ===== */
+.hero { background: radial-gradient(1100px 500px at 15% 10%, rgba(37,99,235,.45), transparent 60%), radial-gradient(800px 400px at 90% 90%, rgba(22,163,74,.25), transparent 60%), linear-gradient(160deg, #0b1220, #0f172a 55%, #172554); color: #e2e8f0; padding: 64px 0 80px; overflow: hidden; }
+.hero .wrap { display: grid; grid-template-columns: 1.05fr 1fr; gap: 40px; align-items: center; }
+.eyebrow { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.pill { border-radius: 999px; padding: 4px 14px; font-size: 14px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: #cbd5e1; }
+.pill.g { background: rgba(34,197,94,.16); border-color: rgba(34,197,94,.35); color: #86efac; }
+.hero h1 { font-size: clamp(30px, 4.6vw, 50px); line-height: 1.2; margin: 0 0 16px; color: #fff; }
+.hero h1 .accent { background: linear-gradient(90deg, #60a5fa, #4ade80); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p.lead { color: #cbd5e1; font-size: clamp(17px, 2.2vw, 20px); margin: 0 0 26px; max-width: 600px; }
+.btns { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; border-radius: 14px; padding: 12px 22px; font-weight: 700; border: 1px solid transparent; }
+.btn.pay { background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; box-shadow: 0 10px 24px rgba(22,163,74,.35); }
+.btn.blue { background: var(--blue); color: #fff; }
+.btn.ghost { background: rgba(255,255,255,.06); color: #fff; border-color: rgba(255,255,255,.25); }
+.btn.line { background: var(--surface); color: var(--blue); border-color: var(--line); }
+.trust { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 22px; color: #94a3b8; font-size: 15px; }
+.trust span::before { content: "✓"; color: #4ade80; margin-inline-end: 6px; }
+/* المشهد: لقطة البرنامج مع بطاقات طافية */
+.stage { position: relative; }
+.screen { border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 30px 80px rgba(0,0,0,.5); background: #fff; transform: perspective(1400px) rotateY(-8deg) rotateX(3deg); }
+.screen img { display: block; width: 100%; }
+.float { position: absolute; border-radius: 16px; padding: 12px 16px; box-shadow: 0 16px 40px rgba(0,0,0,.35); font-size: 14px; }
+.f-total { inset-inline-end: -10px; bottom: -26px; background: #0f172a; border: 1px solid #1e293b; color: #94a3b8; min-width: 190px; }
+.f-total b { display: block; font-size: 30px; color: #4ade80; line-height: 1.2; }
+.f-ask { inset-inline-start: -18px; top: -22px; background: #fff; color: #0f172a; max-width: 250px; }
+.f-ask .q { background: #dbeafe; color: #1d4ed8; border-radius: 12px 12px 2px 12px; padding: 4px 10px; display: inline-block; margin-bottom: 6px; }
+.f-ask b { color: #16a34a; }
+.f-audit { inset-inline-start: 8%; bottom: -34px; background: #fff; color: #0f172a; display: flex; gap: 10px; align-items: center; }
+.f-audit .dot { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #dcfce7; }
+@media (max-width: 920px) {
+  .hero .wrap { grid-template-columns: 1fr; }
+  .screen { transform: none; }
+  .f-ask { inset-inline-start: 6px; top: -30px; }
+  .f-total { inset-inline-end: 6px; }
+  .f-audit { display: none; }
+}
+
+/* ===== بطاقات الأرقام: مثل لوحة التحكم ===== */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: -38px; position: relative; z-index: 2; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); display: flex; gap: 12px; align-items: center; }
+.kpi .ic { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 22px; flex: 0 0 auto; }
+.kpi b { display: block; font-size: 24px; line-height: 1.2; }
+.kpi span { color: var(--muted); font-size: 14px; }
+@media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.c-blue { background: var(--blue-soft); color: var(--blue); } .c-green { background: var(--green-soft); color: var(--green); }
+.c-amber { background: var(--amber-soft); color: var(--amber); } .c-purple { background: var(--purple-soft); color: var(--purple); }
+.c-red { background: var(--red-soft); color: var(--red); } .c-teal { background: var(--teal-soft); color: var(--teal); }
+
+/* ===== عناوين الأقسام ===== */
+section { padding-top: 76px; }
+.kicker { color: var(--blue); font-weight: 700; font-size: 15px; letter-spacing: .02em; }
+h2 { font-size: clamp(26px, 4vw, 36px); margin: 4px 0 10px; line-height: 1.3; }
+.sub { color: var(--muted); margin: 0 0 26px; max-width: 760px; }
+
+/* ===== يوم في محلك ===== */
+.day { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; position: relative; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); position: relative; }
+.step .time { display: inline-block; font-size: 13px; font-weight: 700; border-radius: 999px; padding: 2px 12px; margin-bottom: 10px; }
+.step h3 { margin: 0 0 6px; font-size: 19px; }
+.step p { margin: 0; color: var(--muted); font-size: 15.5px; }
+@media (max-width: 920px) { .day { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .day { grid-template-columns: 1fr; } }
+
+/* ===== المزايا: أيقونات ملوّنة مثل قائمة البرنامج ===== */
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
+.feat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+.feat .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 23px; margin-bottom: 12px; }
+.feat h3 { margin: 0 0 6px; font-size: 18.5px; }
+.feat p { margin: 0; color: var(--muted); font-size: 15.5px; }
+.tag { display: inline-block; font-size: 12px; border-radius: 999px; padding: 1px 10px; margin-inline-start: 6px; vertical-align: middle; background: var(--blue-soft); color: var(--blue); }
+
+/* ===== اسأل محلك: محادثة مرسومة ===== */
+.ask { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.chat { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; }
+.chat-head { padding: 14px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.chat-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.me { align-self: flex-start; background: var(--blue); color: #fff; border-radius: 18px 18px 18px 4px; padding: 8px 16px; max-width: 80%; }
+.bot { align-self: flex-end; background: var(--bg); border: 1px solid var(--line); border-radius: 18px 18px 4px 18px; padding: 12px 16px; width: 92%; }
+.bot .t { font-weight: 700; margin-bottom: 4px; }
+.bot .big { font-size: 26px; font-weight: 700; color: var(--green); line-height: 1.3; }
+.bot table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+.bot td { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.bot td:last-child { text-align: end; font-weight: 700; }
+.bot .go { display: inline-block; margin-top: 8px; font-size: 14px; color: var(--blue); }
+.chat-input { margin: 0 18px 18px; border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; color: var(--muted); background: var(--bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+.chip { background: var(--blue-soft); color: var(--blue); border-radius: 999px; padding: 4px 12px; font-size: 15px; }
+.more { display: grid; gap: 12px; margin-top: 18px; }
+.more div { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; }
+.more .ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; flex: 0 0 auto; }
+.more p { margin: 0; color: var(--muted); font-size: 15px; }
+@media (max-width: 860px) { .ask { grid-template-columns: 1fr; } }
+
+/* ===== لقطات البرنامج ===== */
+.shots { display: flex; gap: 16px; overflow-x: auto; padding: 6px 2px 16px; scroll-snap-type: x mandatory; }
+.shot { flex: 0 0 auto; width: min(520px, 86vw); scroll-snap-align: start; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); margin: 0; }
+.shot .bar { display: flex; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.shot .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.shot img { display: block; width: 100%; aspect-ratio: 1366 / 800; object-fit: cover; object-position: top; }
+.shot figcaption { padding: 10px 14px; font-weight: 700; font-size: 15px; }
+.shot figcaption span { display: block; font-weight: 400; color: var(--muted); font-size: 14px; }
+
+/* ===== الجوال ===== */
+.mobile { background: linear-gradient(160deg, #0f172a, #172554); color: #e2e8f0; border-radius: 28px; padding: 36px; margin-top: 76px; display: grid; grid-template-columns: .9fr 1.4fr; gap: 28px; align-items: center; }
+.mobile h2 { color: #fff; }
+.mobile .sub { color: #cbd5e1; }
+.mobile ul { margin: 0; padding: 0; list-style: none; }
+.mobile li { padding: 6px 0; color: #cbd5e1; }
+.mobile li b { color: #fff; }
+.phones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.phones img { width: 100%; border-radius: 22px; border: 4px solid #1e293b; display: block; aspect-ratio: 9 / 19.5; object-fit: cover; object-position: top; box-shadow: 0 20px 40px rgba(0,0,0,.35); }
+.phones figure { margin: 0; text-align: center; font-size: 13px; color: #94a3b8; }
+.phones figure:nth-child(even) { transform: translateY(22px); }
+@media (max-width: 920px) { .mobile { grid-template-columns: 1fr; padding: 24px; } }
+@media (max-width: 560px) { .phones { grid-template-columns: repeat(2, 1fr); } }
+
+/* ===== الفيديو ===== */
+.video { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 10px; box-shadow: var(--shadow); }
+video { width: 100%; display: block; border-radius: 14px; background: #000; }
+
+/* ===== الباقات ===== */
+.plans { display: grid; gap: 14px; grid-template-columns: repeat(4, 1fr); }
+.plan { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 22px; display: flex; flex-direction: column; box-shadow: var(--shadow); position: relative; }
+.plan.best { border: 2px solid var(--blue); }
+.plan.best::before { content: "الأقوى"; position: absolute; top: -13px; inset-inline-start: 18px; background: var(--blue); color: #fff; font-size: 13px; border-radius: 999px; padding: 1px 12px; }
+.plan .name { font-weight: 700; font-size: 19px; display: flex; align-items: center; gap: 8px; }
+.price { font-size: 34px; font-weight: 700; margin: 8px 0 0; line-height: 1.2; }
+.per { color: var(--muted); font-size: 14px; }
+.was { font-size: 14px; color: var(--muted); margin: 6px 0 12px; min-height: 22px; }
+.was s { color: var(--red); }
+.plan ul { margin: 0; padding: 0; list-style: none; font-size: 15px; border-top: 1px solid var(--line); padding-top: 10px; }
+.plan li { padding: 5px 0; }
+.plan li::before { content: "✓"; color: var(--green); font-weight: 700; margin-inline-end: 8px; }
+.gift { margin-top: 16px; background: var(--green-soft); color: var(--text); border-radius: 16px; padding: 14px 18px; border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); }
+@media (max-width: 980px) { .plans { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .plans { grid-template-columns: 1fr; } }
+
+/* ===== المقارنة ===== */
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
+table.cmp { border-collapse: collapse; width: 100%; min-width: 780px; font-size: 15px; }
+.cmp th, .cmp td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; }
+.cmp th { font-size: 14px; color: var(--muted); }
+.cmp .us { background: color-mix(in srgb, var(--blue) 8%, var(--surface)); color: var(--blue); font-weight: 700; }
+.yes { color: var(--green); font-weight: 700; } .no { color: var(--red); } .part { color: var(--amber); }
+
+/* ===== الأمان ===== */
+.secure { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.secure div { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.secure b { display: block; margin-bottom: 4px; }
+.secure p { margin: 0; color: var(--muted); font-size: 15px; }
+
+/* ===== التحميل والتواصل ===== */
+.dl { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); }
+.dl .card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 22px; display: flex; flex-direction: column; gap: 10px; box-shadow: var(--shadow); }
+.dl .card .ic { width: 50px; height: 50px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; }
+.dl h3 { margin: 0; } .dl p { margin: 0; color: var(--muted); font-size: 15px; }
+.dl .btn { align-self: flex-start; margin-top: auto; }
+@media (max-width: 860px) { .dl { grid-template-columns: 1fr; } }
+.contact { margin-top: 76px; border-radius: 28px; padding: 40px 24px; text-align: center; color: #fff; background: radial-gradient(600px 300px at 80% 0%, rgba(255,255,255,.18), transparent 60%), linear-gradient(135deg, #16a34a, #15803d 60%, #166534); }
+.contact h2 { color: #fff; margin-top: 0; }
+.contact p { color: #dcfce7; margin: 0 auto 22px; max-width: 620px; }
+.contact .btn.white { background: #fff; color: #15803d; }
+.contact .btn.ghost { border-color: rgba(255,255,255,.5); }
+footer { background: #0b1220; color: #94a3b8; margin-top: 76px; padding: 36px 0; font-size: 14px; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; }
+footer a { color: #cbd5e1; }
+code { background: var(--blue-soft); color: var(--blue); border-radius: 6px; padding: 1px 6px; direction: ltr; unicode-bidi: isolate; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><span class="logo">🏪</span><span><b>المحاسبة ونقاط البيع</b><small>للدكاكين والسوبرماركت والسلاسل</small></span></a>
+    <nav class="nav">
+      <a href="#day">يوم في محلك</a>
+      <a href="#features">المزايا</a>
+      <a href="#assistant">اسأل محلك</a>
+      <a href="#screens">الشاشات</a>
+      <a href="#plans">الأسعار</a>
+      <a href="#compare">المقارنة</a>
+      <a class="cta-top" href="#download">⬇ تحميل</a>
+    </nav>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow"><span class="pill g">🌱 مجاني للأبد</span><span class="pill">👑 أول شهر بكل الميزات</span></div>
+      <h1>نقطة بيع ومحاسبة<br><span class="accent">تفهم لهجتك وتدقق حساباتك</span></h1>
+      <p class="lead">من أول فاتورة في الصباح حتى ميزانية آخر السنة: بيع سريع، ديون وأقساط وشيكات، رواتب، تدقيق مالي يومي، وتسأله «كم ربحت الشهر الماضي؟» فيجيبك من أرقامك — بدون إنترنت.</p>
+      <div class="btns">
+        <a class="btn pay" href="https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopAccounting-Setup.exe">⬇ تحميل لويندوز</a>
+        <a class="btn ghost" href="https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopPOS-android.apk">📱 تطبيق أندرويد</a>
+      </div>
+      <div class="trust"><span>يعمل بدون إنترنت</span><span>عربي و English</span><span>بياناتك على جهازك</span></div>
+    </div>
+    <div class="stage">
+      <div class="screen"><img src="img/pos.png" alt="شاشة نقطة البيع" width="1366" height="800"></div>
+      <div class="float f-ask"><span class="q">كم بعت اليوم؟</span><div>مبيعات اليوم <b>حتى هذه الساعة</b> مقارنة بأمس، وطرق الدفع.</div></div>
+      <div class="float f-total">الإجمالي<b>81.00 ₪</b>نقدي • بطاقة • محفظة • آجل</div>
+      <div class="float f-audit"><span class="dot">🔎</span><div><b>المدقق اليومي</b><br><span style="color:#64748b">47 إجراءً على كل عملية</span></div></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="kpis">
+    <div class="kpi"><div class="ic c-blue">⚡</div><div><b>0.016 ث</b><span>زمن حفظ الفاتورة</span></div></div>
+    <div class="kpi"><div class="ic c-green">🔎</div><div><b>47</b><span>إجراء تدقيق كل يوم</span></div></div>
+    <div class="kpi"><div class="ic c-amber">🧾</div><div><b>20 كاشيراً</b><span>معاً بلا فاتورة ضائعة</span></div></div>
+    <div class="kpi"><div class="ic c-purple">🎓</div><div><b>3 سنوات</b><span>بيانات تدريب جاهزة</span></div></div>
+  </div>
+
+  <section id="day">
+    <div class="kicker">يوم في محلك</div>
+    <h2>البرنامج يعمل معك من الصباح حتى الإقفال</h2>
+    <p class="sub">ليس مجرد كاشير: يتذكر عنك، ينبّهك، ويقفل حساباتك بنفسه.</p>
+    <div class="day">
+      <div class="step"><span class="time c-amber">☀ الصباح</span><h3>المستشار يخبرك بما يخسّرك</h3><p>صنف رابح سينفد، بضاعة قاربت على الانتهاء، زبون توقف، أقساط متأخرة — مع زر ينقلك للإجراء.</p></div>
+      <div class="step"><span class="time c-blue">🧾 أثناء البيع</span><h3>كاشير سريع لا يتوقف</h3><p>باركود وميزان، عروض تُطبَّق وحدها، كل طرق الدفع، فاتورة بلا كسور، والبيع مستمر حتى لو انقطعت الشبكة.</p></div>
+      <div class="step"><span class="time c-purple">🌙 المساء</span><h3>إغلاق الوردية وملخص اليوم</h3><p>عدّ النقود بالفئات، العجز والزيادة باسم الكاشير، وملخص اليوم على واتساب المالك.</p></div>
+      <div class="step"><span class="time c-green">📅 آخر الشهر</span><h3>تدقيق وإقفال بضغطة</h3><p>القوائم المالية والمؤشرات ومطابقة البنك وإقرار الضريبة، ثم قفل الدفاتر فلا يُعدَّل شيء بتاريخ قديم.</p></div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="kicker">المزايا</div>
+    <h2>كل ما يحتاجه المحل في برنامج واحد</h2>
+    <p class="sub">مصمم بالعربية من البداية لمحلات منطقتنا: الدفتر، الشيكات المؤجلة، المحافظ المحلية، رمضان والزكاة.</p>
+    <div class="grid">
+      <div class="feat"><div class="ic c-blue">🧾</div><h3>بيع سريع</h3><p>باركود وميزان، حبة وكرتونة، <code>3*</code> للكميات، تعليق الفاتورة، شاشة للزبون، وزر <b>فاتورة بلا كسور</b>.</p></div>
+      <div class="feat"><div class="ic c-green">📲</div><h3>كل طرق الدفع</h3><p>نقدي، بطاقة، محافظ وتطبيقات بنوك برمز QR ورقم العملية، آجل، تقسيط، وعملات أخرى. والمرتجع بسعر الفاتورة الأصلية.</p></div>
+      <div class="feat"><div class="ic c-amber">📦</div><h3>مخزون وصلاحية</h3><p>يبيع الأقرب انتهاءً أولاً، جرد بالجوال، طلبيات ذكية للموردين بواتساب، وطابور ملصقات لكل سعر تغيّر.</p></div>
+      <div class="feat"><div class="ic c-purple">👥</div><h3>ديون وأقساط وشيكات</h3><p>دفتر لكل زبون بحد دين، تذكير واتساب، أقساط بمواعيد تتابع المتأخر، وشيكات مع تنبيه الاستحقاق.</p></div>
+      <div class="feat"><div class="ic c-teal">💰</div><h3>محاسبة حقيقية</h3><p>قيود تلقائية، ميزانية وقائمة دخل مقارنة وتدفقات نقدية، <b>12 مؤشراً مالياً</b>، مطابقة البنك، أصول وإهلاك، وإقفال الشهر.</p></div>
+      <div class="feat"><div class="ic c-red">🔎</div><h3>مدقق مالي يعمل وحده</h3><p>مؤشرات تلاعب الكاشير، تسلسل الفواتير، أعمار الديون، بنفورد، و<b>ختم ضد العبث</b> يكشف أي تعديل من خارج البرنامج.</p></div>
+      <div class="feat"><div class="ic c-blue">🏛</div><h3>فوترة إلكترونية <span class="tag">اختيارية</span></h3><p>«فاتورة» السعودية المرحلة الثانية بالتوقيع الرقمي وQR المرحلة الثانية، ونظام JoFotara الأردني. تُرسل في الخلفية.</p></div>
+      <div class="feat"><div class="ic c-amber">👔</div><h3>الموظفون والرواتب</h3><p>راتب ومكافآت وخصومات، سلف تُخصم تلقائياً، قسيمة لأي شهر، وكشف كامل لكل موظف.</p></div>
+      <div class="feat"><div class="ic c-green">🏬</div><h3>من الدكان إلى السلسلة</h3><p>وضع مبسّط للدكان، عدة كاشيرات على شبكة المحل، وتقرير واحد يجمع كل الفروع.</p></div>
+      <div class="feat"><div class="ic c-purple">🛵</div><h3>متجر أونلاين</h3><p>يطلب زبائنك استلاماً أو توصيلاً من جوالاتهم، والطلب يتحول لفاتورة بضغطة. بلا عمولة لأحد.</p></div>
+      <div class="feat"><div class="ic c-teal">🖨</div><h3>طباعة لا تعطّلك</h3><p>التقارير الكبيرة تُجهَّز في الخلفية بشريط تقدّم: دفتر يومية سنة كاملة في ثوانٍ وأنت تكمل البيع.</p></div>
+      <div class="feat"><div class="ic c-blue">🌙</div><h3>عصري ومريح</h3><p>وضع داكن وفاتح، عربي وإنجليزي في أقل من ثانية (حتى أسماء الأصناف)، وشعار محلك على كل شاشة ومطبوع.</p></div>
+    </div>
+  </section>
+
+  <section id="assistant">
+    <div class="kicker">مساعد المحل 🧭</div>
+    <h2>اسأله كما تسأل محاسبك</h2>
+    <p class="sub">بالفصحى أو العامية أو الإنجليزية، بدون إنترنت. يفهم المعنى لا الكلمات فقط، ويجيبك بالرقم والمقارنة والجدول.</p>
+    <div class="ask">
+      <div class="chat" aria-label="مثال على محادثة">
+        <div class="chat-head"><span class="logo" style="width:32px;height:32px;font-size:16px">✨</span> اسأل محلك</div>
+        <div class="chat-body">
+          <div class="me">مين أفضل 5 زبائن عندي؟</div>
+          <div class="bot">
+            <div class="t">⭐ أفضل 5 زبائن — هذا الشهر</div>
+            <table>
+              <tr><td>بقالة الحي (جملة)</td><td>583.20 ₪</td></tr>
+              <tr><td>أبو عمر</td><td>311.59 ₪</td></tr>
+              <tr><td>أبو علي</td><td>293.48 ₪</td></tr>
+              <tr><td>بلال</td><td>235.71 ₪</td></tr>
+              <tr><td>أم محمد</td><td>214.22 ₪</td></tr>
+            </table>
+            <span class="go">↩ العملاء والديون</span>
+          </div>
+          <div class="me">شو أجهز لرمضان؟</div>
+          <div class="bot"><div class="t">🌙 الاستعداد لرمضان</div>يبدأ 1 رمضان 1448هـ — اطلب قبل 2027-01-29. مبيعات الموسم الماضي أعلى من المعتاد <b>×1.34</b>.
+            <table><tr><td style="color:var(--muted);font-weight:400">الصنف (الارتفاع)</td><td style="color:var(--muted);font-weight:400">الطلبية الأولى</td></tr><tr><td>حليب طازج 1 لتر <span style="color:var(--muted)">×1.69</span></td><td>442</td></tr><tr><td>زيت ذرة 1.8 لتر <span style="color:var(--muted)">×1.66</span></td><td>74</td></tr><tr><td>بيض 30 حبة <span style="color:var(--muted)">×1.27</span></td><td>88</td></tr></table>
+            <span class="go">↩ مخطط المواسم ورمضان</span></div>
+        </div>
+        <div class="chat-input">✨ اكتب سؤالك…  (Ctrl+K من أي شاشة)</div>
+      </div>
+      <div>
+        <div class="chips">
+          <span class="chip">كم بعت اليوم؟</span><span class="chip">كم ربحت الشهر الماضي؟</span><span class="chip">مين عليه دين؟</span>
+          <span class="chip">شو اللي رح يخلص؟</span><span class="chip">قارن هذا الشهر بالماضي</span><span class="chip">كم الزكاة؟</span><span class="chip">كيف أربط الجوال؟</span>
+        </div>
+        <div class="more">
+          <div><span class="ic c-blue">🔮</span><p><b>التنبؤ والسيولة:</b> مبيعات الشهر القادم يوماً بيوم، والنقد المتوقع بالرواتب والشيكات، وتحذير قبل أن ينقص.</p></div>
+          <div><span class="ic c-purple">🌙</span><p><b>مخطط رمضان والمواسم:</b> بالتقويم الهجري، متى تطلب، وكم ارتفع كل صنف في الموسم الماضي.</p></div>
+          <div><span class="ic c-green">🕌</span><p><b>حاسبة الزكاة:</b> زكاة عروض التجارة من الدفاتر بالنصاب والحَوْل، وتقرير للطباعة.</p></div>
+        </div>
+        <p class="sub" style="margin-top:14px;font-size:14px">الأمثلة في المحادثة من بيانات نسخة التدريب.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="kicker">من داخل البرنامج</div>
+    <h2>شاشات واضحة بطابع تطبيقات الجوال</h2>
+    <p class="sub">مرّر لترى المزيد ←</p>
+    <div class="shots">
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/dashboard.png" alt="لوحة التحكم" loading="lazy"><figcaption>لوحة التحكم<span>مبيعات اليوم والربح والنقد والتنبيهات</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/accounting.png" alt="المحاسبة" loading="lazy"><figcaption>المحاسبة والميزانية<span>قوائم مالية ومؤشرات ومطابقة البنك</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/audit.png" alt="التدقيق المالي" loading="lazy"><figcaption>التدقيق المالي<span>رأي ودرجة وملاحظات مرتبة حسب الخطورة</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/smart_ask.png" alt="اسأل محلك" loading="lazy"><figcaption>اسأل محلك<span>إجابات بالأرقام والجداول</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/insights.png" alt="المستشار الذكي" loading="lazy"><figcaption>المستشار الذكي<span>ما يخسّرك مرتباً من الأخطر</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/smart_forecast.png" alt="التنبؤ" loading="lazy"><figcaption>التنبؤ والسيولة<span>النقد المتوقع يوماً بيوم</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/smart_seasons.png" alt="المواسم" loading="lazy"><figcaption>رمضان والمواسم<span>بالتقويم الهجري</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/reorder.png" alt="الطلبيات الذكية" loading="lazy"><figcaption>الطلبيات الذكية<span>ما ينفد أولاً، مقرّباً للكرتونة</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/payroll.png" alt="الرواتب" loading="lazy"><figcaption>الموظفون والرواتب<span>سلف وقسائم وكشوف</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/branches.png" alt="الفروع" loading="lazy"><figcaption>تقرير الفروع<span>كل الفروع ومجموعها</span></figcaption></figure>
+      <figure class="shot"><div class="bar"><i></i><i></i><i></i></div><img src="img/dark_pos.png" alt="الوضع الداكن" loading="lazy"><figcaption>الوضع الداكن<span>مريح للعين ليلاً</span></figcaption></figure>
+    </div>
+  </section>
+
+  <div class="mobile" id="mobile">
+    <div>
+      <div class="kicker" style="color:#93c5fd">تطبيق الجوال</div>
+      <h2>محلك في جيبك</h2>
+      <p class="sub">يجد جهاز المحل وحده على الواي فاي، بلا أي صلاحيات، ويعرض لكل موظف ما تسمح به صلاحيته.</p>
+      <ul>
+        <li>🏠 <b>أرقام اليوم:</b> المبيعات والربح والنقد والنواقص</li>
+        <li>🔍 <b>الأسعار والجرد</b> بكاميرا الجوال</li>
+        <li>👥 <b>الديون</b> مع تذكير واتساب واتصال</li>
+        <li>🛵 <b>تجهيز الطلبات</b> وإبلاغ الزبون</li>
+        <li>📱 الربط: زر <b>📱</b> أعلى البرنامج يعرض رمز التحميل ورمز الربط</li>
+      </ul>
+    </div>
+    <div class="phones">
+      <figure><img src="img/mobile_home.png" alt="أرقام اليوم" loading="lazy">أرقام اليوم</figure>
+      <figure><img src="img/mobile_items.png" alt="السعر والجرد" loading="lazy">السعر والجرد</figure>
+      <figure><img src="img/mobile_customers.png" alt="الديون" loading="lazy">الديون والتذكير</figure>
+      <figure><img src="img/mobile_orders.png" alt="الطلبات" loading="lazy">الطلبات</figure>
+    </div>
+  </div>
+
+  <section>
+    <div class="kicker">في دقيقة</div>
+    <h2>شاهد البرنامج</h2>
+    <div class="video"><video controls preload="none" poster="img/dashboard.png" src="media/ad.mp4"></video></div>
+  </section>
+
+  <section id="plans">
+    <div class="kicker">الأسعار</div>
+    <h2>بأقل من نصف سعر مثيله العالمي</h2>
+    <p class="sub">سنوياً بالدولار. الترقية فورية بمفتاح تفعيل، وبياناتك لا تُقفل أبداً.</p>
+    <div class="plans">
+      <div class="plan"><div class="name">🌱 مجاني</div><div class="price">$0</div><div class="per">للأبد • جهاز واحد</div><div class="was"></div>
+        <ul><li>البيع والمخزون والصلاحية</li><li>الديون، البطاقات والمحافظ</li><li>الورديات، التقارير والضريبة</li><li>فحص الأسعار من الجوال</li></ul></div>
+      <div class="plan"><div class="name">⚡ بلس</div><div class="price">$290</div><div class="per">سنوياً ≈ $24 شهرياً • جهازان</div><div class="was">مثيله: Square Plus <s>$588</s></div>
+        <ul><li>كل ما في المجاني</li><li>المستشار والطلبيات الذكية</li><li>العروض والولاء، الشيكات</li><li>التقسيط، الجرد من الجوال</li></ul></div>
+      <div class="plan"><div class="name">💎 برو</div><div class="price">$890</div><div class="per">سنوياً ≈ $74 شهرياً • 5 أجهزة</div><div class="was">مثيله: Lightspeed Core <s>$1,788</s></div>
+        <ul><li>كل ما في بلس</li><li>المحاسبة والميزانية</li><li>المدقق المالي والرواتب</li><li>المتجر الأونلاين، لوحة المالك، الزكاة</li></ul></div>
+      <div class="plan best"><div class="name">👑 ماكس</div><div class="price">$1,730</div><div class="per">سنوياً ≈ $144 شهرياً • أجهزة بلا حد</div><div class="was">مثيله: Lightspeed Plus <s>$3,468</s></div>
+        <ul><li>كل ما في برو</li><li>اسأل محلك</li><li>التنبؤ والسيولة، مخطط رمضان</li><li>تقرير الفروع</li></ul></div>
+    </div>
+    <div class="gift">🎁 <b>أول 30 يوماً: باقة ماكس كاملة مجاناً.</b> بعدها ينتقل للمجانية تلقائياً — البيع لا يتوقف، والتقارير والديون تبقى متاحة.</div>
+  </section>
+
+  <section id="compare">
+    <div class="kicker">المقارنة</div>
+    <h2>مقابل أشهر البرامج</h2>
+    <div class="table-wrap">
+      <table class="cmp">
+        <thead><tr><th></th><th class="us">برنامجنا</th><th>Square</th><th>Lightspeed</th><th>Shopify POS</th><th>دفترة</th><th>قيود</th><th>Loyverse</th></tr></thead>
+        <tbody>
+          <tr><td>السعر الشهري لمحل واحد</td><td class="us">0 / ~13$ / ~27$ / ~48$</td><td>0-149$ + عمولة كل بطاقة</td><td>89-289$</td><td>89$ + اشتراك Shopify</td><td>30-70$</td><td>~37-101$</td><td>0 + إضافات</td></tr>
+          <tr><td>يعمل كاملاً بدون إنترنت</td><td class="us yes">✓</td><td class="part">جزئياً</td><td class="part">جزئياً</td><td class="part">جزئياً</td><td class="part">جزئياً</td><td class="no">✗</td><td class="part">جزئياً</td></tr>
+          <tr><td>محاسبة وميزانية ومدقق مالي آلي</td><td class="us yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="part">بلا مدقق</td><td class="part">بلا مدقق</td><td class="no">✗</td></tr>
+          <tr><td>اسأل بالعامية، تنبؤ بالسيولة، رمضان الهجري، الزكاة</td><td class="us yes">✓</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td><td class="no">✗</td></tr>
+          <tr><td>الديون والتقسيط والشيكات المؤجلة والمحافظ المحلية</td><td class="us yes">✓</td><td class="no">✗</td><td class="part">جزئياً</td><td class="no">✗</td><td class="part">جزئياً</td><td class="part">جزئياً</td><td class="no">✗</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="sub" style="margin-top:12px;font-size:15px">المقارنة الكاملة مع 11 برنامجاً، بما فيها أين يتفوق المنافسون: <a href="https://github.com/abdulrahmanahmedelabed-prog/mee/blob/HEAD/docs/08_%D8%A7%D9%84%D9%85%D9%82%D8%A7%D8%B1%D9%86%D8%A9_%D9%85%D8%B9_%D8%A7%D9%84%D9%85%D9%86%D8%A7%D9%81%D8%B3%D9%8A%D9%86.md">المقارنة مع المنافسين</a>.</p>
+  </section>
+
+  <section>
+    <div class="kicker">الأمان والخصوصية</div>
+    <h2>أرقامك ملكك</h2>
+    <div class="secure">
+      <div><b>💾 على جهازك</b><p>لا خادم يرى مبيعاتك أو أرباحك. نسخة احتياطية يومية، ونسخة ثانية في Google Drive أو OneDrive.</p></div>
+      <div><b>🔐 صلاحيات محكمة</b><p>كلمات مرور مشفّرة، وكل صلاحية يتحقق منها جهاز المحل، والدخول يُقفل مؤقتاً بعد محاولات خاطئة.</p></div>
+      <div><b>🧷 ختم ضد العبث</b><p>كل فاتورة وكل سطر في سجل العمليات مختوم ببصمة متسلسلة؛ أي تعديل من الخارج ينكشف.</p></div>
+      <div><b>✋ إذن المدير</b><p>للخصم الكبير وتغيير السعر وتجاوز حد الدين، وسجل كامل لكل عملية ومن قام بها.</p></div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="kicker">التحميل</div>
+    <h2>جرّبه اليوم</h2>
+    <p class="sub">بعد التثبيت افتح <b>«نسخة التدريب»</b>: سوبرماركت كامل بتاريخ 3 سنوات لتجرّب كل شيء دون المساس ببيانات محلك (الدخول <code>admin</code> / <code>admin</code>).</p>
+    <div class="dl">
+      <div class="card"><div class="ic c-blue">🖥</div><h3>ويندوز</h3><p>ملف التثبيت الموصى به. ويندوز 10 و11 مع أي طابعة حرارية وماسح باركود.</p>
+        <a class="btn blue" href="https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopAccounting-Setup.exe">⬇ ShopAccounting-Setup.exe</a></div>
+      <div class="card"><div class="ic c-teal">🗂</div><h3>بدون تثبيت</h3><p>فك الضغط وشغّل <code>ShopAccounting.exe</code> مباشرة.</p>
+        <a class="btn line" href="https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopAccounting-Portable.zip">⬇ النسخة المحمولة</a></div>
+      <div class="card"><div class="ic c-green">📱</div><h3>أندرويد</h3><p>تطبيق الموظفين وصاحب المحل؛ يجد جهاز المحل تلقائياً. وللآيفون: لوحة المالك من المتصفح.</p>
+        <a class="btn pay" href="https://github.com/abdulrahmanahmedelabed-prog/mee/releases/latest/download/ShopPOS-android.apk">⬇ ShopPOS-android.apk</a></div>
+    </div>
+    <p class="sub" style="margin-top:12px;font-size:15px">إن ظهرت رسالة «ويندوز حمى جهازك»: «معلومات إضافية» ← «تشغيل على أي حال». كل الإصدارات في <a href="https://github.com/abdulrahmanahmedelabed-prog/mee/releases">صفحة الإصدارات</a>.</p>
+  </section>
+
+  <div class="contact">
+    <h2>لأي سؤال أو لطلب التفعيل</h2>
+    <p>تواصل معنا مباشرة على واتساب.</p>
+    <div class="btns" style="justify-content:center">
+      <a class="btn white" href="https://wa.me/970592458157">💬 واتساب <span class="ltr">+970 59 245 8157</span></a>
+      <a class="btn ghost" href="https://github.com/abdulrahmanahmedelabed-prog/mee/blob/HEAD/docs/Product_Sheet_EN.md">English product sheet</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>🏪 المحاسبة ونقاط البيع — شركة الحسن للبرمجة والدعاية · عبد الرحمن العابد</span>
+    <span><a href="https://github.com/abdulrahmanahmedelabed-prog/mee#readme">الأدلة</a> · <a href="https://github.com/abdulrahmanahmedelabed-prog/mee/releases">الإصدارات</a></span>
+  </div>
+</footer>
+</body>
+</html>

@@ -231,7 +231,7 @@ class MainWindow(QMainWindow):
         self.ask_box = QLineEdit()
         self.ask_box.setObjectName("askBox")
         self.ask_box.setPlaceholderText("✨ اسأل محلك…  (Ctrl+K)")
-        self.ask_box.setMinimumWidth(60)          # يتقلص ثم يختفي على الشاشات الضيقة (لا يفرض عرضاً على النافذة)
+        self.ask_box.setMinimumWidth(40)          # يتقلص ثم يختفي على الشاشات الضيقة (لا يفرض عرضاً على النافذة)
         self.ask_box.setMaximumWidth(320)
         self.ask_box.returnPressed.connect(self.ask_shop)
         tl.addWidget(self.ask_box)
@@ -271,6 +271,14 @@ class MainWindow(QMainWindow):
         self.theme_btn.setToolTip("الوضع الفاتح" if theme.is_dark() else "الوضع الداكن")
         self.theme_btn.clicked.connect(lambda: self.switch_theme())
         tl.addWidget(self.theme_btn)
+        self.pair_btn = QPushButton()
+        self.pair_btn.setObjectName("secondaryBtn")
+        self.pair_btn.setCursor(Qt.PointingHandCursor)
+        _iq.set_raw_text(self.pair_btn, "📱")
+        self.pair_btn.setToolTip("ربط تطبيق الجوال (رمز التحميل ورمز الربط)")
+        self.pair_btn.clicked.connect(self.open_pairing)
+        self.pair_btn.setMinimumWidth(1)             # لا يفرض عرضاً على النافذة؛ يختفي على الشاشات الضيقة
+        tl.addWidget(self.pair_btn)
         content.addWidget(top)
         # شريط الترخيص (يظهر في التجربة أو عند الانتهاء)
         self.license_bar = QFrame()
@@ -288,6 +296,9 @@ class MainWindow(QMainWindow):
         content.addLayout(lwrap)
         self.stack = QStackedWidget()
         content.addWidget(self.stack, 1)
+        from ui.jobs import JobBar
+        self.jobs = JobBar()                      # الطباعة الثقيلة في الخلفية مع شريط تقدّم
+        content.addWidget(self.jobs)
         wrap = QWidget()
         wrap.setLayout(content)
         root.addWidget(wrap, 1)
@@ -562,7 +573,14 @@ class MainWindow(QMainWindow):
         from core.i18n import tr
         self.greeting.setText(f"{tr(days[n.weekday()])} • {n:%Y-%m-%d}")
 
+    def open_pairing(self):
+        from ui.pair_dialog import open_pairing
+        open_pairing(self)
+
     def go(self, key):
+        if key == "pair":                                  # «كيف أربط الجوال؟» من المساعد أو المساعدة
+            self.open_pairing()
+            return
         section = None
         if isinstance(key, str) and "/" in key:          # «reports/المبيعات اليومية»: الشاشة ثم القسم داخلها
             key, section = key.split("/", 1)
@@ -616,6 +634,7 @@ class MainWindow(QMainWindow):
         self.set_rail(self.width() < self.RAIL_WIDTH)
         self.ask_box.setVisible(self.width() >= 1180)        # الشاشات الضيقة: من شاشة مساعد المحل أو Ctrl+K
         self.plan_chip.setVisible(self.width() >= 1000 and bool(self.plan_chip.text()))
+        self.pair_btn.setVisible(self.width() >= 1100)       # الشاشات الضيقة: من المساعدة أو «كيف أربط الجوال؟»
 
     def set_rail(self, rail):
         if rail == self._rail:

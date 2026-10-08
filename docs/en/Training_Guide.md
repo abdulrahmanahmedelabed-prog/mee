@@ -303,6 +303,7 @@ An expense paid from the drawer of a closed shift can't be deleted (its cash cou
 - **Financial ratios:** 12 ratios as a financial analyst reads them, each with a colour and a plain explanation: gross and net margin, expense ratio, **liquidity** (can what you have pay what you owe?), **days stock stays on the shelf**, **days to collect debts** and **days to pay suppliers**, the **cash cycle**, the **break-even point** (how much you must sell monthly to cover expenses), **months of cash runway**, and return on equity. 🟢 good • 🟡 watch • 🔴 needs action.
 - **Bank reconciliation (monthly):** enter the **bank statement** balance on a date → **⚖ Reconcile**. The program deducts amounts **in transit** (card and transfer sales from the last two days the bank hasn't settled yet) from the book balance and shows the difference. A small negative difference is usually bank fees: **🏦 Record the difference as bank fees and save** posts the entry automatically. Every reconciliation is kept in the history below, and the auditor reminds you if 45 days pass without one.
 - **✅ Close month** (at the start of each month): choose the month → **🔎 Audit and close**. The program audits the whole month, opens the **closing pack** to print (income statement, balance sheet, cash flow, VAT return, trial balance, the auditor's opinion), then **locks the books** up to the end of the month: no entry or expense dated inside it can be added or deleted. If there are critical findings it asks before closing. To reopen the last closed month for a correction: **🔓 Reopen last closed month** (recorded in the activity log).
+- **🖨 Printing never blocks your work:** printing any table in Accounting and Reports is prepared **in the background** with a slim progress bar at the bottom of the window ("Preparing the journal… page 40 of 296") while you keep selling or working. When it's done: **📄 Open** (in a PDF viewer), **🖨 Print** (choose the printer), **💾 Save as**, or **Cancel** while it's preparing. **The journal prints in full for the chosen period** (a whole year, about 300 pages, in seconds), with the shop header, logo and page numbers.
 > Read "Accounting Made Simple" to understand the terms in plain language.
 
 ### 5.13.1 The financial audit (instead of an outside auditor)
@@ -416,9 +417,12 @@ For shops registered in **Saudi Arabia** (Fatoora — phase 2, integration) or *
 ## 6. Mobile: the app, owner dashboard and online store
 
 ### 6.1 The mobile app (Android)
-1. Install the app (from your provider or the releases page). It asks for no permissions.
-2. On the main cashier computer: Settings → Loyalty points & owner dashboard → enable "Run the owner dashboard on mobile".
-3. Open the app with the phone on the shop's Wi-Fi: it **finds the shop computer automatically** and opens directly. (If several shops are on the network it lists them; if none is found, use **📷 Scan pairing QR** shown in the settings.)
+1. On the shop's main computer, click the **📱 button at the top** (or Help → **📲 Link your phone**, or ask "how do I pair my phone?"). A window opens with two codes:
+   - **Download code:** scan it with the phone camera to download the Android app. Install it; it asks for no permissions.
+   - **Pairing code:** the shop computer's address on the network.
+   If it shows "🔴 The phone service is off", click **▶ Start the phone service on this computer** (once; it keeps running on every start).
+2. The first time, Windows Firewall may ask: choose **Allow**.
+3. Open the app with the phone on the shop's Wi-Fi: it **finds the shop computer automatically** and opens directly. (If several shops are on the network it lists them; if none is found, tap **📷 Scan pairing QR** in the app and scan the "pairing code" from the window.)
 4. Log in once with the same username and password as in the program — **you stay signed in**, even after the computer or phone restarts (until you sign out, change the password, or 90 days without use).
 5. The app has tabs at the bottom; each employee sees what their permissions allow:
    | Tab | What's in it |
@@ -519,6 +523,7 @@ Do them in order. After each exercise, check the expected result.
 | Profit in "Reports" differs from what you expected | Check unrecorded expenses, damaged stock, and item costs (a zero cost inflates profit!) |
 | The balance sheet shows a difference between physical and book inventory | Caused by selling with negative stock or editing costs manually. Count the items with negative quantities |
 | "Owner's account" is a large number | Normal: it's the total the owner took from the drawers. It isn't a loss |
+| Where is the phone pairing code? | The **📱** button at the top (on narrow screens: Help → **📲 Link your phone**) |
 | An e-invoice is "Rejected" | Settings → E-invoicing → 📋 Log: read the platform's message (usually business details: VAT number or address), fix and save, then **🔁 Resend** |
 | "Waiting for the device to be linked with Fatoora" | Linking isn't complete: 🔗 Link this computer with a new OTP. Invoices saved before linking are signed and sent automatically afterwards |
 | The JoFotara QR code doesn't print | The system didn't respond within 5 seconds (internet). The invoice was sent later: reprint it from the invoice log and the code appears |

@@ -178,6 +178,9 @@ def _find_named(table, q, extra=""):
 # ---------------------------------------------------------------------------
 INTENTS = [
     ("help", ["مساعده", "ساعدني", "شو بتعرف", "ماذا تستطيع", "ايش تقدر", "امثله", "help", "what can you"]),
+    ("pair", ["اربط الجوال", "ربط الجوال", "اربط جوال", "تطبيق الجوال", "تطبيق الموبايل", "اربط الموبايل",
+              "ربط الموبايل", "رمز الربط", "اربط تلفوني", "اربط هاتفي", "تطبيق اندرويد", "pair phone", "mobile app",
+              "connect phone", "android app"]),
     ("navigate", ["افتح", "روح", "اذهب", "وديني", "خذني", "open", "go to", "show me the"]),
     ("zakat", ["زكاه", "الزكاه", "zakat"]),
     ("season", ["رمضان", "العيد", "عيد", "موسم", "المواسم", "المدارس", "الصيف", "ramadan", "eid", "season", "school"]),
@@ -873,7 +876,17 @@ def _navigate(q, today):
     return _help(unknown=True)
 
 
-HANDLERS = {"help": _help, "navigate": _navigate, "sales": _sales, "profit": _profit, "expenses": _expenses,
+def _pair(q, today):
+    """كيف أربط الجوال؟ الخطوات وزر يفتح نافذة الرموز"""
+    return {"intent": "pair", "title": "📱 ربط تطبيق الجوال",
+            "lines": ["1. حمّل تطبيق أندرويد: امسح رمز التحميل في نافذة «ربط الجوال».",
+                      "2. افتح التطبيق والجوال على واي فاي المحل: يجد المحل وحده، أو امسح «رمز الربط» من نفس النافذة.",
+                      "3. ادخل باسم المستخدم وكلمة المرور نفسها التي في البرنامج.",
+                      "النافذة متاحة دائماً من زر 📱 أعلى الشاشة."],
+            "action": ("pair", "ربط الجوال")}
+
+
+HANDLERS = {"pair": _pair, "help": _help, "navigate": _navigate, "sales": _sales, "profit": _profit, "expenses": _expenses,
             "top": _top, "slow": _slow, "debts": _debts, "payables": _payables, "stock": _stock, "low": _low,
             "expiry": _expiry, "cash": _cash, "top_customers": _top_customers, "cashier": _cashier, "hours": _hours,
             "price": _price, "compare": _compare, "forecast": _forecast, "zakat": _zakat, "season": _season,

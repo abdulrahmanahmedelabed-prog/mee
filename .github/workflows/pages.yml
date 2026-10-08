@@ -1,0 +1,47 @@
+name: Website (GitHub Pages)
+
+# ينشر صفحة البرنامج (docs/site) على GitHub Pages مع صور البرنامج وخطه والفيديو التعريفي.
+on:
+  push:
+    paths:
+      - "docs/site/**"
+      - "docs/*.png"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/img _site/fonts _site/media
+          cp docs/site/index.html _site/
+          cp docs/*.png _site/img/
+          cp ui/fonts/IBMPlexSansArabic_400Regular.ttf ui/fonts/IBMPlexSansArabic_700Bold.ttf ui/fonts/OFL.txt _site/fonts/
+          cp marketing/ad/ad_horizontal.mp4 _site/media/ad.mp4
+          touch _site/.nojekyll
+          # كل صورة يذكرها الموقع يجب أن تكون موجودة
+          for f in $(grep -o 'img/[a-z_]*\.png' _site/index.html | sort -u); do test -f "_site/$f" || { echo "missing $f"; exit 1; }; done
+          du -sh _site
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

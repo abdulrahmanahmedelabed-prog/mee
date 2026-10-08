@@ -58,6 +58,7 @@ class HelpScreen(QWidget):
             from ui.widgets import open_training
             row.addWidget(button("🎓 نسخة التدريب", "secondaryBtn", lambda: open_training(self),
                                  "برنامج كامل ببيانات سوبرماركت تجريبية للتعلّم، منفصل عن بيانات محلك"))
+        row.addWidget(button("📲 ربط الجوال", "secondaryBtn", self.pair, "رمز تحميل تطبيق الجوال ورمز ربطه بالمحل"))
         if vendor.VENDOR_PHONE:
             row.addWidget(button("📱 تواصل مع الدعم", "successBtn", self.contact))
         lay.addLayout(row)
@@ -154,6 +155,10 @@ class HelpScreen(QWidget):
         dlg.finished.connect(player.stop)
         player.play()
         dlg.exec()
+
+    def pair(self):
+        from ui.pair_dialog import open_pairing
+        open_pairing(self.window())
 
     def contact(self):
         from core import whatsapp, settings

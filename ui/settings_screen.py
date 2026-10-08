@@ -236,6 +236,8 @@ class SettingsScreen(QWidget):
         self.pair_qr = QLabel()
         self.pair_qr.setToolTip("امسحه بتطبيق نقطة البيع على الجوال لربطه بهذا المحل")
         f.addRow("ربط تطبيق الجوال:", self.pair_qr)
+        from ui.pair_dialog import open_pairing
+        f.addRow("", button("📱 عرض رمز التحميل ورمز الربط بحجم كبير", "secondaryBtn", lambda: open_pairing(self.window())))
 
         # --- المتجر الإلكتروني
         f = self._form_tab("المتجر الإلكتروني")

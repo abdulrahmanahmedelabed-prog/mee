@@ -4,7 +4,6 @@
 كلها تُبنى تلقائياً من عمليات البرنامج؛ صاحب المحل لا يحتاج كتابة أي قيد إلا للعمليات خارج البيع والشراء.
 """
 
-from html import escape
 
 from PySide6.QtCore import Qt, QDate
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QComboBox, QLabel, QGridLayout, QDialog,
@@ -770,17 +769,53 @@ class AccountingScreen(QWidget):
             t.export_csv(self, f"{name} {a} - {b}.csv")
 
     def print_current(self):
+        """الطباعة تُجهَّز في الخلفية بشريط تقدّم أسفل النافذة؛ دفتر اليومية يُطبع كاملاً للفترة"""
         t, name = self.current_table()
         if not t:
             return
+        from ui import jobs
+        from ui.table_print import TableReport
         a, b = self.range.range()
-        heads = "".join(f"<th>{escape(t.horizontalHeaderItem(c).text())}</th>" for c in range(t.columnCount()))
-        body = ""
-        for r in range(t.rowCount()):
-            body += "<tr>" + "".join(f"<td>{escape(t.item(r, c).text() if t.item(r, c) else '')}</td>"
-                                     for c in range(t.columnCount())) + "</tr>"
         period = f"في {b}" if name == "الميزانية العمومية" else f"من {a} إلى {b}"
-        from core import branding
-        html = branding.document(f"<table width='100%' border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse'>"
-                                 f"<tr style='background:#eee'>{heads}</tr>{body}</table>", name, period)
-        printing.print_html(self, html, width_mm=210, preview=True)
+        if name == "دفتر اليومية":
+            jobs.print_table(self, _JournalReport(a, b, not self.per_invoice.isChecked(), period))
+            return
+        jobs.print_table(self, TableReport.from_table(t, name, period))
+
+
+class _JournalReport:
+    """دفتر اليومية كاملاً للفترة: الأسطر تُجهَّز داخل الخيط الخلفي نفسه (لا تجميد مهما كبر الدفتر)"""
+
+    def __init__(self, a, b, daily, period):
+        from core import i18n
+        self.a, self.b, self.daily = a, b, daily
+        self.title, self.subtitle = i18n.tr("دفتر اليومية"), i18n.tr(period)
+        self.headers = [i18n.tr(h) for h in ("التاريخ", "المرجع", "البيان", "الحساب", "مدين", "دائن")]
+        self.numeric = {4, 5}
+        self.landscape = False
+        self._rows = self._shade = None
+
+    def _load(self):
+        from core import i18n
+        rows, shade, sh = [], [], False
+        for e in ledger.journal(self.a, self.b, daily_sales=self.daily):
+            sh = not sh
+            for i, ln in enumerate(e["lines"]):
+                rows.append([e["date"][:16] if i == 0 else "", e["ref"] if i == 0 else "",
+                             i18n.tr(e["description"]) if i == 0 else "",
+                             ("    " if ln["credit"] else "") + i18n.tr(ln["name"]),
+                             f"{ln['debit']:,.2f}" if ln["debit"] else "", f"{ln['credit']:,.2f}" if ln["credit"] else ""])
+                shade.append(sh)
+        self._rows, self._shade = rows, shade
+
+    @property
+    def rows(self):
+        if self._rows is None:
+            self._load()
+        return self._rows
+
+    @property
+    def shade(self):
+        if self._rows is None:
+            self._load()
+        return self._shade

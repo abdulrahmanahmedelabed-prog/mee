@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """التقارير: الأرباح والخسائر، يومي، فئات، أصناف، راكدة، ساعات الذروة، الكاشير، الديون، المخزون، سجل العمليات"""
 
-from html import escape
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QComboBox, QLabel, QGridLayout
 
@@ -348,16 +347,11 @@ class ReportsScreen(QWidget):
             t.export_csv(self, f"{name} {a} - {b}.csv")
 
     def print_current(self):
+        """تُجهَّز في الخلفية بشريط تقدّم أسفل النافذة، فيستمر العمل أثناء تجهيز التقارير الكبيرة"""
         t, name = self.current_table()
         if not t:
             return
+        from ui import jobs
+        from ui.table_print import TableReport
         a, b = self.range.range()
-        heads = "".join(f"<th>{escape(t.horizontalHeaderItem(c).text())}</th>" for c in range(t.columnCount()))
-        body = ""
-        for r in range(t.rowCount()):
-            body += "<tr>" + "".join(f"<td>{escape(t.item(r, c).text() if t.item(r, c) else '')}</td>"
-                                     for c in range(t.columnCount())) + "</tr>"
-        from core import branding
-        html = branding.document(f"<table width='100%' border='1' cellspacing='0' cellpadding='4' style='border-collapse:collapse'>"
-                                 f"<tr style='background:#eee'>{heads}</tr>{body}</table>", name, f"من {a} إلى {b}")
-        printing.print_html(self, html, width_mm=210, preview=True)
+        jobs.print_table(self, TableReport.from_table(t, name, f"من {a} إلى {b}"))
