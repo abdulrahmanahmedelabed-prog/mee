@@ -59,9 +59,30 @@ class HelpScreen(QWidget):
             row.addWidget(button("🎓 نسخة التدريب", "secondaryBtn", lambda: open_training(self),
                                  "برنامج كامل ببيانات سوبرماركت تجريبية للتعلّم، منفصل عن بيانات محلك"))
         row.addWidget(button("📲 ربط الجوال", "secondaryBtn", self.pair, "رمز تحميل تطبيق الجوال ورمز ربطه بالمحل"))
+        row.addWidget(button("⬆ التحديثات", "secondaryBtn", self.check_updates, "التحقق من وجود نسخة أحدث وتثبيتها"))
         if vendor.VENDOR_PHONE:
             row.addWidget(button("📱 تواصل مع الدعم", "successBtn", self.contact))
         lay.addLayout(row)
+
+    def check_updates(self):
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import Qt as _Qt
+        from core import updates
+        from ui.widgets import info, warn
+        QApplication.setOverrideCursor(_Qt.WaitCursor)
+        try:
+            found = updates.check(timeout=8, raise_errors=True)
+        except updates.UpdateError as e:
+            return warn(self, i18n.tr(str(e)))
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not found:
+            return info(self, i18n.tr("لديك أحدث نسخة ({0}).").format(vendor.VERSION))
+        win = self.window()
+        if hasattr(win, "_update_info"):
+            win._update_info = found
+        from ui.update_dialog import open_update
+        open_update(self, found)
 
     def refresh(self):
         if self.list.currentRow() < 0:

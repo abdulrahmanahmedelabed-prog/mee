@@ -45,6 +45,15 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Name: "{group}\{#AppName} (Training)"; Filename: "{app}\{#AppExe}"; Parameters: "--demo"
 
 [Run]
-; allow the local network service (multi-till, owner dashboard, online store, staff mobile app)
+; allow the local network service (multi-till, owner dashboard, online store, staff mobile app); one rule even after updates
+Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""{#AppName}"" program=""{app}\{#AppExe}"""; Flags: runhidden
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""{#AppName}"" dir=in action=allow program=""{app}\{#AppExe}"" enable=yes profile=private"; Flags: runhidden
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; one-click update from inside the program (core/updates.py): silent install, then reopen the program as the user
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: ShouldRelaunch
+
+[Code]
+function ShouldRelaunch: Boolean;
+begin
+  Result := ExpandConstant('{param:relaunch|0}') = '1';
+end;

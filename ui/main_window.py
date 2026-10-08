@@ -474,12 +474,27 @@ class MainWindow(QMainWindow):
     def show_update(self):
         info = self._update_info
         if info:
-            from PySide6.QtCore import QUrl
-            from PySide6.QtGui import QDesktopServices
-            b = button(f"⬆ نسخة جديدة {info.get('version')}", "successBtn",
-                       lambda: QDesktopServices.openUrl(QUrl(info.get("url", ""))), info.get("notes", ""))
+            b = button(f"⬆ نسخة جديدة {info.get('version')} — تحديث", "successBtn", lambda: self.open_update(),
+                       info.get("notes", ""))
             self.license_bar.layout().insertWidget(1, b)
             self.license_bar.show()
+
+    def open_update(self):
+        if self._update_info:
+            from ui.update_dialog import open_update
+            open_update(self, self._update_info)
+
+    def quit_for_update(self):
+        """المثبّت يعمل الآن: إغلاق فوري (النسخة الاحتياطية أُخذت قبل التثبيت)"""
+        from PySide6.QtWidgets import QApplication
+        self._replaced = True
+        try:
+            from core import remote as _r
+            _r.stop_server()
+        except Exception:  # noqa: BLE001
+            pass
+        self.close()
+        QApplication.quit()
 
     def order_to_pos(self, order):
         pos = self.pages["pos"]

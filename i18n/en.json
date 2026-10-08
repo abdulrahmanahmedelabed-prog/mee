@@ -2595,7 +2595,32 @@
 "💾 حفظ": "💾 Save",
 "📝 الملاحظات والتذكيرات": "📝 Notes & reminders",
 "📝 فتح الملاحظات": "📝 Open notes",
-"🔍 بحث في الملاحظات...": "🔍 Search notes..."
+"🔍 بحث في الملاحظات...": "🔍 Search notes...",
+"1/3 — جارٍ تنزيل النسخة الجديدة…": "1/3 — Downloading the new version…",
+"2/3 — نسخة احتياطية من البيانات…": "2/3 — Backing up your data…",
+"3/3 — التثبيت… سيُغلق البرنامج ويُفتح من جديد خلال دقيقة": "3/3 — Installing… the program will close and reopen within a minute",
+"أكمل البيع الحالي في نقطة البيع أو علّقه أولاً، ثم حدّث البرنامج.": "Finish or hold the current sale in the POS first, then update.",
+"التحديث التلقائي متاح على ويندوز فقط": "Automatic update is available on Windows only",
+"التحقق من وجود نسخة أحدث وتثبيتها": "Check for a newer version and install it",
+"تحسينات وإصلاحات.": "Improvements and fixes.",
+"تحويل التنزيل إلى مصدر غير موثوق": "The download was redirected to an untrusted source",
+"تعذر الاتصال بخادم التحديثات. تأكد من الإنترنت وحاول لاحقاً": "Could not reach the update server. Check the internet connection and try later",
+"تعذرت النسخة الاحتياطية، لم يُثبَّت شيء:": "Backup failed, nothing was installed:",
+"حجم ملف التحديث غير منطقي": "The update file size is not valid",
+"رابط التنزيل ليس من مصدر موثوق": "The download link is not from a trusted source",
+"لا يوجد رابط تنزيل آمن لهذه النسخة": "No secure download link for this version",
+"لديك أحدث نسخة ({0}).": "You have the latest version ({0}).",
+"لم يبدأ التثبيت:": "Installation did not start:",
+"لم يكتمل التنزيل، حاول مرة أخرى": "The download did not complete, please try again",
+"ملف التحديث لا يطابق البصمة المنشورة (قد يكون تالفاً). لم يُثبَّت شيء": "The update file does not match the published fingerprint (it may be damaged). Nothing was installed",
+"نسختك الحالية: {0}. بياناتك ومبيعاتك تبقى كما هي، ويُؤخذ لها نسخة احتياطية قبل التحديث.": "Your current version: {0}. Your data and sales stay as they are, and a backup is taken before updating.",
+"هذه نسخة محمولة أو بلا ملف تثبيت: نزّل النسخة الجديدة من صفحة التحميل وشغّلها (بياناتك في مجلد data تبقى كما هي).": "This is a portable copy or the release has no installer: download the new version from the download page and run it (your data in the data folder stays as it is).",
+"↻ حاول مرة أخرى": "↻ Try again",
+"⬆ التحديثات": "⬆ Updates",
+"⬆ تحديث الآن": "⬆ Update now",
+"⬆ تحديث البرنامج": "⬆ Update the program",
+"⬆ نسخة جديدة {0} متاحة": "⬆ New version {0} available",
+"⬇ صفحة التحميل": "⬇ Download page"
 },
 "templates": {
 "\nالمحل: {0} — الأجهزة المسموحة: {1}": "\nShop: {0} — allowed terminals: {1}",
@@ -3219,6 +3244,7 @@
 "اليوم {0}": "Today {0}",
 "بعد {0} أيام": "In {0} days",
 "غداً {0}": "Tomorrow {0}",
-"متأخر منذ {0} يوم": "Overdue by {0} days"
+"متأخر منذ {0} يوم": "Overdue by {0} days",
+"⬆ نسخة جديدة {0} — تحديث": "⬆ New version {0} — update"
 }
 }
