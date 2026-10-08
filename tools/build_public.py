@@ -105,7 +105,7 @@ def _walk(out):
     for d, dirs, files in os.walk(out):
         dirs[:] = [x for x in dirs if x != ".git"]
         for f in files:
-            yield os.path.relpath(os.path.join(d, f), out)
+            yield os.path.relpath(os.path.join(d, f), out).replace(os.sep, "/")
 
 
 if __name__ == "__main__":

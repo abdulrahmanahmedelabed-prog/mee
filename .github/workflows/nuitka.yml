@@ -51,9 +51,15 @@ jobs:
           $env:SHOP_DEMO_DIR = "$env:RUNNER_TEMP\demo"
           $env:SHOP_DEMO_DAYS = "60"
           $p = Start-Process $exe.FullName -ArgumentList "--demo" -PassThru
-          Start-Sleep -Seconds 30
           $db = "$env:SHOP_DEMO_DIR\accounting.db"
-          if ($p.HasExited) { Get-Content "$env:SHOP_DEMO_DIR\errors.log" -ErrorAction SilentlyContinue; throw "EXE --demo exited early" }
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 5
+            if ($p.HasExited) { break }
+            if ((Test-Path $db) -and (Get-Item $db).Length -ge 200000) { break }
+          }
+          Get-ChildItem $env:SHOP_DEMO_DIR -ErrorAction SilentlyContinue | Format-Table Name, Length
+          Get-Content "$env:SHOP_DEMO_DIR\errors.log" -ErrorAction SilentlyContinue
+          if ($p.HasExited) { throw "EXE --demo exited early (code $($p.ExitCode))" }
           Stop-Process -Id $p.Id -Force
           if (-not (Test-Path $db) -or (Get-Item $db).Length -lt 200000) { throw "demo data was not created" }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
